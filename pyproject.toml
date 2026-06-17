@@ -2,19 +2,19 @@
     authors = [{ name = "Nathaniel Landau", email = "github@natelandau.com" }]
     dependencies = [
         "alembic>=1.18.4,<2",
-        "fastapi>=0.137.0,<1",
+        "fastapi>=0.137.1,<1",
         "jinja2>=3.1.6,<4",
-        "pydantic-ai-slim[anthropic,google,openai]>=1.107,<2",
+        "pydantic-ai-slim[anthropic,google,openai]>=1.107.0,<2",
         "pydantic-settings>=2.14.1,<3",
         "pydantic>=2.13.4,<3",
         "python-dotenv>=1.2.2,<2",
         "python-multipart>=0.0.32,<1",
-        "pyyaml>=6.0.2,<7",
+        "pyyaml>=6.0.3,<7",
         "rich>=15.0.0,<16",
-        "sqlalchemy>=2.0.50,<3",
+        "sqlalchemy>=2.0.51,<3",
         "typer>=0.26.7,<1",
         "uvicorn>=0.49.0,<1",
-]
+    ]
     description = "Scan and parse grocery receipts to track prices and spending over time."
     keywords = ["anthropic", "cli", "expenses", "fastapi", "grocery", "receipts", "spending"]
     license = "MIT"
@@ -22,7 +22,7 @@
     name = "cartlog"
     readme = "README.md"
     requires-python = ">=3.14"
-    version = "0.2.0"
+    version = "0.3.0"
 
     [project.scripts]
         cartlog = "cartlog.cli:app"
@@ -43,7 +43,7 @@
         "coverage>=7.14.1",
         "duty>=1.9.0",
         "httpx2>=2.4.0",
-        "prek>=0.4.4",
+        "prek>=0.4.5",
         "pytest-clarity>=1.0.1",
         "pytest-cov>=7.1.0",
         "pytest-devtools>=1.2.0",

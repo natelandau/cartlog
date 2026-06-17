@@ -1,3 +1,13 @@
+## v0.3.0 (2026-06-17)
+
+### Feat
+
+- **docker**: apply container timezone from TZ env var (#4)
+
+### Fix
+
+- **deps**: declare pyyaml as a runtime dependency (#5)
+
 ## v0.2.0 (2026-06-17)
 
 ### Feat
