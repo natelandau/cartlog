@@ -1,0 +1,15 @@
+{
+  "name": "cartlog",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Frontend build toolchain for the cartlog web UI (Tailwind CSS v4 + daisyUI v5).",
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/cartlog/web/assets/app.css -o ./src/cartlog/web/static/app.css --minify",
+    "watch:css": "tailwindcss -i ./src/cartlog/web/assets/app.css -o ./src/cartlog/web/static/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.0",
+    "daisyui": "^5.0.0",
+    "tailwindcss": "^4.0.0"
+  }
+}

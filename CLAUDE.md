@@ -1,0 +1,62 @@
+# cartlog
+
+cartlog scans grocery receipts, parses them into structured data with the Anthropic API, and stores them for price and spend analysis. Python 3.14, FastAPI web UI, Typer CLI, SQLite.
+
+## Running the app
+
+`cartlog serve` is the single entrypoint: it runs Alembic migrations, seeds categories, starts the FastAPI server, and runs the in-process ingestion worker pool. There is no separate migrate/web/worker step.
+
+```bash
+uv run cartlog serve   # web server + workers + migrations
+uv run duty dev        # dev mode: templates and CSS reload on change
+```
+
+The `duty` task runner wraps common workflows. Invoke it as `uv run duty <task>` (NOT `uv duty`, which fails): `dev`, `lint`, `test`, `build`, `update`.
+
+## Architecture
+
+- `src/cartlog/cli.py` — Typer CLI: `ingest`, `serve`, `worker`, plus `query`/`receipts`/`db` sub-apps.
+- `src/cartlog/web/` — FastAPI app factory (`app.py`), routers, Jinja templates, Tailwind/daisyUI assets.
+- `src/cartlog/ingest/` — upload queue and worker pipeline; web uploads enqueue jobs that workers parse.
+- `src/cartlog/parsing/` — Anthropic vision parser and category classifier.
+- `src/cartlog/db/` — SQLAlchemy models, session factory, and seed data. Migrations live in the top-level `alembic/`.
+- `src/cartlog/bootstrap.py` — `prepare_runtime()` runs migrations and seeding; called by `serve`.
+
+## Configuration
+
+Settings load from environment variables and `.env.secret`, all prefixed `CARTLOG_` (see `config.py` and `.env.sample`). Exported env vars override the file. `CARTLOG_DATABASE_URL` accepts a bare filesystem path (e.g. `cartlog.db`); the `sqlite:///` prefix is added and the directory is verified at startup.
+
+## Frontend / CSS
+
+The web UI uses Tailwind CSS v4 and daisyUI v5. `cartlog serve` compiles `web/static/app.css` at startup, which needs the Node toolchain, so run `npm install` first. Pass `serve --skip-css-build` to serve a prebuilt stylesheet without Node (the Docker image does this). `app.css` is gitignored.
+
+## Development tooling
+
+- **Always use `ty` as the type checker** (never mypy, pyright, or pyre):
+    ```bash
+    uv run ty check src/
+    ```
+- **Always use `ruff` as the linter and formatter** (never flake8, pylint, black, or isort):
+    ```bash
+    uv run ruff check --config pyproject.toml
+    uv run ruff format --config pyproject.toml src/ tests/
+    ```
+- Run the test suite with pytest:
+    ```bash
+    uv run pytest
+    ```
+
+## Committing during development
+
+The pre-commit hooks (`prek`) type-check and test the **whole project** on every commit
+(`ty` and `pytest` run with `pass_filenames: false`, and `fail_fast: true`). This makes it
+impossible to land an intentionally-transient intermediate commit (e.g. a refactor whose
+follow-up edits live in a separate commit) while the tree is briefly inconsistent.
+
+When that happens during development, it is OK to commit with `--no-verify` to skip the
+hooks. The only requirement: run the full hook suite across all files and get it green
+**before the final commit** of the change:
+
+```bash
+uv run prek run --all-files
+```

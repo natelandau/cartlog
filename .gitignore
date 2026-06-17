@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local data
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+receipt_images/
+.cache/
+
+# Secrets
+.env.secret
+
+# Superpowers brainstorming scratch files
+.superpowers/
+
+# Frontend build
+node_modules/
+src/cartlog/web/static/app.css
