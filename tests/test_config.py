@@ -109,3 +109,29 @@ def test_get_settings_returns_cached_instance(monkeypatch):
     # Then both calls return the same cached Settings instance
     assert isinstance(first, Settings)
     assert first is second
+
+
+def test_settings_model_defaults(monkeypatch):
+    """Verify the provider-neutral model settings fall back to their declared defaults."""
+    # Given no model overrides in the environment
+    monkeypatch.delenv("CARTLOG_PARSE_MODEL", raising=False)
+    monkeypatch.delenv("CARTLOG_CLASSIFY_MODEL", raising=False)
+
+    # When loading settings
+    settings = Settings()
+
+    # Then the provider-prefixed defaults are used
+    assert settings.parse_model == "anthropic:claude-opus-4-8"
+    assert settings.classify_model == "anthropic:claude-haiku-4-5"
+
+
+def test_settings_parse_model_overrides_default_from_env(monkeypatch):
+    """Verify a configured parse model overrides the default."""
+    # Given a parse model set in the environment
+    monkeypatch.setenv("CARTLOG_PARSE_MODEL", "openai:gpt-5.2")
+
+    # When loading settings
+    settings = Settings()
+
+    # Then the configured value wins
+    assert settings.parse_model == "openai:gpt-5.2"

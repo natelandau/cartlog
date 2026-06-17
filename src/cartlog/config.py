@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-opus-4-8"
     # Cheaper model for the focused, single-purpose category reclassification pass.
     reclassify_model: str = "claude-haiku-4-5"
+    # Provider-prefixed model id for the receipt vision parser (e.g. "openai:gpt-5.2").
+    parse_model: str = "anthropic:claude-opus-4-8"
+    # Provider-prefixed model id for the focused category reclassification pass.
+    classify_model: str = "anthropic:claude-haiku-4-5"
     # Max times the LLM reclassifier is spent on a still-Uncategorized product before it is
     # left as-is for manual review (prevents unbounded retries on products it cannot place).
     max_reclassify_attempts: int = 2
