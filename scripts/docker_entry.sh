@@ -3,6 +3,17 @@ set -euo pipefail
 
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
+export TZ="${TZ:-Etc/UTC}"
+
+# Apply the requested timezone at runtime. The image bakes in a default, but TZ can
+# be overridden per-container, so the localtime symlink must be re-pointed here while
+# we still have root, before privileges are dropped.
+if [[ -f "/usr/share/zoneinfo/${TZ}" ]]; then
+    ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime
+    printf "%s\n" "${TZ}" > /etc/timezone
+else
+    printf "WARNING: unknown timezone %s, keeping image default\n" "${TZ}" >&2
+fi
 
 # Adjust appuser GID if needed
 if [[ "${PGID}" != "1000" ]]; then
