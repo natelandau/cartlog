@@ -9,6 +9,7 @@
         "pydantic>=2.13.4,<3",
         "python-dotenv>=1.2.2,<2",
         "python-multipart>=0.0.32,<1",
+        "pyyaml>=6.0.2,<7",
         "rich>=15.0.0,<16",
         "sqlalchemy>=2.0.50,<3",
         "typer>=0.26.7,<1",

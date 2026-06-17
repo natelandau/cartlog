@@ -60,6 +60,9 @@ jobs:
             - name: Verify cartlog package imports
               run: docker run --rm --entrypoint="" cartlog:ci-test python -c "import cartlog; from cartlog.web.app import create_app"
 
+            - name: Verify cartlog CLI runs
+              run: docker run --rm --entrypoint="" cartlog:ci-test cartlog --help
+
             - name: Verify compiled app.css is present
               run: docker run --rm --entrypoint="" cartlog:ci-test test -s /app/src/cartlog/web/static/app.css
 
