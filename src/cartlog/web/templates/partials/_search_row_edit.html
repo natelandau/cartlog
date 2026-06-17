@@ -1,0 +1,28 @@
+{# Editable search result row. `r` is a SearchResult; `category_options` is a list of
+   (id, name). The product input references the #search-products datalist that lives in the
+   results fragment. Save/Cancel swap this single <tr> via outerHTML (option B). #}
+<tr id="search-row-{{ r.line_item_id }}" class="line-row">
+  <td>{{ r.raw_description }}</td>
+  <td><input class="input input-xs w-full min-w-32" name="canonical_name" list="search-products" value="{{ r.canonical_name }}"
+             aria-label="Product name" /></td>
+  <td>
+    {% with options=category_options, current_id=r.category_id %}
+      {% include "partials/_category_picker.html" %}
+    {% endwith %}
+  </td>
+  <td>{{ r.store_chain }}</td>
+  <td><a class="link link-primary num" href="/receipts/{{ r.receipt_id }}">{{ r.purchase_date }}</a></td>
+  <td class="num text-right">{{ r.unit_price }}</td>
+  <td class="num text-right">{{ r.line_total }}</td>
+  <td>
+    <div class="flex items-center gap-1">
+      {% if errors %}<span class="text-xs font-medium text-error" role="alert">{{ errors }}</span>{% endif %}
+      <button type="button" class="btn btn-primary btn-xs"
+              hx-post="/search/items/{{ r.line_item_id }}" hx-include="closest tr"
+              hx-target="#search-row-{{ r.line_item_id }}" hx-swap="outerHTML">Save</button>
+      <button type="button" class="btn btn-ghost btn-xs"
+              hx-get="/search/items/{{ r.line_item_id }}"
+              hx-target="#search-row-{{ r.line_item_id }}" hx-swap="outerHTML">Cancel</button>
+    </div>
+  </td>
+</tr>

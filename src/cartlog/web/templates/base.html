@@ -1,0 +1,118 @@
+{% macro nav_links() %}
+  <li><a href="/">Dashboard</a></li>
+  <li><a href="/upload">Upload</a></li>
+  <li><a href="/receipts">Receipts</a></li>
+  <li><a href="/search">Search</a></li>
+  <li><a href="/charts">Charts</a></li>
+  <li>
+    <a href="/admin">Admin
+      <span hx-get="/jobs/badge/partial" hx-trigger="load, every 5s" hx-swap="innerHTML" aria-live="polite"></span>
+    </a>
+  </li>
+{% endmacro %}
+<!doctype html>
+<html lang="en" data-theme="cartlog-light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}cartlog{% endblock %}</title>
+    {# Apply the saved theme before first paint to avoid a flash of the wrong scheme. #}
+    <script>
+      (function () {
+        var t = localStorage.getItem("cartlog-theme");
+        if (t === "cartlog-light" || t === "cartlog-dark")
+          document.documentElement.setAttribute("data-theme", t);
+      })();
+    </script>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/htmx.min.js" defer></script>
+  </head>
+  <body class="min-h-screen bg-base-200 text-base-content">
+    <header class="navbar sticky top-0 z-20 gap-2 border-b border-base-300 bg-base-100/95 px-4 shadow-sm backdrop-blur">
+      <div class="navbar-start">
+        <div class="dropdown lg:hidden">
+          <button tabindex="0" class="btn btn-square btn-ghost" aria-label="Open menu">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </button>
+          <ul tabindex="0" class="menu dropdown-content z-30 mt-2 w-52 gap-1 rounded-box bg-base-100 p-2 shadow-lg" data-nav>
+            {{ nav_links() }}
+          </ul>
+        </div>
+        <a href="/" class="btn btn-ghost px-2 font-display text-2xl normal-case tracking-tight">cartlog</a>
+      </div>
+      <nav class="navbar-center hidden lg:flex">
+        <ul class="menu menu-horizontal gap-1" data-nav>{{ nav_links() }}</ul>
+      </nav>
+      <div class="navbar-end">
+        <label class="theme-toggle swap btn btn-square btn-ghost swap-rotate" aria-label="Toggle light or dark theme" title="Toggle theme">
+          <span class="swap-off text-lg" aria-hidden="true">☾</span>
+          <span class="swap-on text-lg" aria-hidden="true">☀</span>
+        </label>
+      </div>
+    </header>
+    <main class="mx-auto w-full max-w-6xl px-4 py-6">{% block content %}{% endblock %}</main>
+    <script>
+      // htmx 2.x does not swap non-2xx responses by default. Opt specific panels into
+      // swapping 422 re-renders so validation errors display inline without a full page reload.
+      document.body.addEventListener("htmx:beforeSwap", function (event) {
+        const target = event.detail.target;
+        const allowed = ["items-panel", "category-panel"];
+        // search rows have dynamic ids (search-row-<line_item_id>); match by prefix so the
+        // inline editor's 422 re-render displays its error instead of being dropped.
+        const isSearchRow = target && target.id && target.id.startsWith("search-row-");
+        if (
+          event.detail.xhr.status === 422 &&
+          target &&
+          (allowed.includes(target.id) || isSearchRow)
+        ) {
+          event.detail.shouldSwap = true;
+          event.detail.isError = false;
+        }
+      });
+
+      // Theme toggle: flip data-theme between the two named themes and remember the choice.
+      // Falls back to the current OS scheme when nothing has been chosen yet. The daisyUI
+      // `swap` only flips its icon when the label carries `swap-active` (there is no inner
+      // checkbox), so keep that class in sync with the active theme.
+      (function () {
+        function syncToggleIcon(theme) {
+          var toggle = document.querySelector(".theme-toggle");
+          if (toggle) toggle.classList.toggle("swap-active", theme === "cartlog-dark");
+        }
+        function effectiveTheme() {
+          var current = document.documentElement.getAttribute("data-theme");
+          if (current === "cartlog-light" || current === "cartlog-dark") return current;
+          return window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "cartlog-dark" : "cartlog-light";
+        }
+        // Reflect the theme applied by the pre-paint script in the icon on first load.
+        syncToggleIcon(effectiveTheme());
+        document.querySelector(".theme-toggle")?.addEventListener("click", function () {
+          var next = effectiveTheme() === "cartlog-dark" ? "cartlog-light" : "cartlog-dark";
+          document.documentElement.setAttribute("data-theme", next);
+          localStorage.setItem("cartlog-theme", next);
+          syncToggleIcon(next);
+        });
+      })();
+
+      // Mark the nav link for the current page. Longest matching prefix wins so
+      // "/receipts/5" still highlights Receipts; "/" only matches the dashboard. The
+      // winning href is then marked in every nav list (desktop + mobile dropdown).
+      (function () {
+        var path = window.location.pathname;
+        var best = null, bestLen = -1;
+        document.querySelectorAll("header [data-nav] a[href]").forEach(function (a) {
+          var href = a.getAttribute("href");
+          var match = href === "/" ? path === "/" : path === href || path.startsWith(href + "/") || path.startsWith(href + "?") || path === href;
+          if (match && href.length > bestLen) { best = href; bestLen = href.length; }
+        });
+        if (best === null) return;
+        document.querySelectorAll('header [data-nav] a[href="' + best + '"]').forEach(function (a) {
+          a.setAttribute("aria-current", "page");
+          a.classList.add("menu-active");
+        });
+      })();
+    </script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

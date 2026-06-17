@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Receipts · cartlog{% endblock %}
+{% block content %}
+<h1 class="mb-4 text-3xl font-semibold tracking-tight">Receipts{% if status %} <span class="text-base-content/50">({{ status }})</span>{% endif %}</h1>
+<div class="join mb-4" role="group" aria-label="Filter by status">
+  <a class="btn join-item btn-sm{% if not status %} btn-active btn-primary{% endif %}" href="/receipts">All</a>
+  <a class="btn join-item btn-sm{% if status == 'needs_review' %} btn-active btn-primary{% endif %}" href="/receipts?status=needs_review">Needs review</a>
+  <a class="btn join-item btn-sm{% if status == 'parsed' %} btn-active btn-primary{% endif %}" href="/receipts?status=parsed">Parsed</a>
+  <a class="btn join-item btn-sm{% if status == 'failed' %} btn-active btn-primary{% endif %}" href="/receipts?status=failed">Failed</a>
+</div>
+<div class="card overflow-hidden border border-base-300 bg-base-100 shadow-sm">
+  {% include "partials/_receipt_table.html" %}
+</div>
+{% endblock %}

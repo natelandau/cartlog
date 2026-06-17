@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+/* Scan the Jinja templates so every class used in any page or htmx partial is captured.
+   htmx swaps fragments at runtime, but Tailwind scans the template SOURCE at build time,
+   so coverage is complete as long as @source spans the templates dir. */
+@source "../templates";
+
+@plugin "daisyui" {
+  themes: cartlog-light --default, cartlog-dark --prefersdark;
+}
+
+/* Self-hosted fonts, vendored as woff2 (no runtime CDN). Fraunces: display serif for
+   headings/wordmark. Public Sans: humanist body. IBM Plex Mono: tabular ledger figures. */
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/static/fonts/fraunces-var.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Public Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/publicsans-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Public Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/publicsans-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/plexmono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/plexmono-500.woff2") format("woff2");
+}
+
+/* Route the fonts through Tailwind's theme tokens so utilities and daisyUI inherit them.
+   --font-sans drives the body via preflight; --font-serif/-mono are used by the base layer
+   and the `num` utility below. */
+@theme {
+  --font-sans: "Public Sans", system-ui, -apple-system, sans-serif;
+  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Light theme: warm paper base, pine-green primary, amber accent. */
+@plugin "daisyui/theme" {
+  name: "cartlog-light";
+  default: true;
+  color-scheme: light;
+  --color-base-100: oklch(98% 0.008 95);
+  --color-base-200: oklch(95% 0.012 95);
+  --color-base-300: oklch(90% 0.016 95);
+  --color-base-content: oklch(26% 0.02 160);
+  --color-primary: oklch(48% 0.09 165);
+  --color-primary-content: oklch(98% 0.01 165);
+  --color-secondary: oklch(45% 0.03 160);
+  --color-secondary-content: oklch(98% 0.01 160);
+  --color-accent: oklch(62% 0.13 65);
+  --color-accent-content: oklch(98% 0.02 65);
+  --color-neutral: oklch(32% 0.02 160);
+  --color-neutral-content: oklch(96% 0.01 160);
+  --color-info: oklch(60% 0.1 230);
+  --color-info-content: oklch(98% 0.01 230);
+  --color-success: oklch(58% 0.12 150);
+  --color-success-content: oklch(98% 0.01 150);
+  --color-warning: oklch(68% 0.13 75);
+  --color-warning-content: oklch(26% 0.03 75);
+  --color-error: oklch(55% 0.18 27);
+  --color-error-content: oklch(98% 0.01 27);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --border: 1px;
+}
+
+/* Dark theme: slate base, pine lifted for legibility on dark surfaces. */
+@plugin "daisyui/theme" {
+  name: "cartlog-dark";
+  color-scheme: dark;
+  --color-base-100: oklch(22% 0.012 165);
+  --color-base-200: oklch(26% 0.014 165);
+  --color-base-300: oklch(31% 0.016 165);
+  --color-base-content: oklch(92% 0.01 160);
+  --color-primary: oklch(72% 0.12 165);
+  --color-primary-content: oklch(20% 0.03 165);
+  --color-secondary: oklch(70% 0.04 160);
+  --color-secondary-content: oklch(20% 0.02 160);
+  --color-accent: oklch(74% 0.12 70);
+  --color-accent-content: oklch(20% 0.03 70);
+  --color-neutral: oklch(88% 0.01 160);
+  --color-neutral-content: oklch(22% 0.012 165);
+  --color-info: oklch(72% 0.1 230);
+  --color-info-content: oklch(20% 0.02 230);
+  --color-success: oklch(74% 0.12 150);
+  --color-success-content: oklch(20% 0.02 150);
+  --color-warning: oklch(80% 0.12 80);
+  --color-warning-content: oklch(24% 0.03 80);
+  --color-error: oklch(70% 0.16 25);
+  --color-error-content: oklch(20% 0.02 25);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --border: 1px;
+}
+
+/* Headings carry the brand serif. htmx loading indicators stay hidden until a request
+   adds .htmx-request to an ancestor (preserves the old app.css spinner behavior). */
+@layer base {
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-serif);
+  }
+
+  .htmx-indicator {
+    display: none;
+  }
+
+  .htmx-request .htmx-indicator,
+  .htmx-request.htmx-indicator {
+    display: inline-flex;
+  }
+}
+
+/* Ledger figures: typewriter mono with lining + tabular numerals so columns align.
+   Replaces the old `.num`/`.kpi-value`/`.bigstat` family. */
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* The receipt editor's reconcile hint. receipt_edit.js toggles `.reconcile-off` when the
+   line totals stop matching the receipt total; the two-class selector wins over any
+   utility color so the state always reads green (matched) vs red (off). */
+@layer components {
+  .reconcile-hint {
+    color: var(--color-success);
+  }
+
+  .reconcile-hint.reconcile-off {
+    color: var(--color-error);
+    font-weight: 600;
+  }
+}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Jobs · cartlog{% endblock %}
+{% block content %}
+<h1 class="mb-4 text-3xl font-semibold tracking-tight">Jobs</h1>
+
+{#
+  A stable container polls the list partial and swaps its inner HTML. Keeping the poll on
+  the container (not on the swapped fragment) means polling continues even when the list is
+  empty, so a job uploaded from another tab still appears here without a manual refresh.
+#}
+<div hx-get="/jobs/list/partial" hx-trigger="load, every 3s" hx-swap="innerHTML" aria-live="polite">
+  <p class="flex items-center gap-2 text-base-content/60"><span class="loading loading-spinner loading-sm"></span> Loading jobs…</p>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{# Sortable, editable search results. Header links carry q + next sort/direction; they swap
+   only #search-results (outerHTML) and do NOT push the URL (the page is /search, not this
+   fragment endpoint). The hidden #search-sort-state is hx-included by the search box so
+   typing preserves the active sort. #}
+{% from "macros/sortable.html" import sort_header with context %}
+{% from "macros/ui.html" import table_card %}
+{% macro sortable_th(label, key) %}{{ sort_header(label, key, "/search/results", "search-results", extra_qs="q=" ~ (q | urlencode) ~ "&", push_url=false) }}{% endmacro %}
+<div id="search-results">
+  <span id="search-sort-state" hidden>
+    <input type="hidden" name="sort" value="{{ sort }}" />
+    <input type="hidden" name="direction" value="{{ direction }}" />
+  </span>
+  {% if results %}
+  {% call table_card() %}
+    <table class="table table-zebra table-sm">
+      <thead><tr>
+        {{ sortable_th("Description", "description") }}
+        {{ sortable_th("Product", "product") }}
+        {{ sortable_th("Category", "category") }}
+        {{ sortable_th("Store", "store") }}
+        {{ sortable_th("Date", "date") }}
+        {{ sortable_th("Unit price", "unit_price") }}
+        {{ sortable_th("Line total", "line_total") }}
+        <th></th>
+      </tr></thead>
+      <tbody>
+        {% for r in results %}{% include "partials/_search_row.html" %}{% endfor %}
+      </tbody>
+    </table>
+  {% endcall %}
+  <datalist id="search-products">
+    {% for name in product_names %}<option value="{{ name }}"></option>{% endfor %}
+  </datalist>
+  {% else %}
+  <p class="text-base-content/60">No matching line items for "{{ q }}".</p>
+  {% endif %}
+</div>

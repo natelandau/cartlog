@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Receipt #{{ receipt.id }} · cartlog{% endblock %}
+{% block content %}
+{# On desktop the page fills the viewport below the header (navbar 4rem + main padding 3rem)
+   so a tall receipt and its items each scroll inside their own column instead of forcing
+   the whole page to scroll. On mobile it falls back to natural stacking. #}
+<div class="flex flex-col gap-3 lg:h-[calc(100dvh-7rem)]">
+  <div>
+    <h1 class="text-3xl font-semibold tracking-tight">Receipt #{{ receipt.id }}</h1>
+    <p class="mt-1 text-base-content/70">
+      <strong>{{ receipt.store.chain_name }}</strong>{% if receipt.store.location %}, {{ receipt.store.location }}{% endif %}
+    </p>
+  </div>
+  <div class="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+    <figure class="overflow-auto rounded-box border border-base-300 bg-base-100 shadow-sm lg:h-full">
+      {% if is_pdf %}
+      {# A PDF cannot render in <img>; use the browser's native viewer with a link fallback. #}
+      <object data="/receipts/{{ receipt.id }}/image" type="application/pdf" class="h-[36rem] w-full lg:h-full">
+        <a class="link link-primary p-4" href="/receipts/{{ receipt.id }}/image" target="_blank" rel="noopener">Open receipt PDF</a>
+      </object>
+      {% else %}
+      <a href="/receipts/{{ receipt.id }}/image" target="_blank" rel="noopener">
+        <img class="w-full" src="/receipts/{{ receipt.id }}/image" alt="Receipt image" onerror="this.style.display='none'" />
+      </a>
+      {% endif %}
+    </figure>
+    <section id="items-panel" class="min-h-0 lg:h-full lg:overflow-y-auto">
+      {% include "partials/_receipt_items.html" %}
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/receipt_edit.js" defer></script>{% endblock %}

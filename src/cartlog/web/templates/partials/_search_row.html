@@ -1,0 +1,16 @@
+{# One read-only search result row. `r` is a SearchResult. The id lets htmx swap just this
+   row in place for inline editing. #}
+<tr id="search-row-{{ r.line_item_id }}">
+  <td>{{ r.raw_description }}</td>
+  <td>{{ r.canonical_name }}</td>
+  <td>{{ r.category or "" }}</td>
+  <td>{{ r.store_chain }}</td>
+  <td><a class="link link-primary num" href="/receipts/{{ r.receipt_id }}">{{ r.purchase_date }}</a></td>
+  <td class="num text-right">{{ r.unit_price }}</td>
+  <td class="num text-right">{{ r.line_total }}</td>
+  <td>
+    <button type="button" class="btn btn-ghost btn-xs"
+            hx-get="/search/items/{{ r.line_item_id }}/edit"
+            hx-target="#search-row-{{ r.line_item_id }}" hx-swap="outerHTML">Edit</button>
+  </td>
+</tr>

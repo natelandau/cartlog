@@ -1,0 +1,126 @@
+{# Reusable dashboard viz macros. Sizes stay small so charts read as data, not decoration.
+   Colors come from daisyUI theme tokens (var(--color-*)); semantic success/error only where
+   meaningful. Every SVG carries role="img" + <title> for screen readers. #}
+
+{% macro delta(pct) %}
+  {% if pct is not none %}
+    {% set up = pct >= 0 %}
+    <span class="num inline-flex items-center gap-0.5 text-sm font-medium {{ 'text-success' if up else 'text-error' }}">
+      {{ "▲" if up else "▼" }} {{ "%.0f"|format(pct|abs) }}%
+    </span>
+  {% endif %}
+{% endmacro %}
+
+{% macro sparkline(points, label="", current=None) %}
+  {% set pts = sparkline_points(points, width=120, height=28, pad=3) %}
+  {% if pts %}
+  <span class="inline-flex items-center gap-2">
+    <svg class="h-7 w-[120px] text-primary" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-label="{{ label }}">
+      <title>{{ label }}</title>
+      <polyline fill="none" stroke="currentColor" stroke-width="1.5" points="{{ pts }}" />
+      {% set end = pts.split(" ")[-1].split(",") %}
+      <circle cx="{{ end[0] }}" cy="{{ end[1] }}" r="2.2" fill="currentColor" />
+    </svg>
+    {% if current is not none %}<b class="num text-sm font-semibold">{{ current }}</b>{% endif %}
+  </span>
+  {% endif %}
+{% endmacro %}
+
+{% macro kpi_card(card) %}
+  <article class="card border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body gap-1 p-4">
+      <span class="text-xs font-medium uppercase tracking-wide text-base-content/60">{{ card.label }}</span>
+      <span class="num text-2xl font-semibold leading-tight">{{ card.value }}</span>
+      <div class="mt-1 flex items-center justify-between gap-2">
+        {{ sparkline(card.points, label=card.label ~ " trend") }}
+        {{ delta(card.delta_pct) }}
+      </div>
+    </div>
+  </article>
+{% endmacro %}
+
+{% macro bar_list(rows, label_attr, value_attr, money=False) %}
+  {% set values = rows | map(attribute=value_attr) | list %}
+  {% set widths = bar_percents(values) %}
+  <ul class="flex flex-col gap-2.5">
+    {% for row in rows %}
+      {% set v = row | attr(value_attr) %}
+      <li class="grid grid-cols-[7rem_1fr_auto] items-center gap-3">
+        <span class="truncate text-sm" title="{{ row | attr(label_attr) }}">{{ row | attr(label_attr) }}</span>
+        <span class="h-2 overflow-hidden rounded-full bg-base-300">
+          <span class="block h-full rounded-full bg-primary" style="width: {{ widths[loop.index0] }}%"></span>
+        </span>
+        <span class="num text-right text-sm">{{ ("$%.2f"|format(v)) if money else v }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+{% endmacro %}
+
+{% macro spark_table(rows) %}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="font-medium">{{ row.product }}</td>
+            <td>{{ sparkline(row.points, label=row.product ~ " price trend") }}</td>
+            <td class="num text-right">${{ "%.2f"|format(row.current_price) }}</td>
+            <td class="text-right">{{ delta(row.change_pct) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}
+
+{% macro store_table(rows) %}
+  {% set widths = bar_percents(rows | map(attribute="total_spend") | list) %}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr><th>Store</th><th class="text-right">Visits</th><th>Spend</th><th class="text-right">Avg/trip</th></tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>{{ row.store_chain }}{% if row.store_location %}, {{ row.store_location }}{% endif %}</td>
+            <td class="num text-right">{{ row.visits }}</td>
+            <td>
+              <span class="flex items-center gap-2">
+                <span class="h-2 w-24 overflow-hidden rounded-full bg-base-300">
+                  <span class="block h-full rounded-full bg-primary" style="width: {{ widths[loop.index0] }}%"></span>
+                </span>
+                <span class="num text-sm">${{ "%.2f"|format(row.total_spend) }}</span>
+              </span>
+            </td>
+            <td class="num text-right">${{ "%.2f"|format(row.avg_per_trip) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}
+
+{% macro month_bars(rows) %}
+  {% set values = rows | map(attribute="total") | list %}
+  {% set heights = bar_percents(values) %}
+  <div class="flex h-36 items-end gap-1.5" role="img" aria-label="Monthly spend">
+    {% for row in rows %}
+      <span class="flex h-full flex-1 flex-col items-center justify-end gap-1" title="{{ row.month }}: ${{ '%.2f'|format(row.total) }}">
+        <span class="w-full rounded-t bg-primary/80 transition-colors hover:bg-primary" style="height: {{ heights[loop.index0] }}%"></span>
+        <span class="num text-[10px] text-base-content/60">{{ row.month[5:] }}</span>
+      </span>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{% macro heatmap(cells) %}
+  {% set max_spend = (cells | map(attribute="spend") | max) if cells else 0 %}
+  <div class="flex flex-wrap gap-1" role="img" aria-label="Daily shopping activity by spend">
+    {% for cell in cells %}
+      <span class="h-3.5 w-3.5 rounded-sm bg-primary"
+            style="opacity: {{ 0.12 + 0.88 * heatmap_intensity(cell.spend, max_spend) }}"
+            title="{{ cell.day }}: ${{ '%.2f'|format(cell.spend) }}"></span>
+    {% endfor %}
+  </div>
+{% endmacro %}

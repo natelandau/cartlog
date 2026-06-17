@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Upload · cartlog{% endblock %}
+{% block content %}
+<h1 class="mb-4 text-3xl font-semibold tracking-tight">Upload receipts</h1>
+
+{#
+  POST /receipts returns JSON ({accepted, rejected}), not HTML, so htmx must not swap the
+  response body. We suppress the swap (hx-swap="none") and, on afterRequest, append a
+  self-polling job-status fragment per accepted job into #result and list any rejected files
+  inline. A 400 (every file rejected) is not "successful" in htmx terms, so we also act on
+  status 400 to still render the rejection reasons.
+#}
+<div class="card max-w-xl border border-base-300 bg-base-100 shadow-sm">
+  <div class="card-body gap-4">
+    <form
+      class="flex flex-col gap-4"
+      hx-post="/receipts"
+      hx-encoding="multipart/form-data"
+      hx-swap="none"
+      hx-disabled-elt="find button"
+      hx-on::after-request="
+        if (event.detail.successful || event.detail.xhr.status === 400) {
+          const body = JSON.parse(event.detail.xhr.responseText);
+          const result = document.getElementById('result');
+          (body.accepted || []).forEach(function (job) {
+            htmx.ajax('GET', '/jobs/' + job.job_id + '/partial', { target: '#result', swap: 'beforeend' });
+          });
+          (body.rejected || []).forEach(function (item) {
+            const p = document.createElement('p');
+            p.className = 'text-error text-sm font-medium';
+            p.textContent = item.filename + ': ' + item.reason;
+            result.appendChild(p);
+          });
+          if (event.detail.successful) { this.reset(); }
+        }
+      ">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Receipt images or PDFs</legend>
+        <input class="file-input file-input-bordered w-full" type="file" name="files" accept="image/*,application/pdf" multiple required />
+        <p class="label">Select one or more files. JPG, PNG, or PDF.</p>
+      </fieldset>
+      <button class="btn btn-primary self-start" type="submit">
+        Upload
+        <span class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<div id="result" class="mt-4 flex flex-col gap-3" aria-live="polite"></div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{# Editable items panel. Posts the full line set; HTMX swaps #items-panel with the result.
+   422 responses are swapped back too (see the htmx:beforeSwap handler in base.html). #}
+<form hx-post="/receipts/{{ receipt.id }}" hx-target="#items-panel" hx-swap="innerHTML"
+      class="receipt-edit flex flex-col gap-4">
+  {% if errors %}<div class="alert alert-error alert-soft text-sm" role="alert">error: {{ errors }}</div>{% endif %}
+
+  <div class="card border border-base-300 bg-base-100">
+    <div class="card-body gap-3 p-4">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-base-content/60">Receipt</h2>
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Store chain</legend>
+          <input class="input w-full" name="chain_name" value="{{ receipt.store.chain_name }}" required />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Location</legend>
+          <input class="input w-full" name="location" value="{{ receipt.store.location or '' }}" />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Purchase date</legend>
+          <input class="input w-full" name="purchase_date" type="date" value="{{ receipt.purchase_date }}" required />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Total</legend>
+          <input class="input w-full" name="total" type="number" step="0.01" inputmode="decimal" value="{{ receipt.total }}" required />
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Currency</legend>
+          <input class="input w-full" name="currency" value="{{ receipt.currency }}" maxlength="3" required />
+        </fieldset>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-sm text-base-content/60">Editing a category updates the shared product and affects every receipt that uses it.</p>
+
+  <div class="overflow-x-auto">
+    <table class="table table-xs">
+      <thead><tr><th>Raw</th><th>Product</th><th>Category</th><th>Qty</th><th>Unit</th><th>Size</th><th>Unit price</th><th>Line total</th><th></th></tr></thead>
+      <tbody id="line-rows">
+        {% for li in receipt.line_items %}
+        <tr class="line-row">
+          <td>
+            <input type="hidden" name="line_id" value="{{ li.id }}" />
+            <input class="input input-xs w-full min-w-32" name="raw_description" value="{{ li.raw_description }}" />
+          </td>
+          <td><input class="input input-xs w-full min-w-32" name="canonical_name" list="product-names" value="{{ li.product.canonical_name }}" /></td>
+          <td>
+            <div class="flex items-center gap-1">
+              {% with options=category_options, current_id=li.product.category_id %}
+                {% include "partials/_category_picker.html" %}
+              {% endwith %}
+              <button type="button" class="btn btn-ghost btn-xs cat-new-btn" title="Create a new category"
+                      hx-get="/categories/new-inline" hx-target="closest td" hx-swap="beforeend">+ new</button>
+            </div>
+          </td>
+          <td><input class="input input-xs w-16" name="quantity" type="number" step="0.001" inputmode="decimal" value="{{ li.quantity }}" /></td>
+          <td><input class="input input-xs w-16" name="unit" value="{{ li.unit or '' }}" /></td>
+          <td><input class="input input-xs w-16" name="unit_size" value="{{ li.unit_size or '' }}" /></td>
+          <td><input class="input input-xs w-20" name="unit_price" type="number" step="0.01" inputmode="decimal" value="{{ li.unit_price }}" /></td>
+          <td><input class="input input-xs w-20" name="line_total" type="number" step="0.01" inputmode="decimal" value="{{ li.line_total }}" /></td>
+          <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove line">✕</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <datalist id="product-names">
+    {% for name in product_names %}<option value="{{ name }}"></option>{% endfor %}
+  </datalist>
+
+  {# Cloned by addLineRow(); a blank line_id marks the row as new on save. #}
+  <template id="line-row-template">
+    <tr class="line-row">
+      <td>
+        <input type="hidden" name="line_id" value="" />
+        <input class="input input-xs w-full min-w-32" name="raw_description" value="" />
+      </td>
+      <td><input class="input input-xs w-full min-w-32" name="canonical_name" list="product-names" value="" /></td>
+      <td>
+        <div class="flex items-center gap-1">
+          {% with options=category_options, current_id=None %}
+            {% include "partials/_category_picker.html" %}
+          {% endwith %}
+          <button type="button" class="btn btn-ghost btn-xs cat-new-btn" title="Create a new category"
+                  hx-get="/categories/new-inline" hx-target="closest td" hx-swap="beforeend">+ new</button>
+        </div>
+      </td>
+      <td><input class="input input-xs w-16" name="quantity" type="number" step="0.001" inputmode="decimal" value="1" /></td>
+      <td><input class="input input-xs w-16" name="unit" value="" /></td>
+      <td><input class="input input-xs w-16" name="unit_size" value="" /></td>
+      <td><input class="input input-xs w-20" name="unit_price" type="number" step="0.01" inputmode="decimal" value="0.00" /></td>
+      <td><input class="input input-xs w-20" name="line_total" type="number" step="0.01" inputmode="decimal" value="0.00" /></td>
+      <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove line">✕</button></td>
+    </tr>
+  </template>
+
+  <div class="flex flex-wrap items-center gap-3">
+    <button type="button" class="btn btn-ghost btn-sm" onclick="addLineRow()">+ Add item</button>
+    <span id="reconcile-hint" class="reconcile-hint num text-sm" aria-live="polite"></span>
+    <span class="grow"></span>
+    <button type="button" class="btn btn-ghost btn-sm" hx-get="/receipts/{{ receipt.id }}/items"
+            hx-target="#items-panel" hx-swap="innerHTML">Cancel</button>
+    <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+  </div>
+</form>

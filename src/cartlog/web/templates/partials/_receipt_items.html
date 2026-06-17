@@ -1,0 +1,48 @@
+{# Read-only items panel; swapped into #items-panel after save / cancel / mark-reviewed. #}
+{% from "macros/ui.html" import table_card %}
+<div class="flex flex-col gap-4">
+  <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-base-content/70">
+    <span class="num">{{ receipt.purchase_date }}</span>
+    <span class="text-base-content/30">·</span>
+    <span class="num">{{ receipt.currency }} {{ receipt.total }}</span>
+    <span class="text-base-content/30">·</span>
+    {% if receipt.status == review_status %}<span class="badge badge-warning badge-sm">{{ receipt.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ receipt.status }}</span>{% endif %}
+  </div>
+  {% if receipt.review_reasons %}
+  <div class="alert alert-warning alert-soft items-start text-sm">
+    <ul class="list-disc pl-4">
+      {% for reason in receipt.review_reasons %}
+      <li><strong>{{ reason.code }}</strong>{% if reason.detail %}: {{ reason.detail }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  <div class="flex flex-wrap gap-2">
+    <button type="button" class="btn btn-primary btn-sm" hx-get="/receipts/{{ receipt.id }}/edit"
+            hx-target="#items-panel" hx-swap="innerHTML">Edit items</button>
+    {% if receipt.status == review_status %}
+    <button type="button" class="btn btn-outline btn-sm" hx-post="/receipts/{{ receipt.id }}/mark-reviewed"
+            hx-target="#items-panel" hx-swap="innerHTML">Mark reviewed</button>
+    {% endif %}
+    {# Destructive action: a redirect on success navigates the whole page, so no hx-target. #}
+    <button type="button" class="btn btn-ghost btn-sm ml-auto text-error" hx-delete="/receipts/{{ receipt.id }}"
+            hx-confirm="Delete this receipt and all its items? This cannot be undone.">Delete receipt</button>
+  </div>
+  {% call table_card() %}
+    <table class="table table-zebra table-sm">
+      <thead><tr><th>Description</th><th>Product</th><th>Category</th><th class="text-right">Qty</th><th class="text-right">Unit price</th><th class="text-right">Line total</th></tr></thead>
+      <tbody>
+        {% for li in receipt.line_items %}
+        <tr>
+          <td>{{ li.raw_description }}</td>
+          <td>{{ li.product.canonical_name }}</td>
+          <td>{{ li.product.category.name if li.product.category else "" }}</td>
+          <td class="num text-right">{{ li.quantity }}{% if li.unit %} {{ li.unit }}{% endif %}</td>
+          <td class="num text-right">{{ li.unit_price }}</td>
+          <td class="num text-right">{{ li.line_total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endcall %}
+</div>

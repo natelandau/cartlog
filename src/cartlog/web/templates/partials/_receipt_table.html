@@ -1,0 +1,35 @@
+{# Sortable receipts table. Header links use href (no-JS full reload) plus hx-get to swap just
+   this container (outerHTML) and push the URL. `endpoint`, `table_id`, `status`, `show_review`
+   parameterize it for the list and the dashboard. #}
+{% from "macros/sortable.html" import sort_header with context %}
+{% macro sortable_th(label, key) %}{{ sort_header(label, key, endpoint, table_id, extra_qs=("status=" ~ status ~ "&" if status else "")) }}{% endmacro %}
+<div id="{{ table_id }}">
+  {% if receipts %}
+  <div class="overflow-x-auto">
+    <table class="table table-zebra">
+      <thead><tr>
+        {{ sortable_th("ID", "id") }}
+        {{ sortable_th("Store", "store") }}
+        {{ sortable_th("Date", "date") }}
+        {{ sortable_th("Total", "total") }}
+        {{ sortable_th("Status", "status") }}
+        {% if show_review %}<th></th>{% endif %}
+      </tr></thead>
+      <tbody>
+        {% for r in receipts %}
+        <tr class="hover">
+          <td><a class="link link-primary font-medium" href="/receipts/{{ r.id }}">#{{ r.id }}</a></td>
+          <td>{{ r.store.chain_name }}{% if r.store.location %}, {{ r.store.location }}{% endif %}</td>
+          <td class="num whitespace-nowrap">{{ r.purchase_date }}</td>
+          <td class="num whitespace-nowrap">{{ r.currency }} {{ r.total }}</td>
+          <td>{% if r.status == review_status %}<span class="badge badge-warning badge-sm">{{ r.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ r.status }}</span>{% endif %}</td>
+          {% if show_review %}<td>{% if r.status == review_status %}<a class="btn btn-ghost btn-xs" href="/receipts/{{ r.id }}">Review</a>{% endif %}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-base-content/60">No receipts.</p>
+  {% endif %}
+</div>

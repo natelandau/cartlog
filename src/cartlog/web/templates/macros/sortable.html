@@ -1,0 +1,26 @@
+{# Shared sortable table-header link, used by every sortable admin/search/receipt table.
+
+   Reads `sort` and `direction` from the importing template's context, so import it
+   `with context`:  {% from "macros/sortable.html" import sort_header with context %}
+
+   Args:
+     label     visible column label
+     key       the sort key this column sets
+     base_url  endpoint the header links/swaps to (e.g. "/admin/products")
+     target    id of the element to swap (without the leading '#')
+     extra_qs  leading query pairs that must precede sort/direction, e.g.
+               "q=eggs&" or "status=parsed&" (empty for none)
+     push_url  whether the swap pushes the URL (false for fragment-only endpoints)
+#}
+{% macro sort_header(label, key, base_url, target, extra_qs="", push_url=true) %}
+  {% set is_active = sort == key %}
+  {% set next_dir = "desc" if (is_active and direction == "asc") else "asc" %}
+  {% set qs = "?" ~ extra_qs ~ "sort=" ~ key ~ "&direction=" ~ next_dir %}
+  <th {% if is_active %}aria-sort="{{ 'ascending' if direction == 'asc' else 'descending' }}"{% endif %}>
+    <a class="inline-flex items-center gap-1 whitespace-nowrap hover:text-primary {{ 'text-primary' if is_active else '' }}"
+       href="{{ base_url }}{{ qs }}" hx-get="{{ base_url }}{{ qs }}"
+       hx-target="#{{ target }}" hx-swap="outerHTML"{% if push_url %} hx-push-url="true"{% endif %}>
+      {{ label }}{% if is_active %} <span aria-hidden="true">{{ "▲" if direction == "asc" else "▼" }}</span>{% endif %}
+    </a>
+  </th>
+{% endmacro %}
