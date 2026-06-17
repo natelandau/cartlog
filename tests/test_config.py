@@ -79,7 +79,7 @@ def test_settings_database_url_missing_directory_raises(tmp_path, monkeypatch):
         Settings()
 
 
-def test_get_settings_returns_cached_instance(monkeypatch):
+def test_get_settings_returns_cached_instance():
     """Verify get_settings returns the same instance on repeated calls."""
     # When get_settings is called twice after clearing the cache
     get_settings.cache_clear()

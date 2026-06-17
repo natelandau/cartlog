@@ -8,7 +8,7 @@ Drop a photo or PDF of a receipt into cartlog and it picks out the store, date, 
 
 cartlog takes a receipt photo and gives you back spending you can search and chart:
 
-- Turn a photo or PDF of a receipt into itemized data, read for you by Claude
+- Turn a photo or PDF of a receipt into itemized data, read for you by your chosen LLM provider
 - Sort every item into a category automatically, and recheck anything it could not place
 - Upload receipts, fix anything that needs a second look, and browse spending charts in your browser
 - Keep using the app while your receipts are read in the background
@@ -135,18 +135,45 @@ Run `uv run cartlog --help` or add `--help` to any command for full options.
 
 All settings are read from the environment and from `.env.secret`, with environment variables taking precedence. Model-selection variables are prefixed `CARTLOG_`; provider credentials use each provider's own native variable name. Only the chosen provider's API key env var is required. See [.env.sample](.env.sample) for the full list with descriptions.
 
-cartlog is provider-agnostic via Pydantic AI; point `CARTLOG_PARSE_MODEL`/`CARTLOG_CLASSIFY_MODEL` at any supported provider (OpenAI, Gemini, local models) and set that provider's key.
+cartlog is provider-agnostic. For how to point it at Anthropic, OpenAI, Gemini, or a local model, see [Choosing an LLM provider](#choosing-an-llm-provider).
 
 | Variable                                          | Default                     | Description                                                        |
 | ------------------------------------------------- | --------------------------- | ------------------------------------------------------------------ |
 | `ANTHROPIC_API_KEY` (or provider equivalent)      | (none, required)            | API key for your chosen provider; read by Pydantic AI              |
 | `CARTLOG_PARSE_MODEL`                             | `anthropic:claude-opus-4-8` | Provider-prefixed model that reads your receipts                   |
-| `CARTLOG_CLASSIFY_MODEL`                          | `anthropic:claude-haiku-4-5`| Cheaper provider-prefixed model that tidies item categories        |
+| `CARTLOG_CLASSIFY_MODEL`                          | `anthropic:claude-haiku-4-5` | Cheaper provider-prefixed model that tidies item categories        |
 | `CARTLOG_DATABASE_URL`                            | `cartlog.db`                | Where to store your data file (the folder must exist)              |
 | `CARTLOG_IMAGE_STORAGE_DIR`                       | `receipt_images`            | Where to keep copies of your receipt images                        |
 | `CARTLOG_REVIEW_CONFIDENCE_THRESHOLD`             | `0.7`                       | Receipts cartlog is unsure about are flagged for you to review     |
 
 For `CARTLOG_DATABASE_URL`, give a plain path to where you want the data file, such as `cartlog.db` or `/app/data.db`. cartlog checks the folder exists when it starts and handles the rest, so most people never need to change the default.
+
+## Choosing an LLM provider
+
+cartlog reads receipts through [Pydantic AI](https://ai.pydantic.dev/), so you can run it against Anthropic, OpenAI, Google Gemini, or a local model without changing any code. Switching providers takes two steps: set the model with `CARTLOG_PARSE_MODEL` and `CARTLOG_CLASSIFY_MODEL`, then supply that provider's API key under its own variable name.
+
+Model values use a `provider:model` format. Set both variables in `.env.secret`, alongside the matching key:
+
+```bash
+# Anthropic (the default)
+ANTHROPIC_API_KEY=sk-ant-...
+CARTLOG_PARSE_MODEL=anthropic:claude-opus-4-8
+CARTLOG_CLASSIFY_MODEL=anthropic:claude-haiku-4-5
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+CARTLOG_PARSE_MODEL=openai:gpt-5.2
+
+# Google Gemini
+GEMINI_API_KEY=...
+CARTLOG_PARSE_MODEL=google-gla:gemini-2.5-pro
+```
+
+`CARTLOG_PARSE_MODEL` reads the receipt image or PDF and does the heavy lifting. `CARTLOG_CLASSIFY_MODEL` only sorts product names into categories, so a smaller, cheaper model from the same provider fits well there (the Anthropic default pairs Opus for parsing with Haiku for classifying). The two variables can use different providers. For the full provider list and exact model-id syntax, see the [Pydantic AI models documentation](https://ai.pydantic.dev/models/).
+
+Local models work through an OpenAI-compatible endpoint such as [Ollama](https://ollama.com/). They are held to the same capability requirements below, which many small local models do not meet.
+
+> **Important:** The parse model must support image (vision) input and structured output, because cartlog hands it the receipt picture and asks for a typed result. To read PDF receipts, the model must also accept PDF documents. The classify model needs structured output only, since it works from text. Point either variable at a model that lacks these capabilities and ingestion fails: the parse step errors and the receipt is flagged for review. Current frontier models from Anthropic, OpenAI, and Google meet all three requirements; many smaller and local models do not. Test one receipt before switching your whole setup.
 
 ## Development
 

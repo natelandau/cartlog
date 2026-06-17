@@ -330,3 +330,6 @@ def test_ingest_command_errors_without_provider_key(tmp_path, monkeypatch):
 
     # Then the command exits non-zero rather than parsing
     assert result.exit_code != 0
+    # And no ingestion jobs were persisted, confirming the guard fires before any DB write
+    with _verify_session(settings.database_url) as session:
+        assert session.query(IngestionJob).count() == 0

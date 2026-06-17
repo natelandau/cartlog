@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _dummy_provider_key(monkeypatch):
-    """Provide a dummy Anthropic key so model construction in tests needs no real credentials.
+    """Provide a dummy provider credential so model construction in tests needs no real credentials.
 
     Model construction reads the provider's key env var but makes no network call; a dummy
     value lets the early-guard and factory code paths run. Tests that exercise the
