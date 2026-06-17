@@ -3,14 +3,20 @@
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Config file holding all options. Loaded into the process environment by get_settings so both
+# cartlog's CARTLOG_ settings and the LLM provider's native key (e.g. ANTHROPIC_API_KEY) resolve
+# from one file, while exported environment variables still take precedence.
+_ENV_FILE = ".env.secret"
 
 
 class Settings(BaseSettings):
     """Runtime configuration, read from environment variables (prefix CARTLOG_)."""
 
-    model_config = SettingsConfigDict(env_prefix="CARTLOG_", env_file=".env.secret", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="CARTLOG_", extra="ignore")
 
     # Provider-prefixed model id for the receipt vision parser (e.g. "openai:gpt-5.2").
     parse_model: str = "anthropic:claude-opus-4-8"
@@ -68,5 +74,12 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return a process-wide cached Settings instance."""
+    """Return a process-wide cached Settings instance.
+
+    Load `.env.secret` into the process environment first, without overriding variables that
+    are already exported. This lets users set every option in the file (including each LLM
+    provider's native key, which the provider SDK reads straight from the environment) while
+    exported environment variables still win.
+    """
+    load_dotenv(_ENV_FILE, override=False)
     return Settings()

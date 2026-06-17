@@ -1,5 +1,7 @@
 """Tests for runtime settings loading and caching."""
 
+import os
+
 import pytest
 from pydantic import ValidationError
 
@@ -77,6 +79,27 @@ def test_settings_database_url_missing_directory_raises(tmp_path, monkeypatch):
     # When loading settings, then validation rejects the unavailable directory
     with pytest.raises(ValidationError, match="does not exist"):
         Settings()
+
+
+def test_get_settings_loads_env_file_without_overriding_exported(tmp_path, monkeypatch):
+    """Verify .env.secret populates the environment for all options while exported vars win."""
+    # Given an env file that sets a provider key and a cartlog model, plus an exported override
+    env_file = tmp_path / ".env.secret"
+    env_file.write_text("ANTHROPIC_API_KEY=from-file\nCARTLOG_PARSE_MODEL=openai:from-file\n")
+    monkeypatch.setattr("cartlog.config._ENV_FILE", str(env_file))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CARTLOG_PARSE_MODEL", "anthropic:exported")
+    get_settings.cache_clear()
+
+    # When loading settings
+    settings = get_settings()
+
+    # Then a file-only value reaches the environment so the provider SDK can read it
+    assert os.environ["ANTHROPIC_API_KEY"] == "from-file"
+    # And an exported value overrides the file value
+    assert settings.parse_model == "anthropic:exported"
+
+    get_settings.cache_clear()
 
 
 def test_get_settings_returns_cached_instance():

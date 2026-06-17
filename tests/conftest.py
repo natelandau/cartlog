@@ -19,6 +19,12 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Isolate tests from a developer's real .env.secret by loading from a nonexistent file."""
+    monkeypatch.setattr("cartlog.config._ENV_FILE", str(tmp_path / "absent.env"))
+
+
+@pytest.fixture(autouse=True)
 def _dummy_provider_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide a dummy provider credential so model construction in tests needs no real credentials.
 
