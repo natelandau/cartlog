@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Product mapping · cartlog{% endblock %}
+{% block content %}
+<h1 class="mb-4 text-3xl font-semibold tracking-tight">Product mapping</h1>
+{% from "macros/admin.html" import search_box %}
+{% set admin_active = "products" %}
+{% include "partials/_admin_tabs.html" %}
+
+{{ search_box("/admin/products", "admin-products", "admin-products-sort-state", "Filter products…", "Filter products", q) }}
+
+{% include "partials/_admin_products_table.html" %}
+
+{# Datalist of all product names for the per-row merge inputs. Kept on the full page,
+   outside #admin-products, so filtered fragment swaps never re-emit (and leak) all names. #}
+<datalist id="admin-product-names">
+  {% for name in product_names %}<option value="{{ name }}"></option>{% endfor %}
+</datalist>
+
+{# Confirmation dialogs render here; the merge form empties it after the request. #}
+<div id="admin-dialog"></div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% from "macros/sortable.html" import sort_header with context %}
+{% from "macros/ui.html" import table_card %}
+{% macro sortable_th(label, key) %}{{ sort_header(label, key, "/admin/stores", "admin-stores", extra_qs="q=" ~ (q | urlencode) ~ "&") }}{% endmacro %}
+<div id="admin-stores">
+  <span id="admin-stores-sort-state" hidden>
+    <input type="hidden" name="sort" value="{{ sort }}" />
+    <input type="hidden" name="direction" value="{{ direction }}" />
+  </span>
+  {% if rows %}
+  {% call table_card() %}
+    <table class="table table-zebra">
+      <thead><tr>
+        {{ sortable_th("Chain", "chain") }}
+        {{ sortable_th("Location", "location") }}
+        {{ sortable_th("Visits", "visits") }}
+        <th class="w-80">Merge into</th>
+      </tr></thead>
+      <tbody>
+        {% for store, count in rows %}
+        <tr class="hover">
+          <td>{{ store.chain_name }}</td>
+          <td>{{ store.location or "—" }}</td>
+          <td class="num text-right">{{ count }}</td>
+          <td>
+            <form class="merge-form join w-full" hx-get="/admin/stores/{{ store.id }}/merge/confirm"
+                  hx-target="#admin-dialog" hx-swap="innerHTML">
+              <select class="select select-sm join-item w-full" name="target_id" aria-label="Target store" required>
+                <option value="" selected disabled>Merge into…</option>
+                {% for other in stores if other.id != store.id %}
+                <option value="{{ other.id }}">{{ other.chain_name }} — {{ other.location or "—" }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-outline btn-sm join-item">Merge</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endcall %}
+  {% else %}
+  <p class="text-base-content/60">No stores{% if q %} matching "{{ q }}"{% endif %}.</p>
+  {% endif %}
+</div>

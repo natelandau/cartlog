@@ -1,0 +1,33 @@
+<dialog class="modal modal-open">
+  <div class="modal-box">
+    {% if error %}
+    <h3 class="text-lg font-semibold">Cannot merge</h3>
+    <p class="py-3">{{ error }}</p>
+    <div class="modal-action">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('admin-dialog').innerHTML=''">Close</button>
+    </div>
+    {% else %}
+    <h3 class="text-lg font-semibold">Merge “{{ source.chain_name }} — {{ source.location or "—" }}” into
+      “{{ target.chain_name }} — {{ target.location or "—" }}”?</h3>
+    <p class="py-3">
+      {{ visits }} existing receipt(s) will move to “{{ target.chain_name }}”, and future
+      receipts read as “{{ source.chain_name }} — {{ source.location or "—" }}” will be merged
+      automatically.
+    </p>
+    <form hx-post="/admin/stores/{{ source.id }}/merge"
+          hx-target="#admin-stores" hx-swap="outerHTML"
+          hx-include="#admin-stores-sort-state, [name='q']"
+          hx-on::after-request="if (event.detail.successful) document.getElementById('admin-dialog').innerHTML=''">
+      <input type="hidden" name="target_id" value="{{ target.id }}" />
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('admin-dialog').innerHTML=''">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Confirm merge</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="button" onclick="document.getElementById('admin-dialog').innerHTML=''">close</button>
+  </form>
+</dialog>

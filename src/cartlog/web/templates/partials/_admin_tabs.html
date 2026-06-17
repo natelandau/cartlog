@@ -1,0 +1,8 @@
+{# Shared admin sub-navigation. The including page sets `admin_active` to one of the keys
+   below to highlight the current area. #}
+<div role="tablist" class="tabs tabs-box mb-4 w-fit">
+  <a role="tab" href="/admin/products" class="tab {{ 'tab-active' if admin_active == 'products' else '' }}">Products</a>
+  <a role="tab" href="/admin/transformations" class="tab {{ 'tab-active' if admin_active == 'transformations' else '' }}">Transformations</a>
+  <a role="tab" href="/admin/stores" class="tab {{ 'tab-active' if admin_active == 'stores' else '' }}">Stores</a>
+  <a role="tab" href="/admin/store-merges" class="tab {{ 'tab-active' if admin_active == 'store_merges' else '' }}">Store merges</a>
+</div>

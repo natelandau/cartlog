@@ -1,0 +1,37 @@
+{% from "macros/sortable.html" import sort_header with context %}
+{% from "macros/ui.html" import table_card %}
+{% macro sortable_th(label, key) %}{{ sort_header(label, key, "/admin/transformations", "admin-transformations", extra_qs="q=" ~ (q | urlencode) ~ "&") }}{% endmacro %}
+<div id="admin-transformations">
+  <span id="admin-transformations-sort-state" hidden>
+    <input type="hidden" name="sort" value="{{ sort }}" />
+    <input type="hidden" name="direction" value="{{ direction }}" />
+  </span>
+  {% if rows %}
+  {% call table_card() %}
+    <table class="table table-zebra">
+      <thead><tr>
+        {{ sortable_th("Old term", "source") }}
+        {{ sortable_th("Merges into", "target") }}
+        {{ sortable_th("Created", "date") }}
+        <th></th>
+      </tr></thead>
+      <tbody>
+        {% for rule, target_name in rows %}
+        <tr class="hover">
+          <td class="font-medium">{{ rule.source_name }}</td>
+          <td>{{ target_name }}</td>
+          <td class="num whitespace-nowrap">{{ rule.created_at.strftime("%Y-%m-%d") }}</td>
+          <td class="text-right">
+            <button type="button" class="btn btn-ghost btn-xs text-error"
+                    hx-get="/admin/transformations/{{ rule.id }}/delete/confirm"
+                    hx-target="#admin-dialog" hx-swap="innerHTML">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endcall %}
+  {% else %}
+  <p class="text-base-content/60">No transformations{% if q %} matching "{{ q }}"{% endif %}.</p>
+  {% endif %}
+</div>

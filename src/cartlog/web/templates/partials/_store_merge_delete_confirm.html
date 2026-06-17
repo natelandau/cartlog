@@ -1,0 +1,22 @@
+<dialog class="modal modal-open">
+  <div class="modal-box">
+    <h3 class="text-lg font-semibold">Delete this store merge?</h3>
+    <p class="py-3">
+      Future receipts read as “{{ rule.source_chain_name }} — {{ rule.source_location or "—" }}”
+      will no longer merge into “{{ target_name }}”. Already-merged receipts are not changed.
+    </p>
+    <form hx-post="/admin/store-merges/{{ rule.id }}/delete"
+          hx-target="#admin-store-merges" hx-swap="outerHTML"
+          hx-include="#admin-store-merges-sort-state, [name='q']"
+          hx-on::after-request="if (event.detail.successful) document.getElementById('admin-dialog').innerHTML=''">
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm"
+                onclick="document.getElementById('admin-dialog').innerHTML=''">Cancel</button>
+        <button type="submit" class="btn btn-error btn-sm">Delete store merge</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="button" onclick="document.getElementById('admin-dialog').innerHTML=''">close</button>
+  </form>
+</dialog>

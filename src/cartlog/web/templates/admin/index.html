@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Admin · cartlog{% endblock %}
+{% block content %}
+<h1 class="text-3xl font-semibold tracking-tight">Admin</h1>
+<p class="mt-1 mb-5 text-base-content/60">Merge duplicate products and stores, manage category assignments, review background jobs, and edit the saved transformation rules that auto-merge future items.</p>
+
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% set tiles = [
+    ("/admin/products", "Product mapping", "Merge duplicate products into a canonical name."),
+    ("/admin/transformations", "Transformations", "Edit the saved rules that auto-merge future items."),
+    ("/admin/stores", "Store mapping", "Normalize and review store records."),
+    ("/admin/store-merges", "Store merges", "Review and undo merged store records."),
+    ("/categories", "Categories", "Manage the product taxonomy."),
+  ] %}
+  {% for href, title, desc in tiles %}
+  <a href="{{ href }}" class="card border border-base-300 bg-base-100 shadow-sm transition-colors hover:border-primary hover:bg-base-200">
+    <div class="card-body gap-1 p-5">
+      <h2 class="card-title text-base">{{ title }}</h2>
+      <p class="text-sm text-base-content/60">{{ desc }}</p>
+    </div>
+  </a>
+  {% endfor %}
+  <a href="/jobs" class="card border border-base-300 bg-base-100 shadow-sm transition-colors hover:border-primary hover:bg-base-200">
+    <div class="card-body gap-1 p-5">
+      <h2 class="card-title text-base">Jobs
+        <span hx-get="/jobs/badge/partial" hx-trigger="load, every 5s" hx-swap="innerHTML" aria-live="polite"></span>
+      </h2>
+      <p class="text-sm text-base-content/60">Review background ingestion jobs.</p>
+    </div>
+  </a>
+</div>
+{% endblock %}
