@@ -135,7 +135,7 @@ Run `uv run cartlog --help` or add `--help` to any command for full options.
 
 All settings are read from the environment and from `.env.secret`, with environment variables taking precedence. Model-selection variables are prefixed `CARTLOG_`; provider credentials use each provider's own native variable name. Only the chosen provider's API key env var is required. See [.env.sample](.env.sample) for the full list with descriptions.
 
-cartlog is provider-agnostic. For how to point it at Anthropic, OpenAI, Gemini, or a local model, see [Choosing an LLM provider](#choosing-an-llm-provider).
+cartlog is provider-agnostic. For how to point it at Anthropic, OpenAI, Gemini, an API router like OpenRouter, or a local model, see [Choosing an LLM provider](#choosing-an-llm-provider).
 
 | Variable                                          | Default                     | Description                                                        |
 | ------------------------------------------------- | --------------------------- | ------------------------------------------------------------------ |
@@ -150,7 +150,7 @@ For `CARTLOG_DATABASE_URL`, give a plain path to where you want the data file, s
 
 ## Choosing an LLM provider
 
-cartlog reads receipts through [Pydantic AI](https://ai.pydantic.dev/), so you can run it against Anthropic, OpenAI, Google Gemini, or a local model without changing any code. Switching providers takes two steps: set the model with `CARTLOG_PARSE_MODEL` and `CARTLOG_CLASSIFY_MODEL`, then supply that provider's API key under its own variable name.
+cartlog reads receipts through [Pydantic AI](https://ai.pydantic.dev/), so you can switch providers without touching code. It ships with support for Anthropic, OpenAI, and Google Gemini, plus any OpenAI-compatible endpoint, which covers API routers like [OpenRouter](https://openrouter.ai/) and local servers like [Ollama](https://ollama.com/). Switching takes two steps: set the model with `CARTLOG_PARSE_MODEL` and `CARTLOG_CLASSIFY_MODEL`, then supply that provider's API key under its own variable name.
 
 Model values use a `provider:model` format. Set both variables in `.env.secret`, alongside the matching key:
 
@@ -166,12 +166,16 @@ CARTLOG_PARSE_MODEL=openai:gpt-5.2
 
 # Google Gemini
 GEMINI_API_KEY=...
-CARTLOG_PARSE_MODEL=google-gla:gemini-2.5-pro
+CARTLOG_PARSE_MODEL=google:gemini-2.5-pro
+
+# OpenRouter (any OpenAI-compatible router works the same way)
+OPENROUTER_API_KEY=sk-or-...
+CARTLOG_PARSE_MODEL=openrouter:anthropic/claude-3.5-sonnet
 ```
 
-`CARTLOG_PARSE_MODEL` reads the receipt image or PDF and does the heavy lifting. `CARTLOG_CLASSIFY_MODEL` only sorts product names into categories, so a smaller, cheaper model from the same provider fits well there (the Anthropic default pairs Opus for parsing with Haiku for classifying). The two variables can use different providers. For the full provider list and exact model-id syntax, see the [Pydantic AI models documentation](https://ai.pydantic.dev/models/).
+`CARTLOG_PARSE_MODEL` reads the receipt image or PDF and does the heavy lifting. `CARTLOG_CLASSIFY_MODEL` only sorts product names into categories, so a smaller, cheaper model fits well there (the Anthropic default pairs Opus for parsing with Haiku for classifying). The two variables can use different providers. For exact model-id syntax, see the [Pydantic AI models documentation](https://ai.pydantic.dev/models/).
 
-Local models work through an OpenAI-compatible endpoint such as [Ollama](https://ollama.com/). They are held to the same capability requirements below, which many small local models do not meet.
+Local and self-hosted models work through that same OpenAI-compatible path. They are held to the same capability requirements below, which many small local models do not meet. To use a provider cartlog does not bundle (for example Cohere or Bedrock), add its [Pydantic AI extra](https://ai.pydantic.dev/models/) to the install and rebuild.
 
 > **Important:** The parse model must support image (vision) input and structured output, because cartlog hands it the receipt picture and asks for a typed result. To read PDF receipts, the model must also accept PDF documents. The classify model needs structured output only, since it works from text. Point either variable at a model that lacks these capabilities and ingestion fails: the parse step errors and the receipt is flagged for review. Current frontier models from Anthropic, OpenAI, and Google meet all three requirements; many smaller and local models do not. Test one receipt before switching your whole setup.
 
