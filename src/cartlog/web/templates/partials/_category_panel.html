@@ -1,0 +1,25 @@
+{# Unified category panel: error banner + add-form + cat-form slot + list. #}
+{# Swapped as a whole unit by all mutation POST handlers so error, form, and list #}
+{# stay in sync after every action. #}
+<div id="category-panel" class="flex flex-col gap-4">
+  {% if error %}<div class="alert alert-error alert-soft text-sm" role="alert">error: {{ error }}</div>{% endif %}
+
+  <section class="card border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body gap-3">
+      <h2 class="card-title text-lg">Add category</h2>
+      <form class="flex flex-wrap items-end gap-2" hx-post="/categories"
+            hx-target="#category-panel"
+            hx-swap="outerHTML">
+        <fieldset class="fieldset min-w-64">
+          <legend class="fieldset-legend">Name</legend>
+          <input class="input w-full" type="text" name="name" placeholder="Category name" required />
+        </fieldset>
+        <button class="btn btn-primary" type="submit">Add</button>
+      </form>
+    </div>
+  </section>
+
+  <div id="cat-form" class="empty:hidden"></div>
+
+  {% include "partials/_category_tree.html" %}
+</div>

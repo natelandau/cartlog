@@ -1,0 +1,7 @@
+{# Inline create-and-assign: posts to /categories/inline and the returned picker (with the
+   new category selected) replaces this cell's contents. #}
+<span class="inline-cat-form inline-flex items-center gap-1">
+  <input class="input input-xs w-32" name="name" placeholder="new category" autofocus />
+  <button type="button" class="cat-new-btn btn btn-primary btn-xs" hx-post="/categories/inline" hx-include="closest .inline-cat-form"
+          hx-target="closest td" hx-swap="innerHTML">create</button>
+</span>

@@ -1,0 +1,60 @@
+{# Action form for rename, merge, or delete. Rendered into #cat-form via htmx GET. #}
+{# mode: "rename" | "merge" | "delete"  category: Category  candidates: list[(id, name)] #}
+{# POST submits target #category-panel (outerHTML swap) so the whole panel refreshes. #}
+{% if mode == "rename" %}
+<form class="card border border-primary/40 bg-base-100 shadow-sm" hx-post="/categories/{{ category.id }}/rename"
+      hx-target="#category-panel"
+      hx-swap="outerHTML">
+  <div class="card-body gap-3">
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">New name</legend>
+      <input class="input w-full max-w-sm" type="text" name="new_name" value="{{ category.name }}" required autofocus />
+    </fieldset>
+    <div class="flex gap-2">
+      <button class="btn btn-primary btn-sm" type="submit">Rename</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('cat-form').innerHTML=''">Cancel</button>
+    </div>
+  </div>
+</form>
+{% elif mode == "merge" %}
+<form class="card border border-primary/40 bg-base-100 shadow-sm" hx-post="/categories/{{ category.id }}/merge"
+      hx-target="#category-panel"
+      hx-swap="outerHTML">
+  <div class="card-body gap-3">
+    <p>Merge <strong>{{ category.name }}</strong> into:</p>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Target category</legend>
+      <select class="select w-full max-w-sm" name="target_id" required>
+        {% for cid, path in candidates %}
+        <option value="{{ cid }}">{{ path }}</option>
+        {% endfor %}
+      </select>
+    </fieldset>
+    <div class="flex gap-2">
+      <button class="btn btn-primary btn-sm" type="submit">Merge</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('cat-form').innerHTML=''">Cancel</button>
+    </div>
+  </div>
+</form>
+{% elif mode == "delete" %}
+<form class="card border border-error/40 bg-base-100 shadow-sm" hx-post="/categories/{{ category.id }}/delete"
+      hx-target="#category-panel"
+      hx-swap="outerHTML">
+  <div class="card-body gap-3">
+    <p>Delete <strong>{{ category.name }}</strong>. Reassign its products to:</p>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Reassign to</legend>
+      <select class="select w-full max-w-sm" name="reassign_to_id">
+        <option value="">(delete, no reassignment)</option>
+        {% for cid, path in candidates %}
+        <option value="{{ cid }}">{{ path }}</option>
+        {% endfor %}
+      </select>
+    </fieldset>
+    <div class="flex gap-2">
+      <button class="btn btn-error btn-sm" type="submit">Delete</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('cat-form').innerHTML=''">Cancel</button>
+    </div>
+  </div>
+</form>
+{% endif %}

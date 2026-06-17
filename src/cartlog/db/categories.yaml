@@ -1,0 +1,31 @@
+# Default product categories seeded into a new database. Flat, grocery-aisle style.
+# Edit freely, then run `cartlog db seed` to add new entries. Seeding is additive: it
+# never removes or renames existing categories. Keep names lowercase and slash-free.
+#
+# Each entry is a bare category name.
+---
+- meat & seafood
+- deli
+- produce
+- dairy & eggs
+- bakery
+- frozen
+- breakfast & cereal
+- pantry
+- canned goods
+- pasta & rice
+- condiments & sauces
+- baking
+- snacks
+- candy
+- beverages
+- alcohol
+- spices & seasonings
+- international
+- health & beauty
+- household
+- baby
+- pet
+- bulk
+- desserts & candy
+- fees & deposits
