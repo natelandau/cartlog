@@ -66,6 +66,7 @@ The container reads its configuration from the environment and from `.env.secret
 | Variable          | Default         | Description                                            |
 | ----------------- | --------------- | ------------------------------------------------------ |
 | `PUID` / `PGID`   | `1000` / `1000` | User and group that own the data volume                |
+| `TZ`              | `Etc/UTC`       | Container timezone, e.g. `America/New_York`            |
 | `CARTLOG_HOST`    | `0.0.0.0`       | Interface the web server binds to inside the container |
 | `CARTLOG_PORT`    | `8000`          | Port the web server listens on                         |
 | `CARTLOG_WORKERS` | `1`             | How many receipts to read at the same time             |

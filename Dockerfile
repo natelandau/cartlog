@@ -51,7 +51,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates tini tzdata gosu \
     && rm -rf /var/lib/apt/lists/*
 
-# Timezone
+# Default timezone. Overridable at runtime via the TZ env var, which the entrypoint
+# re-applies to /etc/localtime before dropping privileges (e.g. TZ=America/New_York).
 ENV TZ=Etc/UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ >/etc/timezone
 
