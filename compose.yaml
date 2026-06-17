@@ -15,7 +15,8 @@ services:
       CARTLOG_DATABASE_URL: /data/cartlog.db
       CARTLOG_IMAGE_STORAGE_DIR: /data/receipt_images
     env_file:
-      # Holds CARTLOG_ANTHROPIC_API_KEY and any model overrides. Copy .env.sample first.
+      # Holds your provider API key (e.g. ANTHROPIC_API_KEY / OPENAI_API_KEY) and any
+      # CARTLOG_PARSE_MODEL / CARTLOG_CLASSIFY_MODEL overrides. Copy .env.sample first.
       - .env.secret
     volumes:
       # Persist the SQLite database and ingested receipt images.

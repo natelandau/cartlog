@@ -17,9 +17,9 @@ cartlog takes a receipt photo and gives you back spending you can search and cha
 
 ## Requirements
 
-You need an Anthropic API key and one of two ways to run cartlog:
+You need an API key for your chosen LLM provider (Anthropic by default) and one of two ways to run cartlog:
 
-- An [Anthropic API key](https://console.anthropic.com/) (required to parse receipts)
+- An API key for your LLM provider - [Anthropic](https://console.anthropic.com/) by default (required to parse receipts)
 - Either Docker, or Python 3.14+ with [uv](https://docs.astral.sh/uv/) for a local install
 
 ## Quick start with Docker
@@ -39,7 +39,7 @@ Running in Docker is the fastest way to get cartlog up. Everything runs in a sin
    cp .env.sample .env.secret
    ```
 
-   Open `.env.secret` and set `CARTLOG_ANTHROPIC_API_KEY`. Every other value is optional.
+   Open `.env.secret` and set the API key for your chosen provider (e.g. `ANTHROPIC_API_KEY`). Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to switch providers. Every other value is optional.
 
 3. Build and start the container:
 
@@ -85,7 +85,7 @@ For development, or to run cartlog without Docker, install it with uv.
    cp .env.sample .env.secret
    ```
 
-   Set `CARTLOG_ANTHROPIC_API_KEY` in `.env.secret`.
+   Set the API key for your chosen provider (e.g. `ANTHROPIC_API_KEY`) in `.env.secret`. Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to point at a different provider or model.
 
 3. Start the web server and worker:
 
@@ -133,16 +133,18 @@ Run `uv run cartlog --help` or add `--help` to any command for full options.
 
 ## Configuration
 
-All settings are read from the environment and from `.env.secret`, with environment variables taking precedence. Every variable is prefixed `CARTLOG_`. Only `CARTLOG_ANTHROPIC_API_KEY` is required. See [.env.sample](.env.sample) for the full list with descriptions.
+All settings are read from the environment and from `.env.secret`, with environment variables taking precedence. Model-selection variables are prefixed `CARTLOG_`; provider credentials use each provider's own native variable name. Only the chosen provider's API key env var is required. See [.env.sample](.env.sample) for the full list with descriptions.
 
-| Variable                              | Default            | Description                                                  |
-| ------------------------------------- | ------------------ | ----------------------------------------------------------- |
-| `CARTLOG_ANTHROPIC_API_KEY`           | (none, required)   | Your Anthropic API key, used to read receipts               |
-| `CARTLOG_ANTHROPIC_MODEL`             | `claude-opus-4-8`  | Which Claude model reads your receipts                      |
-| `CARTLOG_RECLASSIFY_MODEL`            | `claude-haiku-4-5` | A cheaper model used to tidy up item categories             |
-| `CARTLOG_DATABASE_URL`                | `cartlog.db`       | Where to store your data file (the folder must exist)       |
-| `CARTLOG_IMAGE_STORAGE_DIR`           | `receipt_images`   | Where to keep copies of your receipt images                 |
-| `CARTLOG_REVIEW_CONFIDENCE_THRESHOLD` | `0.7`              | Receipts cartlog is unsure about are flagged for you to review |
+cartlog is provider-agnostic via Pydantic AI; point `CARTLOG_PARSE_MODEL`/`CARTLOG_CLASSIFY_MODEL` at any supported provider (OpenAI, Gemini, local models) and set that provider's key.
+
+| Variable                                          | Default                     | Description                                                        |
+| ------------------------------------------------- | --------------------------- | ------------------------------------------------------------------ |
+| `ANTHROPIC_API_KEY` (or provider equivalent)      | (none, required)            | API key for your chosen provider; read by Pydantic AI              |
+| `CARTLOG_PARSE_MODEL`                             | `anthropic:claude-opus-4-8` | Provider-prefixed model that reads your receipts                   |
+| `CARTLOG_CLASSIFY_MODEL`                          | `anthropic:claude-haiku-4-5`| Cheaper provider-prefixed model that tidies item categories        |
+| `CARTLOG_DATABASE_URL`                            | `cartlog.db`                | Where to store your data file (the folder must exist)              |
+| `CARTLOG_IMAGE_STORAGE_DIR`                       | `receipt_images`            | Where to keep copies of your receipt images                        |
+| `CARTLOG_REVIEW_CONFIDENCE_THRESHOLD`             | `0.7`                       | Receipts cartlog is unsure about are flagged for you to review     |
 
 For `CARTLOG_DATABASE_URL`, give a plain path to where you want the data file, such as `cartlog.db` or `/app/data.db`. cartlog checks the folder exists when it starts and handles the rest, so most people never need to change the default.
 

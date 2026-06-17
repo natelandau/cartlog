@@ -1,6 +1,6 @@
 # cartlog
 
-cartlog scans grocery receipts, parses them into structured data with the Anthropic API, and stores them for price and spend analysis. Python 3.14, FastAPI web UI, Typer CLI, SQLite.
+cartlog scans grocery receipts, parses them into structured data via Pydantic AI (provider-agnostic), and stores them for price and spend analysis. Python 3.14, FastAPI web UI, Typer CLI, SQLite.
 
 ## Running the app
 
@@ -18,13 +18,15 @@ The `duty` task runner wraps common workflows. Invoke it as `uv run duty <task>`
 - `src/cartlog/cli.py` — Typer CLI: `ingest`, `serve`, `worker`, plus `query`/`receipts`/`db` sub-apps.
 - `src/cartlog/web/` — FastAPI app factory (`app.py`), routers, Jinja templates, Tailwind/daisyUI assets.
 - `src/cartlog/ingest/` — upload queue and worker pipeline; web uploads enqueue jobs that workers parse.
-- `src/cartlog/parsing/` — Anthropic vision parser and category classifier.
+- `src/cartlog/parsing/` — Pydantic AI vision parser and category classifier.
 - `src/cartlog/db/` — SQLAlchemy models, session factory, and seed data. Migrations live in the top-level `alembic/`.
 - `src/cartlog/bootstrap.py` — `prepare_runtime()` runs migrations and seeding; called by `serve`.
 
 ## Configuration
 
-Settings load from environment variables and `.env.secret`, all prefixed `CARTLOG_` (see `config.py` and `.env.sample`). Exported env vars override the file. `CARTLOG_DATABASE_URL` accepts a bare filesystem path (e.g. `cartlog.db`); the `sqlite:///` prefix is added and the directory is verified at startup.
+Settings load from environment variables and `.env.secret` (see `config.py` and `.env.sample`). Exported env vars override the file. `CARTLOG_DATABASE_URL` accepts a bare filesystem path (e.g. `cartlog.db`); the `sqlite:///` prefix is added and the directory is verified at startup.
+
+The LLM provider is selected via `CARTLOG_PARSE_MODEL` and `CARTLOG_CLASSIFY_MODEL`, which take provider-prefixed model strings (e.g. `anthropic:claude-opus-4-8`, `openai:gpt-4o`). Credentials are supplied via each provider's native env var (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`), not a `CARTLOG_`-prefixed key. Pydantic AI resolves the provider and reads the key automatically.
 
 ## Frontend / CSS
 
