@@ -4,7 +4,6 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003  # Typer resolves command annotations at runtime
 
-import anthropic
 import typer
 import uvicorn
 from pydantic_ai.exceptions import UserError
@@ -38,18 +37,6 @@ console = Console()
 @app.callback()
 def main() -> None:
     """cartlog: scan, parse, and store grocery receipts."""
-
-
-def _anthropic_client(settings: Settings) -> anthropic.Anthropic:
-    """Construct an Anthropic client, requiring a configured API key.
-
-    Raises:
-        typer.BadParameter: If no API key is configured.
-    """
-    if not settings.anthropic_api_key:
-        msg = "No Anthropic API key configured. Set the CARTLOG_ANTHROPIC_API_KEY environment variable."
-        raise typer.BadParameter(msg)
-    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
 def _build_model(model_id: str) -> Model:
@@ -202,12 +189,10 @@ def ingest(
     """Enqueue one or more receipts and, by default, parse each immediately for instant feedback."""
     settings = get_settings()
 
-    # Validate the API key before storing files or enqueuing, so a missing key does not
-    # leave stored receipts and stranded PENDING jobs behind (parser is built later,
-    # inside the session, with the allowed taxonomy).
-    if not no_wait and not settings.anthropic_api_key:
-        msg = "No Anthropic API key configured. Set the CARTLOG_ANTHROPIC_API_KEY environment variable."
-        raise typer.BadParameter(msg)
+    # Build the parse model up front (when we will parse) so a missing provider key fails
+    # before any files are stored or jobs enqueued, rather than stranding PENDING jobs.
+    if not no_wait:
+        _build_model(settings.parse_model)
 
     session_factory = create_session_factory(settings.database_url)
 

@@ -56,7 +56,6 @@ def _temp_db_settings(tmp_path, **overrides) -> Settings:
     Base.metadata.create_all(engine)
     engine.dispose()
     return Settings(
-        anthropic_api_key="test-key",
         database_url=database_url,
         image_storage_dir=tmp_path / "storage",
         **overrides,
@@ -315,3 +314,19 @@ def test_build_model_raises_friendly_error_without_key(monkeypatch):
     # When building a model that needs that key, then a friendly CLI error is raised
     with pytest.raises(typer.BadParameter):
         cli_module._build_model("anthropic:claude-opus-4-8")
+
+
+def test_ingest_command_errors_without_provider_key(tmp_path, monkeypatch):
+    """Verify ingest fails fast with a friendly error when the provider key is unset."""
+    # Given settings and no provider key in the environment
+    settings = _temp_db_settings(tmp_path)
+    monkeypatch.setattr(cli_module, "get_settings", lambda: settings)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    receipt = tmp_path / "receipt.png"
+    receipt.write_bytes(b"\x89PNG fake bytes")
+
+    # When invoking ingest without --no-wait
+    result = runner.invoke(cli_module.app, ["ingest", str(receipt)])
+
+    # Then the command exits non-zero rather than parsing
+    assert result.exit_code != 0
