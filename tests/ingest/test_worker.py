@@ -145,7 +145,6 @@ def test_worker_pool_drains_jobs_then_stops_on_exit(tmp_path, fake_parser):
 
     # And settings with a near-zero poll interval for a fast test
     settings = Settings(
-        anthropic_api_key="test-key",
         database_url=database_url,
         image_storage_dir=storage,
         worker_poll_interval=0.01,

@@ -1,14 +1,19 @@
-"""Anthropic vision-model parser that turns receipt files into ParsedReceipt objects."""
+"""Provider-agnostic vision parser that turns receipt files into ParsedReceipt objects."""
 
 from __future__ import annotations
 
-import base64
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
+
+from pydantic_ai import Agent, BinaryContent
+from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.settings import ModelSettings
 
 from cartlog.parsing.schema import ParsedReceipt
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from pydantic_ai.models import Model
 
 _IMAGE_MEDIA_TYPES: dict[str, str] = {
     ".png": "image/png",
@@ -22,6 +27,9 @@ _PDF_MEDIA_TYPE = "application/pdf"
 
 # File suffixes this parser can ingest; reused by upload sources to reject unsupported files.
 SUPPORTED_SUFFIXES: frozenset[str] = frozenset({*_IMAGE_MEDIA_TYPES, _PDF_SUFFIX})
+
+# Token budget for the parse response; large receipts need headroom for every line item.
+_MAX_TOKENS = 4096
 
 _PROMPT_BASE = (
     "You are reading a scanned grocery receipt. Extract every purchased line item. "
@@ -48,25 +56,25 @@ def _build_prompt(allowed_categories: list[str] | None) -> str:
 
 
 class LLMReceiptParser:
-    """Parses a receipt image or PDF into a ParsedReceipt using an Anthropic vision model.
+    """Parses a receipt image or PDF into a ParsedReceipt using a Pydantic AI vision model.
 
-    Inject an `anthropic.Anthropic` client so tests can substitute a mock
-    without making real network calls. Pass `allowed_categories` to constrain
-    the model to a fixed taxonomy; omit it to fall back to free-form guidance.
+    Inject a `pydantic_ai` `Model` so tests can substitute a `TestModel`/`FunctionModel`
+    without network calls. Pass `allowed_categories` to constrain the model to a fixed
+    taxonomy; omit it to fall back to free-form guidance.
     """
 
-    def __init__(
-        self, client: object, model: str, allowed_categories: list[str] | None = None
-    ) -> None:
-        """Store the injected client, the model name, and the allowed taxonomy paths.
+    def __init__(self, model: Model, allowed_categories: list[str] | None = None) -> None:
+        """Build the parsing agent and precompute the prompt for the given taxonomy.
 
-        An empty list is treated the same as None: both fall back to free-form
-        category guidance rather than constraining the prompt to a fixed taxonomy.
+        An empty list is treated the same as None: both fall back to free-form category
+        guidance rather than constraining the prompt to a fixed taxonomy.
         """
-        # client is an anthropic.Anthropic instance; injected so tests can mock it.
-        self._client = client
-        self._model = model
         self._prompt = _build_prompt(allowed_categories)
+        self._agent = Agent(
+            model,
+            output_type=ParsedReceipt,
+            model_settings=ModelSettings(max_tokens=_MAX_TOKENS),
+        )
 
     def parse(self, file_path: Path) -> ParsedReceipt:
         """Parse a receipt file into a structured ParsedReceipt.
@@ -76,51 +84,42 @@ class LLMReceiptParser:
                 (.png, .jpg, .jpeg, .webp, .gif, or .pdf).
 
         Returns:
-            ParsedReceipt populated by the LLM's structured output.
+            ParsedReceipt populated by the model's structured output.
 
         Raises:
-            ValueError: If the file extension is not supported, or if the model
-                returned no structured output (e.g. the response was truncated or refused).
+            ValueError: If the file extension is not supported, or if the model returned no
+                usable structured output (e.g. the response was truncated or refused).
         """
-        source_block = self._build_source_block(file_path)
-
-        response = self._client.messages.parse(  # type: ignore[attr-defined, ty:unresolved-attribute]
-            model=self._model,
-            max_tokens=4096,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [source_block, {"type": "text", "text": self._prompt}],
-                }
-            ],
-            output_format=ParsedReceipt,
-        )
-        parsed: ParsedReceipt | None = response.parsed_output  # type: ignore[attr-defined]
-        if parsed is None:
+        content = self._build_binary_content(file_path)
+        try:
+            # Image/PDF before the instruction text; vision models attend better when the
+            # document precedes the question.
+            result = self._agent.run_sync([content, self._prompt])
+        except UnexpectedModelBehavior as exc:
             msg = (
                 "Model returned no structured receipt; the response may have been "
                 "truncated (raise max_tokens) or refused."
             )
-            raise ValueError(msg)
-        return parsed
+            raise ValueError(msg) from exc
+        return cast("ParsedReceipt", result.output)
 
     @staticmethod
-    def _build_source_block(file_path: Path) -> dict[str, object]:
-        """Build the base64 content block for the file, choosing image vs. document by suffix."""
-        suffix = file_path.suffix.lower()
+    def _build_binary_content(file_path: Path) -> BinaryContent:
+        """Read the file into a BinaryContent block, choosing the media type by suffix.
 
-        # PDFs use a 'document' content block; the model reads each page with vision.
+        PDFs are sent with the application/pdf media type so capable providers read each
+        page natively; images use their format-specific media type.
+
+        Raises:
+            ValueError: If the file extension is not a supported image or PDF type.
+        """
+        suffix = file_path.suffix.lower()
         if suffix == _PDF_SUFFIX:
-            block_type, media_type = "document", _PDF_MEDIA_TYPE
+            media_type = _PDF_MEDIA_TYPE
         elif suffix in _IMAGE_MEDIA_TYPES:
-            block_type, media_type = "image", _IMAGE_MEDIA_TYPES[suffix]
+            media_type = _IMAGE_MEDIA_TYPES[suffix]
         else:
             # Validate before reading so an unsupported file is rejected without I/O.
             msg = f"Unsupported file type: {file_path.suffix}"
             raise ValueError(msg)
-
-        encoded = base64.standard_b64encode(file_path.read_bytes()).decode("utf-8")
-        return {
-            "type": block_type,
-            "source": {"type": "base64", "media_type": media_type, "data": encoded},
-        }
+        return BinaryContent(data=file_path.read_bytes(), media_type=media_type)

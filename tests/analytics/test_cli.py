@@ -12,7 +12,7 @@ runner = CliRunner()
 
 
 def _settings(seeded_db_url: str) -> Settings:
-    return Settings(anthropic_api_key="test-key", database_url=seeded_db_url)
+    return Settings(database_url=seeded_db_url)
 
 
 def test_query_price_history_table(seeded_db_url, monkeypatch):

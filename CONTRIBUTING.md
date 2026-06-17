@@ -36,8 +36,8 @@ You need:
    cp .env.sample .env.secret
    ```
 
-   Open `.env.secret` and set `CARTLOG_ANTHROPIC_API_KEY`. The file is
-   gitignored, so your key never gets committed.
+   Open `.env.secret` and set your LLM provider's API key (e.g. `ANTHROPIC_API_KEY`). The file
+   is gitignored, so your key never gets committed.
 
 4. Confirm the setup works by running the test suite:
 

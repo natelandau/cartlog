@@ -1,5 +1,7 @@
 """Tests for runtime settings loading and caching."""
 
+import os
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,44 +10,30 @@ from cartlog.config import Settings, get_settings
 
 def test_settings_read_from_env(monkeypatch):
     """Verify settings are read from CARTLOG_-prefixed environment variables."""
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
+    # Given CARTLOG_-prefixed overrides in the environment
+    monkeypatch.setenv("CARTLOG_PARSE_MODEL", "openai:gpt-5.2")
     monkeypatch.setenv("CARTLOG_DATABASE_URL", "sqlite:///custom.db")
 
+    # When loading settings
     settings = Settings()
 
-    assert settings.anthropic_api_key == "test-key"
+    # Then the values come from the environment
+    assert settings.parse_model == "openai:gpt-5.2"
     assert settings.database_url == "sqlite:///custom.db"
 
 
 def test_settings_defaults(monkeypatch):
     """Verify settings fall back to their declared defaults when env vars are unset."""
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
     monkeypatch.delenv("CARTLOG_DATABASE_URL", raising=False)
 
     settings = Settings()
 
     assert settings.database_url == "sqlite:///cartlog.db"
-    assert settings.anthropic_model == "claude-opus-4-8"
-    assert settings.reclassify_model == "claude-haiku-4-5"
     assert settings.review_confidence_threshold == 0.7
-
-
-def test_reclassify_model_overrides_default_from_env(monkeypatch):
-    """Verify a configured reclassify model overrides the default (env file uses this path)."""
-    # Given the reclassify model set in the environment (as the .env.secret file would)
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setenv("CARTLOG_RECLASSIFY_MODEL", "claude-sonnet-4-6")
-
-    # When loading settings
-    settings = Settings()
-
-    # Then the configured value wins over the default
-    assert settings.reclassify_model == "claude-sonnet-4-6"
 
 
 def test_settings_worker_defaults(monkeypatch):
     """Verify worker poll interval and retry budget have sensible defaults."""
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
     monkeypatch.delenv("CARTLOG_WORKER_POLL_INTERVAL", raising=False)
     monkeypatch.delenv("CARTLOG_MAX_RETRIES", raising=False)
 
@@ -60,7 +48,6 @@ def test_settings_worker_defaults(monkeypatch):
 def test_settings_database_url_bare_path_gets_sqlite_prefix(tmp_path, monkeypatch):
     """Verify a bare filesystem path is normalized into a sqlite:/// URL automatically."""
     # Given a bare path to a database file inside an existing directory
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
     db_path = tmp_path / "data.db"
     monkeypatch.setenv("CARTLOG_DATABASE_URL", str(db_path))
 
@@ -74,7 +61,6 @@ def test_settings_database_url_bare_path_gets_sqlite_prefix(tmp_path, monkeypatc
 def test_settings_database_url_full_url_passes_through(monkeypatch):
     """Verify a value that already carries a scheme is used unchanged."""
     # Given a full SQLAlchemy URL
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setenv("CARTLOG_DATABASE_URL", "sqlite:///already.db")
 
     # When loading settings
@@ -87,7 +73,6 @@ def test_settings_database_url_full_url_passes_through(monkeypatch):
 def test_settings_database_url_missing_directory_raises(tmp_path, monkeypatch):
     """Verify a bare path whose parent directory is missing fails fast with a clear error."""
     # Given a path inside a directory that does not exist
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
     missing = tmp_path / "nope" / "data.db"
     monkeypatch.setenv("CARTLOG_DATABASE_URL", str(missing))
 
@@ -96,11 +81,29 @@ def test_settings_database_url_missing_directory_raises(tmp_path, monkeypatch):
         Settings()
 
 
-def test_get_settings_returns_cached_instance(monkeypatch):
-    """Verify get_settings returns the same instance on repeated calls."""
-    # Given a valid API key in the environment
-    monkeypatch.setenv("CARTLOG_ANTHROPIC_API_KEY", "test-key")
+def test_get_settings_loads_env_file_without_overriding_exported(tmp_path, monkeypatch):
+    """Verify .env.secret populates the environment for all options while exported vars win."""
+    # Given an env file that sets a provider key and a cartlog model, plus an exported override
+    env_file = tmp_path / ".env.secret"
+    env_file.write_text("ANTHROPIC_API_KEY=from-file\nCARTLOG_PARSE_MODEL=openai:from-file\n")
+    monkeypatch.setattr("cartlog.config._ENV_FILE", str(env_file))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("CARTLOG_PARSE_MODEL", "anthropic:exported")
+    get_settings.cache_clear()
 
+    # When loading settings
+    settings = get_settings()
+
+    # Then a file-only value reaches the environment so the provider SDK can read it
+    assert os.environ["ANTHROPIC_API_KEY"] == "from-file"
+    # And an exported value overrides the file value
+    assert settings.parse_model == "anthropic:exported"
+
+    get_settings.cache_clear()
+
+
+def test_get_settings_returns_cached_instance():
+    """Verify get_settings returns the same instance on repeated calls."""
     # When get_settings is called twice after clearing the cache
     get_settings.cache_clear()
     first = get_settings()
@@ -109,3 +112,29 @@ def test_get_settings_returns_cached_instance(monkeypatch):
     # Then both calls return the same cached Settings instance
     assert isinstance(first, Settings)
     assert first is second
+
+
+def test_settings_model_defaults(monkeypatch):
+    """Verify the provider-neutral model settings fall back to their declared defaults."""
+    # Given no model overrides in the environment
+    monkeypatch.delenv("CARTLOG_PARSE_MODEL", raising=False)
+    monkeypatch.delenv("CARTLOG_CLASSIFY_MODEL", raising=False)
+
+    # When loading settings
+    settings = Settings()
+
+    # Then the provider-prefixed defaults are used
+    assert settings.parse_model == "anthropic:claude-opus-4-8"
+    assert settings.classify_model == "anthropic:claude-haiku-4-5"
+
+
+def test_settings_parse_model_overrides_default_from_env(monkeypatch):
+    """Verify a configured parse model overrides the default."""
+    # Given a parse model set in the environment
+    monkeypatch.setenv("CARTLOG_PARSE_MODEL", "openai:gpt-5.2")
+
+    # When loading settings
+    settings = Settings()
+
+    # Then the configured value wins
+    assert settings.parse_model == "openai:gpt-5.2"

@@ -4,9 +4,10 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003  # Typer resolves command annotations at runtime
 
-import anthropic
 import typer
 import uvicorn
+from pydantic_ai.exceptions import UserError
+from pydantic_ai.models import Model, infer_model
 from rich.console import Console
 from sqlalchemy.orm import Session  # noqa: TC002  # used in helper annotations at runtime
 
@@ -38,16 +39,20 @@ def main() -> None:
     """cartlog: scan, parse, and store grocery receipts."""
 
 
-def _anthropic_client(settings: Settings) -> anthropic.Anthropic:
-    """Construct an Anthropic client, requiring a configured API key.
+def _build_model(model_id: str) -> Model:
+    """Build a Pydantic AI model from a provider-prefixed id, failing fast on a bad config.
+
+    Construction reads the provider's API key from its native environment variable. A missing
+    key raises UserError; an unknown provider prefix raises ValueError. Both are surfaced as a
+    friendly CLI error naming the problem rather than a raw traceback.
 
     Raises:
-        typer.BadParameter: If no API key is configured.
+        typer.BadParameter: If the provider key is unset or the model id names an unknown provider.
     """
-    if not settings.anthropic_api_key:
-        msg = "No Anthropic API key configured. Set the CARTLOG_ANTHROPIC_API_KEY environment variable."
-        raise typer.BadParameter(msg)
-    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    try:
+        return infer_model(model_id)
+    except (UserError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def build_parser(
@@ -58,34 +63,33 @@ def build_parser(
     An empty list for `allowed_categories` is treated the same as None: both
     fall back to free-form category guidance in the prompt.
     """
-    client = _anthropic_client(settings)
-    return LLMReceiptParser(
-        client=client, model=settings.anthropic_model, allowed_categories=allowed_categories
-    )
+    model = _build_model(settings.parse_model)
+    return LLMReceiptParser(model=model, allowed_categories=allowed_categories)
 
 
 def build_classifier(settings: Settings, allowed_categories: list[str]) -> LLMCategoryClassifier:
     """Construct the focused category classifier from settings (patched out in tests)."""
-    # Validate the API key before the taxonomy so a missing key reports first, as before.
-    client = _anthropic_client(settings)
+    # Validate the provider key before the taxonomy so a missing key reports first, matching
+    # the pre-flight order callers rely on (a key error is the root cause, not the taxonomy).
+    model = _build_model(settings.classify_model)
     if not allowed_categories:
         msg = "No categories in the taxonomy to classify into; seed categories first."
         raise typer.BadParameter(msg)
-    return LLMCategoryClassifier(
-        client=client, model=settings.reclassify_model, allowed_categories=allowed_categories
-    )
+    return LLMCategoryClassifier(model=model, allowed_categories=allowed_categories)
 
 
-def build_ingest_classifier(settings: Settings, session: Session) -> LLMCategoryClassifier | None:
+def build_ingest_classifier(
+    settings: Settings, allowed_categories: list[str]
+) -> LLMCategoryClassifier | None:
     """Build the auto-reclassification classifier for ingestion, or None if no taxonomy exists.
 
     Returns None when no categories are seeded yet, so ingestion runs without the second pass
-    rather than failing; the API key is already validated by the parser build.
+    rather than failing; the API key is already validated by the parser build. Pass the allowed
+    taxonomy the caller already read, so the command issues a single query for it.
     """
-    allowed = CategoryService(session).allowed_categories()
-    if not allowed:
+    if not allowed_categories:
         return None
-    return build_classifier(settings, allowed)
+    return build_classifier(settings, allowed_categories)
 
 
 @dataclass
@@ -189,17 +193,25 @@ def ingest(
     """Enqueue one or more receipts and, by default, parse each immediately for instant feedback."""
     settings = get_settings()
 
-    # Validate the API key before storing files or enqueuing, so a missing key does not
-    # leave stored receipts and stranded PENDING jobs behind (parser is built later,
-    # inside the session, with the allowed taxonomy).
-    if not no_wait and not settings.anthropic_api_key:
-        msg = "No Anthropic API key configured. Set the CARTLOG_ANTHROPIC_API_KEY environment variable."
-        raise typer.BadParameter(msg)
+    # Build the parse model up front (when we will parse) so a missing provider key fails
+    # before any files are stored or jobs enqueued, rather than stranding PENDING jobs.
+    if not no_wait:
+        _build_model(settings.parse_model)
 
     session_factory = create_session_factory(settings.database_url)
 
     try:
         with session_factory() as session:
+            # Read the allowed taxonomy once and reuse it for the guard, parser, and classifier.
+            allowed_categories = CategoryService(session).allowed_categories()
+
+            # When parsing inline, validate the classify provider key too before storing any
+            # files. The reclassification pass runs only when a taxonomy exists, so a classify
+            # model on a different provider with a missing key would otherwise fail after jobs
+            # are enqueued, stranding them as PENDING.
+            if not no_wait and allowed_categories:
+                _build_model(settings.classify_model)
+
             # Enqueue everything first so a running worker can see the whole batch and the
             # foreground parse loop is decoupled from storing the files.
             enqueued: list[tuple[Path, IngestionJob]] = []
@@ -214,10 +226,9 @@ def ingest(
                     typer.echo(f"Enqueued job #{job.id} for {path.name} (status={job.status}).")
                 return
 
-            # Build the parser inside the session so we can read the allowed taxonomy paths.
-            parser = build_parser(settings, CategoryService(session).allowed_categories())
+            parser = build_parser(settings, allowed_categories)
             # Auto-reclassify miscategorized lines as part of ingestion (None if no taxonomy yet).
-            classifier = build_ingest_classifier(settings, session)
+            classifier = build_ingest_classifier(settings, allowed_categories)
 
             results: list[IngestResult] = []
             for index, (path, job) in enumerate(enqueued, start=1):
@@ -277,8 +288,9 @@ def serve(
     # Build the parser before binding the port so a missing API key fails fast.
     # The allowed list is read once at startup; restart the server after taxonomy edits.
     with session_factory() as session:
-        parser = build_parser(settings, CategoryService(session).allowed_categories())
-        classifier = build_ingest_classifier(settings, session)
+        allowed_categories = CategoryService(session).allowed_categories()
+        parser = build_parser(settings, allowed_categories)
+        classifier = build_ingest_classifier(settings, allowed_categories)
 
     # Import here so the other CLI commands don't pay the cost of building the web app.
     from cartlog.web import assets  # noqa: PLC0415
@@ -333,8 +345,9 @@ def worker() -> None:
     session_factory = create_session_factory(settings.database_url)
     # Read the allowed taxonomy once at startup; restart the worker after taxonomy edits.
     with session_factory() as session:
-        parser = build_parser(settings, CategoryService(session).allowed_categories())
-        classifier = build_ingest_classifier(settings, session)
+        allowed_categories = CategoryService(session).allowed_categories()
+        parser = build_parser(settings, allowed_categories)
+        classifier = build_ingest_classifier(settings, allowed_categories)
     typer.echo("cartlog worker started; polling for jobs (Ctrl-C to stop).")
 
     try:
