@@ -1,8 +1,12 @@
+[![Automated Tests](https://github.com/natelandau/cartlog/actions/workflows/automated-tests.yml/badge.svg)](https://github.com/natelandau/cartlog/actions/workflows/automated-tests.yml) [![codecov](https://codecov.io/gh/natelandau/cartlog/graph/badge.svg?token=QdFXvrhoP5)](https://codecov.io/gh/natelandau/cartlog)
+
 # cartlog
 
-Scan your grocery receipts, let cartlog read them for you, and track what you buy and what it costs over time.
+Scan your receipts, let cartlog read them for you, and track what you buy and what it costs over time.
 
 Drop a photo or PDF of a receipt into cartlog and it picks out the store, date, and every item, then sorts each one into a category. Once your receipts are saved, you can chart a product's price history, compare prices across stores, and see where your money goes by category, all from your browser or the command line.
+
+Plenty of apps track all of your spending. cartlog is built for one job instead: following the cost of the things you buy again and again, like groceries.
 
 ## Features
 
@@ -28,24 +32,24 @@ Running in Docker is the fastest way to get cartlog up. Everything runs in a sin
 
 1. Clone this repository and change into it:
 
-   ```bash
-   git clone https://github.com/natelandau/cartlog.git
-   cd cartlog
-   ```
+    ```bash
+    git clone https://github.com/natelandau/cartlog.git
+    cd cartlog
+    ```
 
 2. Create your secret config from the sample and add your API key:
 
-   ```bash
-   cp .env.sample .env.secret
-   ```
+    ```bash
+    cp .env.sample .env.secret
+    ```
 
-   Open `.env.secret` and set the API key for your chosen provider (e.g. `ANTHROPIC_API_KEY`). Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to switch providers. Every other value is optional.
+    Open `.env.secret` and set the API key for your chosen provider (e.g. `ANTHROPIC_API_KEY`). Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to switch providers. Every other value is optional.
 
 3. Build and start the container:
 
-   ```bash
-   docker compose up --build
-   ```
+    ```bash
+    docker compose up --build
+    ```
 
 4. Open the web UI at [http://localhost:8000](http://localhost:8000) and upload a receipt.
 
@@ -74,26 +78,26 @@ For development, or to run cartlog without Docker, install it with uv.
 
 1. Install dependencies, including the frontend toolchain for the web UI:
 
-   ```bash
-   uv sync
-   npm install
-   ```
+    ```bash
+    uv sync
+    npm install
+    ```
 
 2. Create and edit your config:
 
-   ```bash
-   cp .env.sample .env.secret
-   ```
+    ```bash
+    cp .env.sample .env.secret
+    ```
 
-   Set the API key for your chosen provider (e.g. `ANTHROPIC_API_KEY`) in `.env.secret`. Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to point at a different provider or model.
+    Set the API key for your chosen provider (e.g. `ANTHROPIC_API_KEY`) in `.env.secret`. Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to point at a different provider or model.
 
 3. Start the web server and worker:
 
-   ```bash
-   uv run cartlog serve
-   ```
+    ```bash
+    uv run cartlog serve
+    ```
 
-   The web UI is at [http://localhost:8000](http://localhost:8000). Pass `--host`, `--port`, or `--workers` to change how it runs.
+    The web UI is at [http://localhost:8000](http://localhost:8000). Pass `--host`, `--port`, or `--workers` to change how it runs.
 
 ## Command-line usage
 
@@ -137,14 +141,14 @@ All settings are read from the environment and from `.env.secret`, with environm
 
 cartlog is provider-agnostic. For how to point it at Anthropic, OpenAI, Gemini, an API router like OpenRouter, or a local model, see [Choosing an LLM provider](#choosing-an-llm-provider).
 
-| Variable                                          | Default                     | Description                                                        |
-| ------------------------------------------------- | --------------------------- | ------------------------------------------------------------------ |
-| `ANTHROPIC_API_KEY` (or provider equivalent)      | (none, required)            | API key for your chosen provider; read by Pydantic AI              |
-| `CARTLOG_PARSE_MODEL`                             | `anthropic:claude-opus-4-8` | Provider-prefixed model that reads your receipts                   |
-| `CARTLOG_CLASSIFY_MODEL`                          | `anthropic:claude-haiku-4-5` | Cheaper provider-prefixed model that tidies item categories        |
-| `CARTLOG_DATABASE_URL`                            | `cartlog.db`                | Where to store your data file (the folder must exist)              |
-| `CARTLOG_IMAGE_STORAGE_DIR`                       | `receipt_images`            | Where to keep copies of your receipt images                        |
-| `CARTLOG_REVIEW_CONFIDENCE_THRESHOLD`             | `0.7`                       | Receipts cartlog is unsure about are flagged for you to review     |
+| Variable                                     | Default                      | Description                                                    |
+| -------------------------------------------- | ---------------------------- | -------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY` (or provider equivalent) | (none, required)             | API key for your chosen provider; read by Pydantic AI          |
+| `CARTLOG_PARSE_MODEL`                        | `anthropic:claude-opus-4-8`  | Provider-prefixed model that reads your receipts               |
+| `CARTLOG_CLASSIFY_MODEL`                     | `anthropic:claude-haiku-4-5` | Cheaper provider-prefixed model that tidies item categories    |
+| `CARTLOG_DATABASE_URL`                       | `cartlog.db`                 | Where to store your data file (the folder must exist)          |
+| `CARTLOG_IMAGE_STORAGE_DIR`                  | `receipt_images`             | Where to keep copies of your receipt images                    |
+| `CARTLOG_REVIEW_CONFIDENCE_THRESHOLD`        | `0.7`                        | Receipts cartlog is unsure about are flagged for you to review |
 
 For `CARTLOG_DATABASE_URL`, give a plain path to where you want the data file, such as `cartlog.db` or `/app/data.db`. cartlog checks the folder exists when it starts and handles the rest, so most people never need to change the default.
 
