@@ -10,14 +10,22 @@ explicit "uncategorized" escape, so the model can decline rather than invent.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 from pydantic import BaseModel, create_model
+from pydantic_ai import Agent
+from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.settings import ModelSettings
 
 from cartlog.normalization import normalize_text
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from pydantic_ai.models import Model
+
+# Token budget for the classification response.
+_MAX_TOKENS = 2048
 
 # The legal "none of these fit" answer, kept out of the taxonomy itself.
 UNCATEGORIZED_CHOICE = "uncategorized"
@@ -62,27 +70,33 @@ def _build_output_model(allowed: Sequence[str]) -> type[BaseModel]:
 class LLMCategoryClassifier:
     """Categorize products into a fixed taxonomy with a narrow, single-purpose LLM call.
 
-    Inject an `anthropic.Anthropic` client so tests can substitute a mock. `allowed_categories`
+    Inject a `pydantic_ai` Model so tests can substitute a TestModel. `allowed_categories`
     constrains the structured output to a fixed taxonomy; it must be non-empty.
     """
 
-    def __init__(self, client: object, model: str, allowed_categories: Sequence[str]) -> None:
-        """Store the client/model and precompile the enum-constrained output schema.
+    def __init__(self, model: Model, allowed_categories: Sequence[str]) -> None:
+        """Build the classification agent and precompile the enum-constrained output schema.
 
         Args:
-            client: An anthropic.Anthropic instance (injected so tests can mock it).
-            model: The model id to classify with (a cheap model like Haiku is appropriate).
+            model: A pydantic_ai Model (injected so tests can substitute a TestModel). A cheap
+                model like Haiku is appropriate for this narrow task.
             allowed_categories: The taxonomy names the classifier may choose from.
+
+        Raises:
+            ValueError: If `allowed_categories` is empty.
         """
         if not allowed_categories:
             msg = "LLMCategoryClassifier requires a non-empty allowed_categories list"
             raise ValueError(msg)
-        self._client = client
-        self._model = model
         self._allowed = list(allowed_categories)
         # Map normalized name -> canonical taxonomy name, to coerce the model's answer back.
         self._allowed_by_norm = {normalize_text(name): name for name in self._allowed}
         self._output_model = _build_output_model(self._allowed)
+        self._agent = Agent(
+            model,
+            output_type=self._output_model,
+            model_settings=ModelSettings(max_tokens=_MAX_TOKENS),
+        )
 
     def classify(self, products: Sequence[ProductToClassify]) -> dict[str, str | None]:
         """Categorize each product, returning canonical_name -> chosen taxonomy name (or None).
@@ -104,23 +118,19 @@ class LLMCategoryClassifier:
             return {}
 
         prompt = self._build_prompt(products)
-        response = self._client.messages.parse(  # type: ignore[attr-defined, ty:unresolved-attribute]
-            model=self._model,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": [{"type": "text", "text": prompt}]}],
-            output_format=self._output_model,
-        )
-        parsed = response.parsed_output  # type: ignore[attr-defined]
-        if parsed is None:
+        try:
+            result = self._agent.run_sync(prompt)
+        except UnexpectedModelBehavior as exc:
             msg = "Classifier returned no structured output; the response may have been truncated."
-            raise ValueError(msg)
+            raise ValueError(msg) from exc
 
-        result: dict[str, str | None] = {}
-        for entry in parsed.items:
+        classified = cast("Any", result.output)
+        output: dict[str, str | None] = {}
+        for entry in classified.items:
             norm = normalize_text(entry.category)
             # Coerce defensively: anything not a known taxonomy name (incl. the escape) is None.
-            result[entry.canonical_name] = self._allowed_by_norm.get(norm)
-        return result
+            output[entry.canonical_name] = self._allowed_by_norm.get(norm)
+        return output
 
     def _build_prompt(self, products: Sequence[ProductToClassify]) -> str:
         """Render the categorization-only prompt for a batch of products."""

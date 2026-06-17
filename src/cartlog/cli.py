@@ -82,14 +82,11 @@ def build_parser(
 
 def build_classifier(settings: Settings, allowed_categories: list[str]) -> LLMCategoryClassifier:
     """Construct the focused category classifier from settings (patched out in tests)."""
-    # Validate the API key before the taxonomy so a missing key reports first, as before.
-    client = _anthropic_client(settings)
     if not allowed_categories:
         msg = "No categories in the taxonomy to classify into; seed categories first."
         raise typer.BadParameter(msg)
-    return LLMCategoryClassifier(
-        client=client, model=settings.reclassify_model, allowed_categories=allowed_categories
-    )
+    model = _build_model(settings.classify_model)
+    return LLMCategoryClassifier(model=model, allowed_categories=allowed_categories)
 
 
 def build_ingest_classifier(settings: Settings, session: Session) -> LLMCategoryClassifier | None:
