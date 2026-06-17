@@ -6,6 +6,8 @@ import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+import pytest
+import typer
 import uvicorn
 from sqlalchemy import create_engine
 from typer.testing import CliRunner
@@ -293,3 +295,23 @@ def test_serve_command_handles_keyboard_interrupt(tmp_path, monkeypatch, fake_pa
 
     # Then the command exits cleanly without surfacing the interrupt
     assert result.exit_code == 0, result.output
+
+
+def test_build_model_returns_model_for_valid_id():
+    """Verify the factory builds a model when the provider key is present."""
+    # Given the autouse dummy key fixture has set ANTHROPIC_API_KEY
+    # When building a model from a provider-prefixed id
+    model = cli_module._build_model("anthropic:claude-opus-4-8")
+
+    # Then a model object is returned
+    assert model is not None
+
+
+def test_build_model_raises_friendly_error_without_key(monkeypatch):
+    """Verify a missing provider key surfaces as a typer.BadParameter, not a raw error."""
+    # Given no Anthropic key in the environment
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    # When building a model that needs that key, then a friendly CLI error is raised
+    with pytest.raises(typer.BadParameter):
+        cli_module._build_model("anthropic:claude-opus-4-8")

@@ -7,6 +7,8 @@ from pathlib import Path  # noqa: TC003  # Typer resolves command annotations at
 import anthropic
 import typer
 import uvicorn
+from pydantic_ai.exceptions import UserError
+from pydantic_ai.models import Model, infer_model
 from rich.console import Console
 from sqlalchemy.orm import Session  # noqa: TC002  # used in helper annotations at runtime
 
@@ -50,6 +52,22 @@ def _anthropic_client(settings: Settings) -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
+def _build_model(model_id: str) -> Model:
+    """Build a Pydantic AI model from a provider-prefixed id, failing fast on a missing key.
+
+    Construction reads the provider's API key from its native environment variable; when it
+    is unset, Pydantic AI raises a UserError naming the exact variable, which is surfaced to
+    the user as a friendly CLI error.
+
+    Raises:
+        typer.BadParameter: If the provider's API key environment variable is not set.
+    """
+    try:
+        return infer_model(model_id)
+    except UserError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
 def build_parser(
     settings: Settings, allowed_categories: list[str] | None = None
 ) -> LLMReceiptParser:
@@ -58,10 +76,8 @@ def build_parser(
     An empty list for `allowed_categories` is treated the same as None: both
     fall back to free-form category guidance in the prompt.
     """
-    client = _anthropic_client(settings)
-    return LLMReceiptParser(
-        client=client, model=settings.anthropic_model, allowed_categories=allowed_categories
-    )
+    model = _build_model(settings.parse_model)
+    return LLMReceiptParser(model=model, allowed_categories=allowed_categories)
 
 
 def build_classifier(settings: Settings, allowed_categories: list[str]) -> LLMCategoryClassifier:
