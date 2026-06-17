@@ -2,14 +2,14 @@
     authors = [{ name = "Nathaniel Landau", email = "github@natelandau.com" }]
     dependencies = [
         "alembic>=1.18.4",
-        "anthropic>=0.109.1",
-        "fastapi>=0.137.0",
+        "anthropic>=0.109.2",
+        "fastapi>=0.137.1",
         "jinja2>=3.1.6",
         "pydantic-settings>=2.14.1",
         "pydantic>=2.13.4",
         "python-multipart>=0.0.32",
         "rich>=15.0.0",
-        "sqlalchemy>=2.0.50",
+        "sqlalchemy>=2.0.51",
         "typer>=0.26.7",
         "uvicorn>=0.49.0",
     ]
