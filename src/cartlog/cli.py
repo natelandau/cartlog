@@ -40,18 +40,18 @@ def main() -> None:
 
 
 def _build_model(model_id: str) -> Model:
-    """Build a Pydantic AI model from a provider-prefixed id, failing fast on a missing key.
+    """Build a Pydantic AI model from a provider-prefixed id, failing fast on a bad config.
 
-    Construction reads the provider's API key from its native environment variable; when it
-    is unset, Pydantic AI raises a UserError naming the exact variable, which is surfaced to
-    the user as a friendly CLI error.
+    Construction reads the provider's API key from its native environment variable. A missing
+    key raises UserError; an unknown provider prefix raises ValueError. Both are surfaced as a
+    friendly CLI error naming the problem rather than a raw traceback.
 
     Raises:
-        typer.BadParameter: If the provider's API key environment variable is not set.
+        typer.BadParameter: If the provider key is unset or the model id names an unknown provider.
     """
     try:
         return infer_model(model_id)
-    except UserError as exc:
+    except (UserError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
 
 
@@ -69,23 +69,27 @@ def build_parser(
 
 def build_classifier(settings: Settings, allowed_categories: list[str]) -> LLMCategoryClassifier:
     """Construct the focused category classifier from settings (patched out in tests)."""
+    # Validate the provider key before the taxonomy so a missing key reports first, matching
+    # the pre-flight order callers rely on (a key error is the root cause, not the taxonomy).
+    model = _build_model(settings.classify_model)
     if not allowed_categories:
         msg = "No categories in the taxonomy to classify into; seed categories first."
         raise typer.BadParameter(msg)
-    model = _build_model(settings.classify_model)
     return LLMCategoryClassifier(model=model, allowed_categories=allowed_categories)
 
 
-def build_ingest_classifier(settings: Settings, session: Session) -> LLMCategoryClassifier | None:
+def build_ingest_classifier(
+    settings: Settings, allowed_categories: list[str]
+) -> LLMCategoryClassifier | None:
     """Build the auto-reclassification classifier for ingestion, or None if no taxonomy exists.
 
     Returns None when no categories are seeded yet, so ingestion runs without the second pass
-    rather than failing; the API key is already validated by the parser build.
+    rather than failing; the API key is already validated by the parser build. Pass the allowed
+    taxonomy the caller already read, so the command issues a single query for it.
     """
-    allowed = CategoryService(session).allowed_categories()
-    if not allowed:
+    if not allowed_categories:
         return None
-    return build_classifier(settings, allowed)
+    return build_classifier(settings, allowed_categories)
 
 
 @dataclass
@@ -198,6 +202,16 @@ def ingest(
 
     try:
         with session_factory() as session:
+            # Read the allowed taxonomy once and reuse it for the guard, parser, and classifier.
+            allowed_categories = CategoryService(session).allowed_categories()
+
+            # When parsing inline, validate the classify provider key too before storing any
+            # files. The reclassification pass runs only when a taxonomy exists, so a classify
+            # model on a different provider with a missing key would otherwise fail after jobs
+            # are enqueued, stranding them as PENDING.
+            if not no_wait and allowed_categories:
+                _build_model(settings.classify_model)
+
             # Enqueue everything first so a running worker can see the whole batch and the
             # foreground parse loop is decoupled from storing the files.
             enqueued: list[tuple[Path, IngestionJob]] = []
@@ -212,10 +226,9 @@ def ingest(
                     typer.echo(f"Enqueued job #{job.id} for {path.name} (status={job.status}).")
                 return
 
-            # Build the parser inside the session so we can read the allowed taxonomy paths.
-            parser = build_parser(settings, CategoryService(session).allowed_categories())
+            parser = build_parser(settings, allowed_categories)
             # Auto-reclassify miscategorized lines as part of ingestion (None if no taxonomy yet).
-            classifier = build_ingest_classifier(settings, session)
+            classifier = build_ingest_classifier(settings, allowed_categories)
 
             results: list[IngestResult] = []
             for index, (path, job) in enumerate(enqueued, start=1):
@@ -275,8 +288,9 @@ def serve(
     # Build the parser before binding the port so a missing API key fails fast.
     # The allowed list is read once at startup; restart the server after taxonomy edits.
     with session_factory() as session:
-        parser = build_parser(settings, CategoryService(session).allowed_categories())
-        classifier = build_ingest_classifier(settings, session)
+        allowed_categories = CategoryService(session).allowed_categories()
+        parser = build_parser(settings, allowed_categories)
+        classifier = build_ingest_classifier(settings, allowed_categories)
 
     # Import here so the other CLI commands don't pay the cost of building the web app.
     from cartlog.web import assets  # noqa: PLC0415
@@ -331,8 +345,9 @@ def worker() -> None:
     session_factory = create_session_factory(settings.database_url)
     # Read the allowed taxonomy once at startup; restart the worker after taxonomy edits.
     with session_factory() as session:
-        parser = build_parser(settings, CategoryService(session).allowed_categories())
-        classifier = build_ingest_classifier(settings, session)
+        allowed_categories = CategoryService(session).allowed_categories()
+        parser = build_parser(settings, allowed_categories)
+        classifier = build_ingest_classifier(settings, allowed_categories)
     typer.echo("cartlog worker started; polling for jobs (Ctrl-C to stop).")
 
     try:

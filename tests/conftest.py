@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _dummy_provider_key(monkeypatch):
+def _dummy_provider_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide a dummy provider credential so model construction in tests needs no real credentials.
 
     Model construction reads the provider's key env var but makes no network call; a dummy

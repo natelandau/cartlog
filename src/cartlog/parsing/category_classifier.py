@@ -10,7 +10,8 @@ explicit "uncategorized" escape, so the model can decline rather than invent.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
+from functools import lru_cache
+from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 from pydantic import BaseModel, create_model
 from pydantic_ai import Agent
@@ -31,6 +32,23 @@ _MAX_TOKENS = 2048
 UNCATEGORIZED_CHOICE = "uncategorized"
 
 
+class _ClassifiedItem(Protocol):
+    """Structural shape of one entry in the dynamically built classification output."""
+
+    canonical_name: str
+    category: str
+
+
+class _ClassificationOutput(Protocol):
+    """Structural shape of the dynamic ClassificationResult, used to type the model output.
+
+    The output model is built at runtime via create_model, so the type checker cannot follow
+    its attributes; this Protocol lets us read `.items` without falling back to `Any`.
+    """
+
+    items: Sequence[_ClassifiedItem]
+
+
 class CategoryClassifier(Protocol):
     """Categorizes products into a fixed taxonomy, returning canonical_name -> name (or None)."""
 
@@ -49,11 +67,13 @@ class ProductToClassify:
     original_guesses: tuple[str, ...] = field(default_factory=tuple)
 
 
-def _build_output_model(allowed: Sequence[str]) -> type[BaseModel]:
+@lru_cache(maxsize=32)
+def _build_output_model(allowed: tuple[str, ...]) -> type[BaseModel]:
     """Build a Pydantic result model whose category field is constrained to the taxonomy.
 
     The category is a Literal over the allowed names plus the uncategorized escape, so the
-    structured-output decoder cannot emit an invented category like 'produce'.
+    structured-output decoder cannot emit an invented category like 'produce'. Cached on the
+    taxonomy so rebuilding a classifier with the same categories reuses the compiled schema.
     """
     choices = (*allowed, UNCATEGORIZED_CHOICE)
     # Dynamic Literal/model built at runtime from the taxonomy; the type checker cannot follow
@@ -91,7 +111,7 @@ class LLMCategoryClassifier:
         self._allowed = list(allowed_categories)
         # Map normalized name -> canonical taxonomy name, to coerce the model's answer back.
         self._allowed_by_norm = {normalize_text(name): name for name in self._allowed}
-        self._output_model = _build_output_model(self._allowed)
+        self._output_model = _build_output_model(tuple(self._allowed))
         self._agent = Agent(
             model,
             output_type=self._output_model,
@@ -124,7 +144,7 @@ class LLMCategoryClassifier:
             msg = "Classifier returned no structured output; the response may have been truncated."
             raise ValueError(msg) from exc
 
-        classified = cast("Any", result.output)
+        classified = cast("_ClassificationOutput", result.output)
         output: dict[str, str | None] = {}
         for entry in classified.items:
             norm = normalize_text(entry.category)

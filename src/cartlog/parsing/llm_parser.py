@@ -92,7 +92,9 @@ class LLMReceiptParser:
         """
         content = self._build_binary_content(file_path)
         try:
-            result = self._agent.run_sync([self._prompt, content])
+            # Image/PDF before the instruction text; vision models attend better when the
+            # document precedes the question.
+            result = self._agent.run_sync([content, self._prompt])
         except UnexpectedModelBehavior as exc:
             msg = (
                 "Model returned no structured receipt; the response may have been "
