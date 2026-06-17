@@ -12,12 +12,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="CARTLOG_", env_file=".env.secret", extra="ignore")
 
-    # Anthropic API key for the LLM vision parser.
-    anthropic_api_key: str = ""
-    # Default to the most capable model; override to a cheaper one (haiku/sonnet) via env.
-    anthropic_model: str = "claude-opus-4-8"
-    # Cheaper model for the focused, single-purpose category reclassification pass.
-    reclassify_model: str = "claude-haiku-4-5"
     # Provider-prefixed model id for the receipt vision parser (e.g. "openai:gpt-5.2").
     parse_model: str = "anthropic:claude-opus-4-8"
     # Provider-prefixed model id for the focused category reclassification pass.

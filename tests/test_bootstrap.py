@@ -12,7 +12,6 @@ def test_prepare_runtime_creates_storage_and_schema(tmp_path, monkeypatch):
     db_path = tmp_path / "data" / "cartlog.db"
     storage_dir = tmp_path / "imgs"
     settings = Settings(
-        anthropic_api_key="test-key",
         database_url=f"sqlite:///{db_path}",
         image_storage_dir=storage_dir,
     )
