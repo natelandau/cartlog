@@ -1,0 +1,25 @@
+---
+services:
+  cartlog:
+    build: .
+    image: cartlog:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      CARTLOG_HOST: 0.0.0.0
+      CARTLOG_PORT: 8000
+      CARTLOG_WORKERS: ${CARTLOG_WORKERS:-1}
+      CARTLOG_DATABASE_URL: /data/cartlog.db
+      CARTLOG_IMAGE_STORAGE_DIR: /data/receipt_images
+    env_file:
+      # Holds CARTLOG_ANTHROPIC_API_KEY and any model overrides. Copy .env.sample first.
+      - .env.secret
+    volumes:
+      # Persist the SQLite database and ingested receipt images.
+      - cartlog-data:/data
+
+volumes:
+  cartlog-data:
