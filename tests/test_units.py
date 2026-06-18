@@ -68,7 +68,7 @@ def test_loose_weight_quantity_is_the_measure():
     """Verify that loose produce sold by weight uses quantity as the measure in grams."""
     # bananas: 2 lb @ line_total 3.48 -> grams base, $/g
     r = normalize_line_item(
-        quantity=Decimal("2"), unit="lb", unit_size=None, line_total=Decimal("3.48")
+        quantity=Decimal(2), unit="lb", unit_size=None, line_total=Decimal("3.48")
     )
     assert r.measure_status == RESOLVED
     assert r.measure_dimension == "weight"
@@ -80,7 +80,7 @@ def test_packaged_volume_from_unit_size():
     """Verify that packaged volume goods resolve measure from unit_size text."""
     # milk: 1 x 1.5L @ 4.50 -> 1500 ml, $/ml
     r = normalize_line_item(
-        quantity=Decimal("1"), unit="ea", unit_size="1.5L", line_total=Decimal("4.50")
+        quantity=Decimal(1), unit="ea", unit_size="1.5L", line_total=Decimal("4.50")
     )
     assert r.measure_status == RESOLVED
     assert r.measure_dimension == "volume"
@@ -91,7 +91,7 @@ def test_packaged_volume_from_unit_size():
 def test_llm_measure_takes_precedence_over_unit_size():
     """Verify that the llm_measure overrides a garbled unit_size field."""
     r = normalize_line_item(
-        quantity=Decimal("1"),
+        quantity=Decimal(1),
         unit="ea",
         unit_size="garbled",
         line_total=Decimal("2.00"),
@@ -105,7 +105,7 @@ def test_count_in_unit_size_is_count_dimension():
     """Verify that a count token in unit_size resolves to the count dimension."""
     # eggs: 1 x 12CT @ 3.48 -> $/each
     r = normalize_line_item(
-        quantity=Decimal("1"), unit=None, unit_size="12CT", line_total=Decimal("3.48")
+        quantity=Decimal(1), unit=None, unit_size="12CT", line_total=Decimal("3.48")
     )
     assert r.measure_status == RESOLVED
     assert r.measure_dimension == "count"
@@ -116,7 +116,7 @@ def test_count_in_unit_size_is_count_dimension():
 def test_count_only_unit_is_each():
     """Verify that a count unit with no size resolves to quantity-as-each."""
     r = normalize_line_item(
-        quantity=Decimal("3"), unit="ea", unit_size=None, line_total=Decimal("1.50")
+        quantity=Decimal(3), unit="ea", unit_size=None, line_total=Decimal("1.50")
     )
     assert r.measure_dimension == "count"
     assert r.normalized_unit_price == Decimal("0.500000")
@@ -126,7 +126,7 @@ def test_no_measure_no_text_is_not_applicable():
     """Verify that a line with no unit or size text is flagged as not_applicable."""
     # an apple / loaf of bread with nothing printed
     r = normalize_line_item(
-        quantity=Decimal("1"), unit=None, unit_size=None, line_total=Decimal("0.99")
+        quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal("0.99")
     )
     assert r.measure_status == NOT_APPLICABLE
     assert r.normalized_unit_price is None
@@ -136,7 +136,7 @@ def test_no_measure_no_text_is_not_applicable():
 def test_unparsable_measure_text_is_needs_review():
     """Verify that unrecognized unit text triggers needs_review rather than silently dropping."""
     r = normalize_line_item(
-        quantity=Decimal("1"), unit="family pack", unit_size=None, line_total=Decimal("8.00")
+        quantity=Decimal(1), unit="family pack", unit_size=None, line_total=Decimal("8.00")
     )
     assert r.measure_status == NEEDS_REVIEW
     assert r.normalized_unit_price is None
@@ -145,6 +145,21 @@ def test_unparsable_measure_text_is_needs_review():
 def test_zero_measure_is_needs_review():
     """Verify that a zero quantity with a weight unit yields needs_review to avoid division by zero."""
     r = normalize_line_item(
-        quantity=Decimal("0"), unit="lb", unit_size=None, line_total=Decimal("3.00")
+        quantity=Decimal(0), unit="lb", unit_size=None, line_total=Decimal("3.00")
     )
     assert r.measure_status == NEEDS_REVIEW
+
+
+def test_measurable_unit_wins_over_llm_measure():
+    """Verify that a sold-by-weight unit takes precedence over an LLM per-package measure."""
+    # Sold by the pound: quantity is the authoritative amount, so the lb path must win
+    # even when the LLM also reported a per-package measure.
+    r = normalize_line_item(
+        quantity=Decimal(2),
+        unit="lb",
+        unit_size=None,
+        line_total=Decimal("3.48"),
+        llm_measure=(400, "g"),
+    )
+    assert r.measure_dimension == "weight"
+    assert r.measure_quantity == Decimal("907.1840")  # 2 lb, not 400 g

@@ -176,7 +176,9 @@ def normalize_line_item(
     """
     unit_token = normalize_unit_token(unit)
 
-    # Step 2: the unit itself is a measurable unit, so quantity is the amount.
+    # The unit itself is a measurable unit, so the line was sold by that unit and quantity
+    # is the authoritative amount. This intentionally takes priority over any llm_measure,
+    # which only describes a per-package size (relevant when unit is a count/null token).
     if unit_token is not None and UNIT_FACTORS[unit_token][0] in (WEIGHT, VOLUME):
         dimension, factor = UNIT_FACTORS[unit_token]
         return _resolved(quantity * factor, dimension, line_total)
