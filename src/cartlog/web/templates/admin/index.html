@@ -2,14 +2,12 @@
 {% block title %}Admin · cartlog{% endblock %}
 {% block content %}
 <h1 class="text-3xl font-semibold tracking-tight">Admin</h1>
-<p class="mt-1 mb-5 text-base-content/60">Merge duplicate products and stores, manage category assignments, review background jobs, and edit the saved transformation rules that auto-merge future items.</p>
+<p class="mt-1 mb-5 text-base-content/60">Manage products, stores, and categories, and review background jobs.</p>
 
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+<div class="grid gap-4 sm:grid-cols-2">
   {% set tiles = [
-    ("/admin/products", "Product mapping", "Merge duplicate products into a canonical name."),
-    ("/admin/transformations", "Transformations", "Edit the saved rules that auto-merge future items."),
-    ("/admin/stores", "Store mapping", "Normalize and review store records."),
-    ("/admin/store-merges", "Store merges", "Review and undo merged store records."),
+    ("/admin/products", "Product management", "Merge duplicate products and edit the rules that auto-merge future items."),
+    ("/admin/stores", "Store management", "Normalize store records and review or undo store merges."),
     ("/categories", "Categories", "Manage the product taxonomy."),
   ] %}
   {% for href, title, desc in tiles %}

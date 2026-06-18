@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Store merges · cartlog{% endblock %}
+{% block title %}Store management · cartlog{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-3xl font-semibold tracking-tight">Store merges</h1>
+<h1 class="mb-4 text-3xl font-semibold tracking-tight">Store management</h1>
 {% from "macros/admin.html" import search_box %}
-{% set admin_active = "store_merges" %}
+{% set admin_section = "store" %}
+{% set admin_active = "merges" %}
 {% include "partials/_admin_tabs.html" %}
 
 {{ search_box("/admin/store-merges", "admin-store-merges", "admin-store-merges-sort-state", "Filter store merges…", "Filter store merges", q) }}
