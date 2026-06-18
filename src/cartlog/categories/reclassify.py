@@ -21,6 +21,7 @@ from cartlog.parsing.category_classifier import ProductToClassify
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from pydantic_ai.usage import RunUsage
     from sqlalchemy.orm import Session
 
     from cartlog.db.models import Product, Receipt
@@ -63,6 +64,7 @@ def reclassify_products(
     classifier: CategoryClassifier | None,
     *,
     max_attempts: int = DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
+    usage: RunUsage | None = None,
 ) -> ReclassifyResult:
     """Re-home the given (assumed Uncategorized) products with the focused classifier.
 
@@ -75,6 +77,8 @@ def reclassify_products(
             rescued.
         max_attempts: Per-product cap on LLM reclassification attempts. Products at or above
             the cap are not sent to the classifier.
+        usage: Optional accumulator; when provided, the classify call's token counts are added
+            to it for cost tracking.
 
     Returns:
         ReclassifyResult counting what was rescued and how.
@@ -93,7 +97,9 @@ def reclassify_products(
         for product in products
     ]
 
-    rescued_by_llm = _run_classifier(categories, classifier, pending, max_attempts=max_attempts)
+    rescued_by_llm = _run_classifier(
+        categories, classifier, pending, max_attempts=max_attempts, usage=usage
+    )
 
     session.flush()
     return ReclassifyResult(
@@ -109,11 +115,24 @@ def reclassify_receipt(
     classifier: CategoryClassifier | None,
     *,
     max_attempts: int = DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
+    usage: RunUsage | None = None,
 ) -> ReclassifyResult:
     """Reclassify only the distinct Uncategorized products referenced by one receipt.
 
     Used during ingestion so a freshly-parsed receipt's miscategorized lines are re-homed
     immediately, without sweeping the whole database.
+
+    Args:
+        session: The session to mutate.
+        receipt: The receipt whose Uncategorized products are candidates for rescue.
+        classifier: The focused classifier that places the products. When None, nothing is
+            rescued.
+        max_attempts: Per-product cap on LLM reclassification attempts.
+        usage: Optional accumulator; when provided, the classify call's token counts are added
+            to it for cost tracking.
+
+    Returns:
+        ReclassifyResult counting what was rescued and how.
     """
     uncategorized = CategoryService(session).ensure_uncategorized()
     distinct: dict[int, Product] = {}
@@ -121,7 +140,7 @@ def reclassify_receipt(
         if line.product.category_id == uncategorized.id:
             distinct.setdefault(line.product.id, line.product)
     return reclassify_products(
-        session, list(distinct.values()), classifier, max_attempts=max_attempts
+        session, list(distinct.values()), classifier, max_attempts=max_attempts, usage=usage
     )
 
 
@@ -146,6 +165,7 @@ def _run_classifier(
     pending: list[tuple[Product, ProductToClassify]],
     *,
     max_attempts: int,
+    usage: RunUsage | None = None,
 ) -> int:
     """Classify pending products under the budget; assign hits, spend an attempt on misses.
 
@@ -158,7 +178,7 @@ def _run_classifier(
     if not eligible:
         return 0
 
-    answers = classifier.classify([item for _product, item in eligible])
+    answers = classifier.classify([item for _product, item in eligible], usage=usage)
     rescued = 0
     for product, item in eligible:
         chosen = answers.get(item.canonical_name)

@@ -4,6 +4,21 @@
 <h1 class="text-3xl font-semibold tracking-tight">Admin</h1>
 <p class="mt-1 mb-5 text-base-content/60">Manage products, stores, and categories, and review background jobs.</p>
 
+<div class="stats stats-horizontal mb-5 border border-base-300 bg-base-100 shadow-sm">
+  <div class="stat">
+    <div class="stat-title">Total LLM costs</div>
+    <div class="stat-value text-2xl">${{ "%.2f"|format(parsing_cost.total_all_time) }}</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Past 30 days</div>
+    <div class="stat-value text-2xl">${{ "%.2f"|format(parsing_cost.total_last_30_days) }}</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Avg cost / receipt</div>
+    <div class="stat-value text-2xl">${{ "%.4f"|format(parsing_cost.avg_per_receipt) }}</div>
+  </div>
+</div>
+
 <div class="grid gap-4 sm:grid-cols-2">
   {% set tiles = [
     ("/admin/products", "Product management", "Merge duplicate products and edit the rules that auto-merge future items."),

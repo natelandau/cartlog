@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from pydantic_ai.models import Model
+    from pydantic_ai.usage import RunUsage
 
 _IMAGE_MEDIA_TYPES: dict[str, str] = {
     ".png": "image/png",
@@ -76,12 +77,14 @@ class LLMReceiptParser:
             model_settings=ModelSettings(max_tokens=_MAX_TOKENS),
         )
 
-    def parse(self, file_path: Path) -> ParsedReceipt:
+    def parse(self, file_path: Path, *, usage: RunUsage | None = None) -> ParsedReceipt:
         """Parse a receipt file into a structured ParsedReceipt.
 
         Args:
             file_path: Path to the receipt. Must be a supported format
                 (.png, .jpg, .jpeg, .webp, .gif, or .pdf).
+            usage: Optional accumulator; token counts from this call are added into it so
+                the caller can price the parse without coupling to the agent internals.
 
         Returns:
             ParsedReceipt populated by the model's structured output.
@@ -93,8 +96,8 @@ class LLMReceiptParser:
         content = self._build_binary_content(file_path)
         try:
             # Image/PDF before the instruction text; vision models attend better when the
-            # document precedes the question.
-            result = self._agent.run_sync([content, self._prompt])
+            # document precedes the question. Pass the accumulator so the caller can price it.
+            result = self._agent.run_sync([content, self._prompt], usage=usage)
         except UnexpectedModelBehavior as exc:
             msg = (
                 "Model returned no structured receipt; the response may have been "

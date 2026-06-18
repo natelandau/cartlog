@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -18,6 +18,8 @@ from cartlog.analytics.results import (
     KpiCard,
     MonthComparison,
     MonthlySpend,
+    ParsingCostOverview,
+    ParsingCostSummary,
     PriceHistory,
     PricePoint,
     PriceTrendRow,
@@ -30,7 +32,15 @@ from cartlog.analytics.results import (
 from cartlog.analytics.search_sort import SEARCH_SORT_COLUMNS, SearchSortKey
 from cartlog.categories.service import UNCATEGORIZED_NAME
 from cartlog.clock import naive_utcnow
-from cartlog.db.models import Category, LineItem, Product, Receipt, ReceiptStatus, Store
+from cartlog.db.models import (
+    Category,
+    LineItem,
+    ParseCostEvent,
+    Product,
+    Receipt,
+    ReceiptStatus,
+    Store,
+)
 from cartlog.db.query_helpers import escape_like
 
 if TYPE_CHECKING:
@@ -112,6 +122,46 @@ class AnalyticsService:
             MonthlySpend(month=key, total=totals[key], receipt_count=counts[key])
             for key in sorted(totals)
         ]
+
+    def parsing_cost(
+        self, *, start: date | None = None, end: date | None = None
+    ) -> ParsingCostSummary:
+        """Total estimated parsing cost and per-parse average over an optional range.
+
+        Helps a self-hoster see their LLM bill and judge their model choice. Sums the durable
+        parse cost ledger (not ingestion_jobs, which are deleted on receipt delete/reparse),
+        counting only events with a non-null estimated_cost_usd. `start`/`end` are optional;
+        each is applied only when given (`end` exclusive), so omitting both yields all time.
+        """
+        query = self._session.query(
+            func.coalesce(func.sum(ParseCostEvent.estimated_cost_usd), 0),
+            func.count(ParseCostEvent.id),
+        ).filter(ParseCostEvent.estimated_cost_usd.is_not(None))
+        if start is not None:
+            query = query.filter(ParseCostEvent.created_at >= datetime.combine(start, time.min))
+        if end is not None:
+            query = query.filter(ParseCostEvent.created_at < datetime.combine(end, time.min))
+        total, count = query.one()
+        total_cost = Decimal(str(total))
+        avg = total_cost / count if count else Decimal(0)
+        return ParsingCostSummary(total=total_cost, receipt_count=count, avg_per_receipt=avg)
+
+    def parsing_cost_overview(self, *, today: date | None = None) -> ParsingCostOverview:
+        """Assemble the admin page's three LLM-cost figures in one call.
+
+        Uses a rolling 30-day window (not a calendar month) so the figure is always a
+        comparable span. The average is all-time per-parse cost.
+        """
+        today_date = today or naive_utcnow().date()
+        all_time = self.parsing_cost()
+        last_30 = self.parsing_cost(
+            start=today_date - timedelta(days=30), end=today_date + timedelta(days=1)
+        )
+        return ParsingCostOverview(
+            total_all_time=all_time.total,
+            total_last_30_days=last_30.total,
+            avg_per_receipt=all_time.avg_per_receipt,
+        )
 
     def monthly_spend(self, *, start: date | None, end: date | None) -> list[MonthlySpend]:
         """Return total spend and receipt count per calendar month, oldest first.

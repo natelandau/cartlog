@@ -30,6 +30,8 @@ def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
     retry_backoff_base_seconds: float = 0.0,
     classifier: CategoryClassifier | None = None,
     max_reclassify_attempts: int = 2,
+    parse_model: str | None = None,
+    classify_model: str | None = None,
 ) -> bool:
     """Claim and process a single job in its own session/transaction.
 
@@ -44,6 +46,8 @@ def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
         retry_backoff_base_seconds: Base delay for exponential backoff forwarded to process_job.
         classifier: Optional focused classifier forwarded to process_job for auto-reclassification.
         max_reclassify_attempts: Per-product LLM reclassification cap forwarded to process_job.
+        parse_model: Provider-prefixed model id forwarded to process_job for cost tracking.
+        classify_model: Provider-prefixed model id forwarded to process_job for cost tracking.
 
     Returns:
         True if a job was processed, False if the queue was empty.
@@ -62,6 +66,8 @@ def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
             retry_backoff_base_seconds=retry_backoff_base_seconds,
             classifier=classifier,
             max_reclassify_attempts=max_reclassify_attempts,
+            parse_model=parse_model,
+            classify_model=classify_model,
         )
         return True
 
@@ -79,6 +85,8 @@ def run_worker(  # noqa: PLR0913 - top-level entrypoint forwarding settings-deri
     classifier: CategoryClassifier | None = None,
     max_reclassify_attempts: int = 2,
     stop: Callable[[], bool] | None = None,
+    parse_model: str | None = None,
+    classify_model: str | None = None,
 ) -> None:
     """Continuously drain the queue, sleeping poll_interval when idle.
 
@@ -96,6 +104,8 @@ def run_worker(  # noqa: PLR0913 - top-level entrypoint forwarding settings-deri
         max_reclassify_attempts: Per-product LLM reclassification cap forwarded to process_job.
         stop: Optional predicate checked each iteration; the loop exits when it returns
             True. Defaults to running until interrupted.
+        parse_model: Provider-prefixed model id forwarded to process_job for cost tracking.
+        classify_model: Provider-prefixed model id forwarded to process_job for cost tracking.
     """
     # Reap at most once per stale window; a tighter cadence only re-scans for an event that
     # cannot occur more often than that, wasting a full table scan on every poll.
@@ -121,6 +131,8 @@ def run_worker(  # noqa: PLR0913 - top-level entrypoint forwarding settings-deri
             retry_backoff_base_seconds=retry_backoff_base_seconds,
             classifier=classifier,
             max_reclassify_attempts=max_reclassify_attempts,
+            parse_model=parse_model,
+            classify_model=classify_model,
         )
         if not processed:
             time.sleep(poll_interval)
@@ -156,6 +168,8 @@ def worker_pool(
                 "stale_timeout_seconds": settings.parsing_stale_timeout_seconds,
                 "classifier": classifier,
                 "max_reclassify_attempts": settings.max_reclassify_attempts,
+                "parse_model": settings.parse_model,
+                "classify_model": settings.classify_model,
                 "stop": stop_event.is_set,
             },
             name=f"cartlog-worker-{i}",

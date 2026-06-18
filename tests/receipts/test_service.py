@@ -17,6 +17,7 @@ from cartlog.db.models import (
     IngestionJob,
     JobStatus,
     LineItem,
+    ParseCostEvent,
     Product,
     Receipt,
     ReceiptStatus,
@@ -617,3 +618,46 @@ def test_image_file_available_true_only_inside_storage(tmp_path) -> None:
     assert image_file_available(str(inside), storage_dir=storage) is True
     assert image_file_available(str(outside), storage_dir=storage) is False
     assert image_file_available(str(storage / "missing.png"), storage_dir=storage) is False
+
+
+# ---------------------------------------------------------------------------
+# Parse cost durability tests
+# ---------------------------------------------------------------------------
+
+
+def test_delete_receipt_keeps_parse_cost_events(session, tmp_path) -> None:
+    """Verify deleting a receipt leaves its parse cost event in the ledger."""
+    # Given a persisted receipt and a cost event recorded for its parse (no FK to receipt)
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    image = storage / "cost-abc123.png"
+    image.write_bytes(b"img")
+    receipt = _make_receipt(session, image_path=image)
+    session.add(ParseCostEvent(job_id=None, estimated_cost_usd=Decimal("0.05")))
+    session.commit()
+
+    # When the receipt is deleted
+    delete_receipt(session, receipt.id, storage_dir=storage)
+
+    # Then the cost event survives; spend is not erased
+    assert session.query(ParseCostEvent).count() == 1
+    assert session.query(ParseCostEvent).one().estimated_cost_usd == Decimal("0.05")
+
+
+def test_reparse_receipt_keeps_prior_parse_cost_events(session, tmp_path) -> None:
+    """Verify reparsing a receipt keeps the original parse's cost event in the ledger."""
+    # Given a persisted receipt with a stored image and a recorded cost event
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    image = storage / "rp-cost-abc123.png"
+    image.write_bytes(b"img")
+    receipt = _make_receipt(session, image_path=image)
+    session.add(ParseCostEvent(job_id=None, estimated_cost_usd=Decimal("0.05")))
+    session.commit()
+
+    # When the receipt is reparsed (deletes the old receipt and enqueues a fresh job)
+    reparse_receipt(session, receipt.id, storage_dir=storage)
+
+    # Then the original parse's cost event is still counted
+    assert session.query(ParseCostEvent).count() == 1
+    assert session.query(ParseCostEvent).one().estimated_cost_usd == Decimal("0.05")

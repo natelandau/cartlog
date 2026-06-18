@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic_ai.usage import RunUsage
+
 from cartlog.categories.reclassify import (
     DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
     reclassify_receipt,
@@ -14,9 +16,11 @@ from cartlog.categories.reclassify import (
 )
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import JobStep, ReceiptStatus
+from cartlog.ingest.cost import record_classify_cost, record_parse_cost
 from cartlog.ingest.persistence import persist_receipt
 from cartlog.ingest.queue import complete_job, fail_job, set_job_step
 from cartlog.ingest.review import build_review_reasons
+from cartlog.parsing.pricing import estimate_cost
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,6 +52,7 @@ def _reclassify_and_recompute_unmapped(
     classifier: CategoryClassifier,
     *,
     max_attempts: int,
+    usage: RunUsage | None = None,
 ) -> list[str]:
     """Reclassify the receipt's Uncategorized products, then recompute the unmapped guesses.
 
@@ -57,7 +62,7 @@ def _reclassify_and_recompute_unmapped(
     """
     uncategorized_id = CategoryService(session).ensure_uncategorized().id
     try:
-        reclassify_receipt(session, receipt, classifier, max_attempts=max_attempts)
+        reclassify_receipt(session, receipt, classifier, max_attempts=max_attempts, usage=usage)
     except Exception:  # noqa: BLE001  # reclassification is best-effort; never fail the receipt
         logger.warning(
             "Reclassification failed for receipt %s; leaving items uncategorized for review",
@@ -80,6 +85,8 @@ def process_job(  # noqa: PLR0913
     classifier: CategoryClassifier | None = None,
     max_reclassify_attempts: int = DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
     on_step: Callable[[JobStep], None] | None = None,
+    parse_model: str | None = None,
+    classify_model: str | None = None,
 ) -> Receipt | None:
     """Parse a claimed job's stored file and persist the result. Commits.
 
@@ -105,14 +112,31 @@ def process_job(  # noqa: PLR0913
         max_reclassify_attempts: Per-product cap on LLM reclassification attempts.
         on_step: Optional callback invoked with each JobStep as parsing advances, for
             progress display. The worker omits it.
+        parse_model: Provider-prefixed model id used to price the parse call (e.g.
+            "anthropic:claude-opus-4-8"). None skips cost estimation but still records token counts.
+        classify_model: Provider-prefixed model id used to price the classify call. None skips cost
+            estimation but still records token counts.
 
     Returns:
         The committed Receipt on success, or None if the job failed.
     """
     try:
+        parse_usage = RunUsage()
+        classify_usage = RunUsage()
         set_job_step(session, job, JobStep.EXTRACTING)
         _notify_step(on_step, JobStep.EXTRACTING)
-        parsed = parser.parse(Path(job.image_path))
+        parsed = parser.parse(Path(job.image_path), usage=parse_usage)
+        # Record-on-spend: write the parse cost to the durable ledger before the SAVING step,
+        # which may still fail. The ledger row outlives the job (and any later reparse/delete).
+        parse_cost = estimate_cost(model=parse_model, usage=parse_usage) if parse_model else None
+        cost_event = record_parse_cost(
+            session,
+            job_id=job.id,
+            input_tokens=parse_usage.input_tokens,
+            output_tokens=parse_usage.output_tokens,
+            model=parse_model,
+            cost=parse_cost,
+        )
         set_job_step(session, job, JobStep.SAVING)
         _notify_step(on_step, JobStep.SAVING)
         # Persist first (categories resolve here, yielding the unmapped list), then decide
@@ -131,7 +155,11 @@ def process_job(  # noqa: PLR0913
         # list from what genuinely remains after the sweep.
         if classifier is not None:
             unmapped = _reclassify_and_recompute_unmapped(
-                session, receipt, classifier, max_attempts=max_reclassify_attempts
+                session,
+                receipt,
+                classifier,
+                max_attempts=max_reclassify_attempts,
+                usage=classify_usage,
             )
         reasons = build_review_reasons(
             parsed,
@@ -155,4 +183,32 @@ def process_job(  # noqa: PLR0913
             retry_backoff_base_seconds=retry_backoff_base_seconds,
         )
         return None
+    # Record classify spend only after complete_job has committed the receipt and its job link
+    # together. record_classify_cost commits, so doing it earlier (before complete_job) would
+    # prematurely commit the flushed-but-unlinked receipt and its pending review reasons,
+    # reopening a crash window that could orphan the receipt and duplicate it on retry. This is
+    # best-effort: the receipt already succeeded, so a pricing or ledger-write failure here must
+    # never fail it.
+    if classifier is not None:
+        try:
+            classify_cost = (
+                estimate_cost(model=classify_model, usage=classify_usage)
+                if classify_model
+                else None
+            )
+            record_classify_cost(
+                session,
+                cost_event,
+                input_tokens=classify_usage.input_tokens,
+                output_tokens=classify_usage.output_tokens,
+                model=classify_model,
+                cost=classify_cost,
+            )
+        except Exception:  # noqa: BLE001  # cost tracking must never fail a committed receipt
+            logger.warning(
+                "Failed to record classify cost for job %s; receipt %s is unaffected",
+                job.id,
+                receipt.id,
+                exc_info=True,
+            )
     return receipt

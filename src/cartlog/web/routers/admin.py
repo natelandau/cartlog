@@ -11,13 +11,14 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session  # noqa: TC002  # runtime import for FastAPI Depends
 
+from cartlog.analytics.service import AnalyticsService  # noqa: TC001  # FastAPI Depends at runtime
 from cartlog.db.models import Category, LineItem, Product, ProductMerge, Receipt, Store, StoreMerge
 from cartlog.db.query_helpers import text_filter
 from cartlog.db.sort import SortDir, apply_sort
 from cartlog.exceptions import ProductMergeError, StoreMergeError
 from cartlog.products.service import merge_products
 from cartlog.stores.service import merge_stores
-from cartlog.web.dependencies import get_session
+from cartlog.web.dependencies import get_analytics_service, get_session
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import (
     OCCURRENCE_COUNT,
@@ -100,9 +101,16 @@ def _delete_and_refresh(  # noqa: PLR0913 - explicit per-table delete config
 
 
 @router.get("/admin", response_class=HTMLResponse)
-def admin_index(request: Request) -> HTMLResponse:
-    """Render the admin landing page linking to the mapping tools."""
-    return templates.TemplateResponse(request, "admin/index.html", {})
+def admin_index(
+    request: Request,
+    service: Annotated[AnalyticsService, Depends(get_analytics_service)],
+) -> HTMLResponse:
+    """Render the admin landing page with the mapping tools and the LLM parsing-cost figures."""
+    return templates.TemplateResponse(
+        request,
+        "admin/index.html",
+        {"parsing_cost": service.parsing_cost_overview()},
+    )
 
 
 # --- Products --------------------------------------------------------------------------------

@@ -19,7 +19,7 @@ class FakeClassifier:
         self.answers = answers
         self.seen_names: list[str] = []
 
-    def classify(self, products):  # duck-typed test double
+    def classify(self, products, *, usage=None):  # duck-typed test double
         self.seen_names.extend(p.canonical_name for p in products)
         return {p.canonical_name: self.answers.get(p.canonical_name) for p in products}
 

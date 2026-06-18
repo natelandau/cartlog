@@ -109,7 +109,7 @@ class FakeReceiptParser:
         self._result = result
         self.calls: list[Path] = []
 
-    def parse(self, file_path: Path) -> ParsedReceipt:
+    def parse(self, file_path: Path, *, usage=None) -> ParsedReceipt:
         self.calls.append(file_path)
         return self._result
 

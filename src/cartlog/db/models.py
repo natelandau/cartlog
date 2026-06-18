@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -249,3 +250,29 @@ class IngestionJob(Base):
 
     # One-directional: a Receipt has no back-reference to its source job.
     receipt: Mapped[Receipt | None] = relationship()
+
+
+class ParseCostEvent(Base):
+    """Append-only record of one receipt parse's LLM token usage and estimated USD cost.
+
+    Kept separate from ingestion_jobs (and with no foreign key to it or to receipts) so that
+    deleting or reparsing a receipt, which deletes the producing job, never erases the money
+    that was actually spent. The monthly parsing-cost figure sums this ledger.
+    """
+
+    __tablename__ = "parse_cost_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # Which job produced this event, for traceability only. Plain int (no FK) so a deleted
+    # job never cascades to the ledger.
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Token counts and models for the two model calls. Null when a call did not happen or
+    # genai-prices had no pricing data; estimated_cost_usd is a snapshot priced when it ran.
+    parse_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parse_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    classify_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    classify_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parse_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    classify_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    estimated_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
