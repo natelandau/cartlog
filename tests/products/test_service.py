@@ -153,3 +153,95 @@ def test_apply_line_item_edit_honors_merge_rule(session: Session) -> None:
     # Then it resolves to the target, and no "Coke" product is created
     assert line.product_id == target.id
     assert session.query(Product).filter_by(canonical_name="Coke").count() == 0
+
+
+def test_resolve_collapses_singular_then_plural(session) -> None:
+    """Verify seeing the singular first, then the plural, yields one product named in the plural."""
+    # Given the singular was ingested first
+    first = resolve_product(session, "banana")
+    session.flush()
+
+    # When the plural variant arrives
+    second = resolve_product(session, "bananas")
+    session.flush()
+
+    # Then it is the same product, now displayed in the plural
+    assert second.id == first.id
+    assert second.canonical_name == "bananas"
+    assert session.query(Product).count() == 1
+
+
+def test_resolve_collapses_plural_then_singular(session) -> None:
+    """Verify seeing the plural first keeps the plural display when the singular arrives."""
+    # Given the plural was ingested first
+    first = resolve_product(session, "bananas")
+    session.flush()
+
+    # When the singular variant arrives
+    second = resolve_product(session, "banana")
+    session.flush()
+
+    # Then it is the same product and the display stays plural
+    assert second.id == first.id
+    assert second.canonical_name == "bananas"
+    assert session.query(Product).count() == 1
+
+
+def test_resolve_does_not_force_pluralize_mass_noun(session) -> None:
+    """Verify a mass noun seen only in the singular keeps its singular display."""
+    # When the same mass noun is resolved twice
+    first = resolve_product(session, "milk")
+    session.flush()
+    second = resolve_product(session, "milk")
+    session.flush()
+
+    # Then there is one product and it is never pluralized to "milks"
+    assert second.id == first.id
+    assert second.canonical_name == "milk"
+    assert session.query(Product).count() == 1
+
+
+def test_resolve_does_not_merge_false_plural(session) -> None:
+    """Verify a singular word ending in 's' (e.g. asparagus) is not merged into an erroneous stem."""
+    # When asparagus is ingested with no real counterpart present
+    product = resolve_product(session, "asparagus")
+    session.flush()
+
+    # Then it stands alone under its own name
+    assert product.canonical_name == "asparagus"
+    assert session.query(Product).count() == 1
+
+
+def test_manual_merge_rule_still_wins_first(session) -> None:
+    """Verify an existing manual ProductMerge rule takes precedence over variant collapsing."""
+    # Given a target product and a manual rule mapping "banana" -> that target
+    target = Product(canonical_name="fruit")
+    session.add(target)
+    session.flush()
+    session.add(
+        ProductMerge(
+            source_name="banana", source_name_normalized="banana", target_product_id=target.id
+        )
+    )
+    session.flush()
+
+    # When the ruled source name is resolved
+    resolved = resolve_product(session, "banana")
+
+    # Then the manual rule's target wins, not a new/variant product
+    assert resolved.id == target.id
+
+
+def test_resolve_applies_defaults_only_on_create(session) -> None:
+    """Verify defaults are applied when creating, ignored when collapsing into an existing product."""
+    # Given a singular product created with no category
+    first = resolve_product(session, "banana")
+    session.flush()
+
+    # When the plural arrives carrying a defaults dict
+    second = resolve_product(session, "bananas", defaults={"reclassify_attempts": 5})
+    session.flush()
+
+    # Then it collapses into the existing product and ignores defaults
+    assert second.id == first.id
+    assert second.reclassify_attempts == 0
