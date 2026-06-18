@@ -82,6 +82,65 @@ def test_jobs_badge_partial_empty_when_no_active(app_client):
     assert "badge-warning" not in response.text
 
 
+def test_jobs_progress_partial_summarizes_batch(app_client):
+    """Verify the upload progress card counts done and failed jobs and keeps polling."""
+    # Given three jobs from one upload: one done, one failed, one still pending
+    with app_client.app.state.session_factory() as session:
+        receipt_id = session.query(Receipt.id).order_by(Receipt.id).first()[0]
+        done = IngestionJob(
+            source="web", image_path="/s/a.png", status=JobStatus.DONE, receipt_id=receipt_id
+        )
+        failed = IngestionJob(
+            source="web", image_path="/s/b.png", status=JobStatus.FAILED, last_error="boom"
+        )
+        pending = IngestionJob(source="web", image_path="/s/c.png", status=JobStatus.PENDING)
+        session.add_all([done, failed, pending])
+        session.commit()
+        ids = f"{done.id},{failed.id},{pending.id}"
+
+    # When loading the progress card for that batch
+    response = app_client.get(f"/jobs/progress/partial?ids={ids}")
+
+    # Then it reports 1 of 3 done, flags the failure, and still polls
+    assert response.status_code == 200
+    assert "1 of 3" in response.text
+    assert "1 failed" in response.text
+    assert 'hx-trigger="every 2s"' in response.text
+
+
+def test_jobs_progress_partial_stops_polling_when_all_terminal(app_client):
+    """Verify the progress card drops polling attributes once every tracked job is terminal."""
+    # Given two finished jobs from one upload
+    with app_client.app.state.session_factory() as session:
+        first = IngestionJob(source="web", image_path="/s/a.png", status=JobStatus.DONE)
+        second = IngestionJob(source="web", image_path="/s/b.png", status=JobStatus.DONE)
+        session.add_all([first, second])
+        session.commit()
+        ids = f"{first.id},{second.id}"
+
+    # When loading the progress card
+    response = app_client.get(f"/jobs/progress/partial?ids={ids}")
+
+    # Then it shows completion and no longer polls
+    assert response.status_code == 200
+    assert "2 of 2" in response.text
+    assert "Upload complete" in response.text
+    assert "hx-trigger" not in response.text
+
+
+def test_jobs_progress_partial_tolerates_non_numeric_ids(app_client):
+    """Verify the progress route resolves (not captured as /jobs/{id}) and ignores junk ids."""
+    # Given a single real pending job
+    job_id = _upload(app_client)
+
+    # When requesting progress with a junk token mixed into the ids
+    response = app_client.get(f"/jobs/progress/partial?ids=abc,{job_id}")
+
+    # Then the route resolves and counts only the one real job
+    assert response.status_code == 200
+    assert "0 of 1" in response.text
+
+
 def test_jobs_list_partial_shows_done_job_receipt_link(app_client):
     """Verify a finished job links to its receipt in the Recent section."""
     # Given a done job linked to an existing seeded receipt

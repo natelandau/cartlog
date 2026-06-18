@@ -5,10 +5,12 @@
 
 {#
   POST /receipts returns JSON ({accepted, rejected}), not HTML, so htmx must not swap the
-  response body. We suppress the swap (hx-swap="none") and, on afterRequest, append a
-  self-polling job-status fragment per accepted job into #result and list any rejected files
-  inline. A 400 (every file rejected) is not "successful" in htmx terms, so we also act on
-  status 400 to still render the rejection reasons.
+  response body. We suppress the swap (hx-swap="none") and, on afterRequest, load a single
+  self-polling progress card for the whole batch into #upload-progress and list any rejected
+  files inline in #result. One card per upload (tracked by job id) avoids the earlier race
+  where many concurrent fragment requests sharing one target clobbered each other. A 400
+  (every file rejected) is not "successful" in htmx terms, so we also act on status 400 to
+  still render the rejection reasons.
 #}
 <div class="card max-w-xl border border-base-300 bg-base-100 shadow-sm">
   <div class="card-body gap-4">
@@ -22,9 +24,11 @@
         if (event.detail.successful || event.detail.xhr.status === 400) {
           const body = JSON.parse(event.detail.xhr.responseText);
           const result = document.getElementById('result');
-          (body.accepted || []).forEach(function (job) {
-            htmx.ajax('GET', '/jobs/' + job.job_id + '/partial', { target: '#result', swap: 'beforeend' });
-          });
+          const accepted = body.accepted || [];
+          if (accepted.length) {
+            const ids = accepted.map(function (job) { return job.job_id; }).join(',');
+            htmx.ajax('GET', '/jobs/progress/partial?ids=' + ids, { target: '#upload-progress', swap: 'innerHTML' });
+          }
           (body.rejected || []).forEach(function (item) {
             const p = document.createElement('p');
             p.className = 'text-error text-sm font-medium';
@@ -47,5 +51,6 @@
   </div>
 </div>
 
+<div id="upload-progress" class="mt-4 max-w-xl" aria-live="polite"></div>
 <div id="result" class="mt-4 flex flex-col gap-3" aria-live="polite"></div>
 {% endblock %}
