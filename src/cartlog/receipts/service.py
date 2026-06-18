@@ -50,7 +50,7 @@ def reparse_receipt(session: Session, receipt_id: int, *, storage_dir: Path) -> 
     job like any upload. The new job preserves the original receipt's source.
 
     Args:
-        session: SQLAlchemy session; this function commits.
+        session: SQLAlchemy session; this function commits twice (the new job, then the delete).
         receipt_id: Id of the receipt to reparse.
         storage_dir: Directory stored image files live under.
 
