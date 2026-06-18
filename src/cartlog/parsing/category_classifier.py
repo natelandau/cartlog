@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from pydantic_ai.models import Model
+    from pydantic_ai.usage import RunUsage
 
 # Token budget for the classification response.
 _MAX_TOKENS = 2048
@@ -52,7 +53,9 @@ class _ClassificationOutput(Protocol):
 class CategoryClassifier(Protocol):
     """Categorizes products into a fixed taxonomy, returning canonical_name -> name (or None)."""
 
-    def classify(self, products: Sequence[ProductToClassify]) -> dict[str, str | None]:
+    def classify(
+        self, products: Sequence[ProductToClassify], *, usage: RunUsage | None = None
+    ) -> dict[str, str | None]:
         """Categorize each product; None means the classifier declined to place it."""
         ...
 
@@ -118,7 +121,9 @@ class LLMCategoryClassifier:
             model_settings=ModelSettings(max_tokens=_MAX_TOKENS),
         )
 
-    def classify(self, products: Sequence[ProductToClassify]) -> dict[str, str | None]:
+    def classify(
+        self, products: Sequence[ProductToClassify], *, usage: RunUsage | None = None
+    ) -> dict[str, str | None]:
         """Categorize each product, returning canonical_name -> chosen taxonomy name (or None).
 
         A None value means the classifier declined ("uncategorized"); the caller should leave
@@ -126,6 +131,7 @@ class LLMCategoryClassifier:
 
         Args:
             products: The products to categorize.
+            usage: Optional accumulator; when provided, the call's token counts are added to it.
 
         Returns:
             dict mapping each answered product's canonical_name to a taxonomy category name,
@@ -139,7 +145,7 @@ class LLMCategoryClassifier:
 
         prompt = self._build_prompt(products)
         try:
-            result = self._agent.run_sync(prompt)
+            result = self._agent.run_sync(prompt, usage=usage)
         except UnexpectedModelBehavior as exc:
             msg = "Classifier returned no structured output; the response may have been truncated."
             raise ValueError(msg) from exc

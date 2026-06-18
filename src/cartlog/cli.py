@@ -140,6 +140,8 @@ def _process_enqueued_job(
             classifier=classifier,
             max_reclassify_attempts=settings.max_reclassify_attempts,
             on_step=checklist.start,
+            parse_model=settings.parse_model,
+            classify_model=settings.classify_model,
         )
         if receipt is not None:
             checklist.finish()
@@ -362,6 +364,8 @@ def worker() -> None:
             stale_timeout_seconds=settings.parsing_stale_timeout_seconds,
             classifier=classifier,
             max_reclassify_attempts=settings.max_reclassify_attempts,
+            parse_model=settings.parse_model,
+            classify_model=settings.classify_model,
         )
     except KeyboardInterrupt:
         typer.echo("Worker stopped.")

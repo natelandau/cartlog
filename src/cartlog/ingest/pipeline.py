@@ -16,7 +16,7 @@ from cartlog.categories.reclassify import (
 )
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import JobStep, ReceiptStatus
-from cartlog.ingest.cost import record_parse_cost
+from cartlog.ingest.cost import record_classify_cost, record_parse_cost
 from cartlog.ingest.persistence import persist_receipt
 from cartlog.ingest.queue import complete_job, fail_job, set_job_step
 from cartlog.ingest.review import build_review_reasons
@@ -52,6 +52,7 @@ def _reclassify_and_recompute_unmapped(
     classifier: CategoryClassifier,
     *,
     max_attempts: int,
+    usage: RunUsage | None = None,
 ) -> list[str]:
     """Reclassify the receipt's Uncategorized products, then recompute the unmapped guesses.
 
@@ -61,7 +62,7 @@ def _reclassify_and_recompute_unmapped(
     """
     uncategorized_id = CategoryService(session).ensure_uncategorized().id
     try:
-        reclassify_receipt(session, receipt, classifier, max_attempts=max_attempts)
+        reclassify_receipt(session, receipt, classifier, max_attempts=max_attempts, usage=usage)
     except Exception:  # noqa: BLE001  # reclassification is best-effort; never fail the receipt
         logger.warning(
             "Reclassification failed for receipt %s; leaving items uncategorized for review",
@@ -85,7 +86,7 @@ def process_job(  # noqa: PLR0913
     max_reclassify_attempts: int = DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
     on_step: Callable[[JobStep], None] | None = None,
     parse_model: str | None = None,
-    classify_model: str | None = None,  # noqa: ARG001  # wired in Task 4
+    classify_model: str | None = None,
 ) -> Receipt | None:
     """Parse a claimed job's stored file and persist the result. Commits.
 
@@ -121,13 +122,14 @@ def process_job(  # noqa: PLR0913
     """
     try:
         parse_usage = RunUsage()
+        classify_usage = RunUsage()
         set_job_step(session, job, JobStep.EXTRACTING)
         _notify_step(on_step, JobStep.EXTRACTING)
         parsed = parser.parse(Path(job.image_path), usage=parse_usage)
         # Record-on-spend: write the parse cost to the durable ledger before the SAVING step,
         # which may still fail. The ledger row outlives the job (and any later reparse/delete).
         parse_cost = estimate_cost(parse_model, parse_usage) if parse_model else None
-        cost_event = record_parse_cost(  # noqa: F841  # Task 4 updates this with classify usage
+        cost_event = record_parse_cost(
             session,
             job_id=job.id,
             input_tokens=parse_usage.input_tokens,
@@ -153,7 +155,22 @@ def process_job(  # noqa: PLR0913
         # list from what genuinely remains after the sweep.
         if classifier is not None:
             unmapped = _reclassify_and_recompute_unmapped(
-                session, receipt, classifier, max_attempts=max_reclassify_attempts
+                session,
+                receipt,
+                classifier,
+                max_attempts=max_reclassify_attempts,
+                usage=classify_usage,
+            )
+            classify_cost = (
+                estimate_cost(classify_model, classify_usage) if classify_model else None
+            )
+            record_classify_cost(
+                session,
+                cost_event,
+                input_tokens=classify_usage.input_tokens,
+                output_tokens=classify_usage.output_tokens,
+                model=classify_model,
+                cost=classify_cost,
             )
         reasons = build_review_reasons(
             parsed,

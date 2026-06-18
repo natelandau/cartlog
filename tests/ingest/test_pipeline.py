@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic_ai.usage import RunUsage
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -23,6 +24,7 @@ from cartlog.db.models import (
 )
 from cartlog.ingest.pipeline import process_job
 from cartlog.ingest.queue import enqueue_job
+from cartlog.parsing.pricing import estimate_cost
 from cartlog.parsing.schema import ParsedLineItem, ParsedReceipt
 from tests.conftest import FakeReceiptParser
 
@@ -447,7 +449,7 @@ class _FakeClassifier:
     def __init__(self, answers: dict[str, str | None]) -> None:
         self.answers = answers
 
-    def classify(self, products):  # duck-typed double
+    def classify(self, products, *, usage=None):  # duck-typed double
         return {p.canonical_name: self.answers.get(p.canonical_name) for p in products}
 
 
@@ -492,7 +494,7 @@ def test_process_job_reclassify_failure_leaves_item_for_review(session, fake_par
     job = _enqueue(session, tmp_path)
 
     class _BoomClassifier:
-        def classify(self, products):
+        def classify(self, products, *, usage=None):
             msg = "model unavailable"
             raise RuntimeError(msg)
 
@@ -613,3 +615,66 @@ def test_process_job_persists_parse_cost_even_when_saving_fails(session, tmp_pat
     assert result is None
     event = session.query(ParseCostEvent).one()
     assert event.parse_input_tokens == 900
+
+
+def test_process_job_records_classify_usage_and_sums_cost(session, tmp_path):
+    """Verify the classify pass adds its tokens and cost on top of the parse cost."""
+    # Given a parser and a classifier that each report usage; the receipt has a product whose
+    # category ("mystery-category") is not in the seeded taxonomy, so it lands in Uncategorized
+    # and becomes eligible for the classify pass
+    CategoryService(session).ensure_uncategorized()
+    session.flush()
+    job = _enqueue(session, tmp_path)
+
+    class UsageParser:
+        def parse(self, file_path, *, usage=None):
+            if usage is not None:
+                usage.input_tokens += 1000
+                usage.output_tokens += 200
+            return ParsedReceipt(
+                store_name="Test Store",
+                purchase_date=date(2026, 1, 1),
+                currency="USD",
+                total=1.0,
+                confidence=0.95,
+                line_items=[
+                    ParsedLineItem(
+                        raw_description="widget",
+                        canonical_name="widget",
+                        category="mystery-category",
+                        quantity=1,
+                        unit_price=1.0,
+                        line_total=1.0,
+                    )
+                ],
+            )
+
+    class UsageClassifier:
+        def classify(self, products, *, usage=None):
+            if usage is not None:
+                usage.input_tokens += 300
+                usage.output_tokens += 50
+            return {}
+
+    # When processing with both models known
+    process_job(
+        session,
+        job,
+        parser=UsageParser(),
+        review_confidence_threshold=0.0,
+        total_mismatch_tolerance=1.0,
+        max_retries=0,
+        classifier=UsageClassifier(),
+        parse_model="anthropic:claude-opus-4-8",
+        classify_model="anthropic:claude-haiku-4-5",
+    )
+
+    # Then the cost event records classify tokens and a total exceeding the parse-only cost
+    event = session.query(ParseCostEvent).one()
+    assert event.classify_input_tokens == 300
+    assert event.classify_output_tokens == 50
+    assert event.classify_model == "anthropic:claude-haiku-4-5"
+    parse_only = estimate_cost(
+        "anthropic:claude-opus-4-8", RunUsage(input_tokens=1000, output_tokens=200)
+    )
+    assert event.estimated_cost_usd > parse_only
