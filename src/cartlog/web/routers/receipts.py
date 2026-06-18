@@ -22,7 +22,13 @@ from cartlog.db.models import LineItem, Product, Receipt, ReceiptStatus
 from cartlog.db.sort import SortDir
 from cartlog.ingest.queue import enqueue_job
 from cartlog.parsing.llm_parser import SUPPORTED_SUFFIXES
-from cartlog.receipts.service import apply_receipt_edit, delete_receipt
+from cartlog.receipts.service import (
+    ReparseImageMissingError,
+    apply_receipt_edit,
+    delete_receipt,
+    image_file_available,
+    reparse_receipt,
+)
 from cartlog.web.dependencies import get_session
 from cartlog.web.forms import parse_review_form
 from cartlog.web.htmx import wants_partial
@@ -65,6 +71,17 @@ def _edit_context(session: Session, receipt: Receipt, *, errors: str | None) -> 
         "product_names": product_names,
         "category_options": category_options,
         "review_status": ReceiptStatus.NEEDS_REVIEW,
+    }
+
+
+def _items_panel_context(receipt: Receipt, settings: Settings) -> dict[str, object]:
+    """Build the read-only items panel context, including whether reparse can be offered."""
+    return {
+        "receipt": receipt,
+        "review_status": ReceiptStatus.NEEDS_REVIEW,
+        "image_available": image_file_available(
+            receipt.image_path, storage_dir=settings.image_storage_dir
+        ),
     }
 
 
@@ -187,6 +204,7 @@ def receipt_detail(
     receipt_id: int,
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> HTMLResponse:
     """Render a single receipt with its line items beside the source image or PDF."""
     receipt = _load_receipt(session, receipt_id, with_category=True)
@@ -195,7 +213,7 @@ def receipt_detail(
     return templates.TemplateResponse(
         request,
         "receipt_detail.html",
-        {"receipt": receipt, "review_status": ReceiptStatus.NEEDS_REVIEW, "is_pdf": is_pdf},
+        {**_items_panel_context(receipt, settings), "is_pdf": is_pdf},
     )
 
 
@@ -210,12 +228,9 @@ def receipt_image(
     if receipt is None:
         raise HTTPException(status_code=404, detail="Receipt not found")
 
-    storage_root = settings.image_storage_dir.resolve()
-    image_path = Path(receipt.image_path).resolve()
-    # Refuse paths that escape the configured storage directory (path traversal / stale rows).
-    if not image_path.is_relative_to(storage_root) or not image_path.is_file():
+    if not image_file_available(receipt.image_path, storage_dir=settings.image_storage_dir):
         raise HTTPException(status_code=404, detail="Image not available")
-    return FileResponse(image_path)
+    return FileResponse(Path(receipt.image_path).resolve())
 
 
 @router.get("/receipts/{receipt_id}/items", response_class=HTMLResponse)
@@ -223,13 +238,12 @@ def receipt_items(
     receipt_id: int,
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> HTMLResponse:
     """Render the read-only items panel fragment (used by Cancel to restore the view)."""
     receipt = _load_receipt(session, receipt_id, with_category=True)
     return templates.TemplateResponse(
-        request,
-        "partials/_receipt_items.html",
-        {"receipt": receipt, "review_status": ReceiptStatus.NEEDS_REVIEW},
+        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings)
     )
 
 
@@ -257,6 +271,7 @@ async def review_save(
     receipt_id: int,
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> HTMLResponse:
     """Apply the full edited line set + header in one transaction, then return the read panel.
 
@@ -287,9 +302,7 @@ async def review_save(
     # Reload with the category join so the read partial renders category names post-commit.
     receipt = _load_receipt(session, receipt_id, with_category=True)
     return templates.TemplateResponse(
-        request,
-        "partials/_receipt_items.html",
-        {"receipt": receipt, "review_status": ReceiptStatus.NEEDS_REVIEW},
+        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings)
     )
 
 
@@ -307,11 +320,29 @@ def delete_receipt_route(
     return Response(status_code=200, headers={"HX-Redirect": "/receipts"})
 
 
+@router.post("/receipts/{receipt_id}/reparse")
+def reparse_receipt_route(
+    receipt_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Response:
+    """Discard a receipt's parsed data, requeue its image, and send htmx to the list."""
+    try:
+        job = reparse_receipt(session, receipt_id, storage_dir=settings.image_storage_dir)
+    except ReparseImageMissingError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if job is None:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    # htmx swaps on a 2xx body; HX-Redirect instead navigates the whole page to the list.
+    return Response(status_code=200, headers={"HX-Redirect": "/receipts"})
+
+
 @router.post("/receipts/{receipt_id}/mark-reviewed", response_class=HTMLResponse)
 def mark_reviewed(
     receipt_id: int,
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> HTMLResponse:
     """Flip a needs_review receipt to parsed without editing any fields."""
     receipt = _load_receipt(session, receipt_id, with_category=True)
@@ -319,7 +350,5 @@ def mark_reviewed(
     receipt.review_reasons.clear()
     session.commit()
     return templates.TemplateResponse(
-        request,
-        "partials/_receipt_items.html",
-        {"receipt": receipt, "review_status": ReceiptStatus.NEEDS_REVIEW},
+        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings)
     )

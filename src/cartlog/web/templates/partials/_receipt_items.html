@@ -24,6 +24,11 @@
     <button type="button" class="btn btn-outline btn-sm" hx-post="/receipts/{{ receipt.id }}/mark-reviewed"
             hx-target="#items-panel" hx-swap="innerHTML">Mark reviewed</button>
     {% endif %}
+    {% if image_available %}
+    {# Destructive + redirect-on-success like delete, so no hx-target. #}
+    <button type="button" class="btn btn-outline btn-sm" hx-post="/receipts/{{ receipt.id }}/reparse"
+            hx-confirm="Delete this receipt's parsed data and parse the image again from scratch? This cannot be undone.">Reparse</button>
+    {% endif %}
     {# Destructive action: a redirect on success navigates the whole page, so no hx-target. #}
     <button type="button" class="btn btn-ghost btn-sm ml-auto text-error" hx-delete="/receipts/{{ receipt.id }}"
             hx-confirm="Delete this receipt and all its items? This cannot be undone.">Delete receipt</button>

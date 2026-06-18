@@ -22,7 +22,14 @@ from cartlog.db.models import (
     ReceiptStatus,
     Store,
 )
-from cartlog.receipts.service import apply_line_item_edit, apply_receipt_edit, delete_receipt
+from cartlog.receipts.service import (
+    ReparseImageMissingError,
+    apply_line_item_edit,
+    apply_receipt_edit,
+    delete_receipt,
+    image_file_available,
+    reparse_receipt,
+)
 from cartlog.web.forms import LineEdit, ReceiptEdit
 from tests.factories import seed_receipts
 
@@ -493,3 +500,120 @@ def test_apply_line_item_edit_unknown_category_raises(session) -> None:
     # Then nothing was committed for this line
     session.rollback()
     assert session.get(LineItem, eggs.id).product_id == original_product_id
+
+
+# ---------------------------------------------------------------------------
+# reparse_receipt and image_file_available tests
+# ---------------------------------------------------------------------------
+
+
+def test_reparse_receipt_enqueues_new_job_for_same_image(session, tmp_path) -> None:
+    """Verify reparse creates a pending job for the same image and deletes the old receipt."""
+    # Given a parsed receipt whose image file exists inside the storage dir
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    image = storage / "rp-abc123.png"
+    image.write_bytes(b"img")
+    receipt = _make_receipt(session, image_path=image)
+    rid = receipt.id
+
+    # When reparsing it
+    job = reparse_receipt(session, rid, storage_dir=storage)
+
+    # Then a new pending job points at the same image, the old receipt is gone,
+    # and the image file is preserved on disk
+    assert job is not None
+    assert job.status == JobStatus.PENDING
+    assert job.image_path == str(image)
+    assert job.receipt_id is None
+    assert session.get(Receipt, rid) is None
+    assert session.query(LineItem).count() == 0
+    assert image.exists()
+
+
+def test_reparse_receipt_preserves_source(session, tmp_path) -> None:
+    """Verify the reparse job keeps the original receipt's source value."""
+    # Given a web-sourced receipt with an on-disk image
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    image = storage / "rp-src.png"
+    image.write_bytes(b"img")
+    receipt = _make_receipt(session, image_path=image)
+    receipt.source = "web"
+    session.commit()
+
+    # When reparsing it
+    job = reparse_receipt(session, receipt.id, storage_dir=storage)
+
+    # Then the new job carries the same source
+    assert job is not None
+    assert job.source == "web"
+
+
+def test_reparse_receipt_unknown_id_returns_none(session, tmp_path) -> None:
+    """Verify reparsing a nonexistent id returns None and creates no job."""
+    # Given an empty storage dir and no matching receipt
+    storage = tmp_path / "storage"
+    storage.mkdir()
+
+    # When reparsing an id that does not exist
+    job = reparse_receipt(session, 999, storage_dir=storage)
+
+    # Then nothing happens
+    assert job is None
+    assert session.query(IngestionJob).count() == 0
+
+
+def test_reparse_receipt_missing_image_raises_and_keeps_receipt(session, tmp_path) -> None:
+    """Verify a missing image file aborts reparse before any destructive change."""
+    # Given a receipt whose recorded image file does not exist on disk
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    image = storage / "gone.png"  # never written
+    receipt = _make_receipt(session, image_path=image)
+    rid = receipt.id
+
+    # When reparsing it
+    with pytest.raises(ReparseImageMissingError):
+        reparse_receipt(session, rid, storage_dir=storage)
+
+    # Then the receipt and its line items remain intact and no job was created
+    assert session.get(Receipt, rid) is not None
+    assert session.query(LineItem).count() == 1
+    assert session.query(IngestionJob).count() == 0
+
+
+def test_reparse_receipt_image_outside_storage_raises(session, tmp_path) -> None:
+    """Verify an image path outside the storage dir is treated as unavailable."""
+    # Given a receipt whose image lives outside the configured storage dir
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(b"img")
+    receipt = _make_receipt(session, image_path=outside)
+    rid = receipt.id
+
+    # When reparsing it
+    with pytest.raises(ReparseImageMissingError):
+        reparse_receipt(session, rid, storage_dir=storage)
+
+    # Then the receipt and its line items remain intact and no job was created
+    assert session.get(Receipt, rid) is not None
+    assert session.query(LineItem).count() == 1
+    assert session.query(IngestionJob).count() == 0
+
+
+def test_image_file_available_true_only_inside_storage(tmp_path) -> None:
+    """Verify image_file_available is True only for an existing file under storage_dir."""
+    # Given a file inside storage and a file outside it
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    inside = storage / "in.png"
+    inside.write_bytes(b"img")
+    outside = tmp_path / "out.png"
+    outside.write_bytes(b"img")
+
+    # When / Then only the in-storage existing file is reported available
+    assert image_file_available(str(inside), storage_dir=storage) is True
+    assert image_file_available(str(outside), storage_dir=storage) is False
+    assert image_file_available(str(storage / "missing.png"), storage_dir=storage) is False

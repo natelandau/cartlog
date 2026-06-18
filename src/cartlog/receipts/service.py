@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from cartlog.db.models import Category, IngestionJob, LineItem, Receipt, Store
+from cartlog.db.models import Category, IngestionJob, JobStatus, LineItem, Receipt, Store
 from cartlog.ingest.persistence import _get_or_create
 from cartlog.products.service import resolve_product
 
@@ -16,6 +16,70 @@ if TYPE_CHECKING:
     from cartlog.web.forms import ReceiptEdit
 
 logger = logging.getLogger(__name__)
+
+
+class ReparseImageMissingError(Exception):
+    """Raised when a receipt's stored image is missing, so it cannot be reparsed."""
+
+
+def image_file_available(image_path: str, *, storage_dir: Path) -> bool:
+    """Report whether a receipt's stored image exists and lives inside the storage dir.
+
+    Use this before reparsing or when deciding whether to offer reparse: a missing or
+    out-of-storage path means the source image is gone and cannot be parsed again.
+
+    Args:
+        image_path: The receipt's recorded image path.
+        storage_dir: Directory stored image files live under; paths outside it are rejected.
+
+    Returns:
+        True only when the path resolves inside storage_dir and points at an existing file.
+    """
+    resolved = Path(image_path).resolve()
+    storage_root = storage_dir.resolve()
+    return resolved.is_relative_to(storage_root) and resolved.is_file()
+
+
+def reparse_receipt(session: Session, receipt_id: int, *, storage_dir: Path) -> IngestionJob | None:
+    """Discard a receipt's parsed records and queue its stored image for a fresh parse.
+
+    Use this to re-run the ingestion pipeline on an existing receipt, e.g. to pick up
+    model or prompt changes or to retry a bad parse. A new pending job is created for the
+    receipt's existing stored image first, so when the old receipt is deleted the shared
+    image file is still referenced and left on disk; the worker pool then parses the new
+    job like any upload. The new job preserves the original receipt's source.
+
+    Args:
+        session: SQLAlchemy session; this function commits twice (the new job, then the delete).
+        receipt_id: Id of the receipt to reparse.
+        storage_dir: Directory stored image files live under.
+
+    Returns:
+        The new pending IngestionJob, or None if no receipt has that id.
+
+    Raises:
+        ReparseImageMissingError: If the receipt's image file is missing or outside storage_dir.
+    """
+    receipt = session.get(Receipt, receipt_id)
+    if receipt is None:
+        return None
+
+    image_path = receipt.image_path
+    source = receipt.source
+    if not image_file_available(image_path, storage_dir=storage_dir):
+        msg = f"Image file for receipt {receipt_id} is missing; cannot reparse."
+        raise ReparseImageMissingError(msg)
+
+    # Create the new job pointing at the SAME stored file before deleting the receipt, so
+    # delete_receipt's reference check keeps the image on disk. Point the job straight at
+    # the existing path rather than calling enqueue_job, which would re-hash and re-copy
+    # the already-stored file under a new name.
+    job = IngestionJob(source=source, image_path=image_path, status=JobStatus.PENDING)
+    session.add(job)
+    session.commit()
+
+    delete_receipt(session, receipt_id, storage_dir=storage_dir)
+    return job
 
 
 def apply_receipt_edit(session: Session, receipt: Receipt, edit: ReceiptEdit) -> None:
