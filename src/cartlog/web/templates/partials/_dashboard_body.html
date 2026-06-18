@@ -42,13 +42,16 @@
     </article>
   </section>
 
-  <section class="grid gap-4 md:grid-cols-2">
+  <section>
     <article class="card border border-base-300 bg-base-100 shadow-sm">
       <div class="card-body gap-3">
         <h2 class="card-title text-lg">Activity</h2>
-        {% if data.heatmap %}{{ viz.heatmap(data.heatmap) }}{% else %}<p class="text-base-content/60">No activity in this range.</p>{% endif %}
+        {% if heatmap_grid %}{{ viz.heatmap(heatmap_grid) }}{% else %}<p class="text-base-content/60">No activity in this range.</p>{% endif %}
       </div>
     </article>
+  </section>
+
+  <section>
     <article class="card border border-base-300 bg-base-100 shadow-sm">
       <div class="card-body gap-3">
         <h2 class="card-title text-lg">Avg receipt size</h2>
