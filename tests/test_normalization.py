@@ -34,8 +34,8 @@ def test_singular_and_plural_share_forms(singular: str, plural: str) -> None:
 
 
 @pytest.mark.parametrize("word", ["milk", "rice", "asparagus", "molasses", "swiss"])
-def test_mass_nouns_and_false_plurals_only_match_themselves(word: str) -> None:
-    """A mass noun / false-plural has no real counterpart spelling in its form set."""
+def test_mass_nouns_include_their_own_spelling(word: str) -> None:
+    """Verify a mass noun / false-plural's own spelling is present in its forms set so it can still self-match an existing product."""
     # When a non-count or already-singular term is reduced
     forms = equivalent_forms(word)
 
@@ -61,5 +61,5 @@ def test_equivalent_forms_is_thread_safe() -> None:
         results = list(pool.map(lambda _: equivalent_forms("bananas"), range(200)))
 
     # Then every call agrees on the plural anchor (no engine state corruption)
-    assert all(r.plural == "banana" + "s" for r in results)
+    assert all(r.plural == "bananas" for r in results)
     assert all("banana" in r.forms for r in results)
