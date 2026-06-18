@@ -24,9 +24,9 @@
           <td>
             <form class="merge-form join w-full" hx-get="/admin/products/{{ product.id }}/merge/confirm"
                   hx-target="#admin-dialog" hx-swap="innerHTML">
-              <input class="input input-sm join-item w-full" type="search" name="target" list="admin-product-names"
+              <input class="input input-sm join-item min-w-0 flex-1" type="search" name="target" list="admin-product-names"
                      placeholder="Merge into…" aria-label="Target product" required />
-              <button type="submit" class="btn btn-outline btn-sm join-item">Merge</button>
+              <button type="submit" class="btn btn-outline btn-sm join-item shrink-0">Merge</button>
             </form>
           </td>
         </tr>
