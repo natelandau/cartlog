@@ -13,6 +13,8 @@ from cartlog.analytics.ranges import RangePreset, prior_range, range_label, reso
 from cartlog.analytics.results import (
     CategorySpend,
     CategorySpendRow,
+    CategoryUnitComparison,
+    CategoryUnitRow,
     DashboardData,
     HeatmapCell,
     KpiCard,
@@ -42,7 +44,7 @@ from cartlog.db.models import (
     Store,
 )
 from cartlog.db.query_helpers import escape_like
-from cartlog.units import RESOLVED
+from cartlog.units import RESOLVED, VOLUME, WEIGHT
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Query, Session
@@ -644,6 +646,76 @@ class AnalyticsService:
         rows.sort(key=lambda r: r.total_spend, reverse=True)
         total_spend = sum(running.values(), Decimal(0))
         return CategorySpend(rows=rows, total_spend=total_spend, unclassified_spend=unclassified)
+
+    def category_unit_comparison(
+        self,
+        category: str,
+        *,
+        store: str | None = None,
+        start: date | None = None,
+        end: date | None = None,
+    ) -> CategoryUnitComparison:
+        """Rank products in a category by average normalized price, cheapest first.
+
+        Weight and volume are ranked in separate lists; the two dimensions are not
+        commensurable. Count items are excluded because $/each is only same-product
+        comparable. Only resolved lines contribute.
+
+        Args:
+            category: Category name to filter on (case-insensitive).
+            store: Optional store chain name to filter on (case-insensitive).
+            start: Optional earliest purchase date (inclusive).
+            end: Optional latest purchase date (inclusive).
+
+        Returns:
+            CategoryUnitComparison: Weight and volume rows each sorted cheapest-first.
+        """
+        query = (
+            self._session.query(
+                Product.canonical_name, LineItem.measure_dimension, LineItem.normalized_unit_price
+            )
+            .join(Product, LineItem.product_id == Product.id)
+            .join(Category, Product.category_id == Category.id)
+            .join(Receipt, LineItem.receipt_id == Receipt.id)
+            .join(Store, Receipt.store_id == Store.id)
+            .filter(Receipt.status.in_(COUNTED_STATUSES))
+            .filter(LineItem.measure_status == RESOLVED)
+            .filter(LineItem.measure_dimension.in_((WEIGHT, VOLUME)))
+            .filter(func.lower(Category.name) == category.lower())
+        )
+        query = _apply_store_filter(query, store)
+        query = _apply_date_range(query, start=start, end=end)
+
+        # Average per (product, dimension) in Python over Decimal to avoid SQLite float drift.
+        sums: dict[tuple[str, str], Decimal] = {}
+        counts: dict[tuple[str, str], int] = {}
+        for name, dimension, price in query.all():
+            key = (name, dimension)
+            sums[key] = sums.get(key, Decimal(0)) + price
+            counts[key] = counts.get(key, 0) + 1
+
+        rows = [
+            CategoryUnitRow(
+                canonical_name=name,
+                measure_dimension=dimension,
+                avg_normalized_unit_price=(
+                    sums[(name, dimension)] / counts[(name, dimension)]
+                ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
+                line_count=counts[(name, dimension)],
+            )
+            for (name, dimension) in sums
+        ]
+        weight_rows = sorted(
+            (r for r in rows if r.measure_dimension == WEIGHT),
+            key=lambda r: r.avg_normalized_unit_price,
+        )
+        volume_rows = sorted(
+            (r for r in rows if r.measure_dimension == VOLUME),
+            key=lambda r: r.avg_normalized_unit_price,
+        )
+        return CategoryUnitComparison(
+            category=category, weight_rows=weight_rows, volume_rows=volume_rows
+        )
 
     def search(
         self,

@@ -133,6 +133,38 @@ def category_spend_command(
     typer.echo(f"total={result.total_spend}")
 
 
+@query_app.command("category-units")
+def category_units_command(
+    category: str = typer.Argument(..., help="Category name, e.g. 'produce'."),
+    store: str | None = typer.Option(None, "--store", help="Filter to a store chain."),
+    start: datetime | None = _FROM,
+    end: datetime | None = _TO,
+    as_json: bool = _JSON,  # noqa: FBT001
+) -> None:
+    """Rank products in a category by normalized unit price (weight and volume separately)."""
+    result = _run(
+        lambda svc: svc.category_unit_comparison(
+            category, store=store, start=_as_date(start), end=_as_date(end)
+        )
+    )
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    for label, rows in (
+        ("weight ($/g)", result.weight_rows),
+        ("volume ($/ml)", result.volume_rows),
+    ):
+        if not rows:
+            continue
+        typer.echo(label)
+        for row in rows:
+            typer.echo(
+                f"  {row.canonical_name:<28} {row.avg_normalized_unit_price} n={row.line_count}"
+            )
+    if not result.weight_rows and not result.volume_rows:
+        typer.echo(f"No normalized data for category '{category}'.")
+
+
 @query_app.command("search")
 def search_command(
     text: str = typer.Argument(..., help="Substring to search for across receipts."),

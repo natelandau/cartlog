@@ -155,6 +155,23 @@ class PriceTrendRow(BaseModel):
     change_pct: float | None
 
 
+class CategoryUnitRow(BaseModel):
+    """A product's average normalized price within a category, for one dimension."""
+
+    canonical_name: str
+    measure_dimension: str
+    avg_normalized_unit_price: Decimal
+    line_count: int
+
+
+class CategoryUnitComparison(BaseModel):
+    """Products in a category ranked by normalized price, weight and volume kept separate."""
+
+    category: str
+    weight_rows: list[CategoryUnitRow]
+    volume_rows: list[CategoryUnitRow]
+
+
 class MonthComparison(BaseModel):
     """This calendar month versus the previous one across three measures."""
 
