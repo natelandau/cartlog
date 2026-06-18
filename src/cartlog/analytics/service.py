@@ -539,6 +539,9 @@ class AnalyticsService:
             dimension = resolved[0].measure_dimension if resolved else None
             # Average only points of the same dimension; mixing $/g and $/each is meaningless.
             same_dim = [p for p in resolved if p.measure_dimension == dimension]
+            # Defend the sum below against a data-integrity violation: a RESOLVED row should
+            # always carry a normalized price, but guard so a NULL can never crash the average.
+            same_dim = [p for p in same_dim if p.normalized_unit_price is not None]
             avg_norm = (
                 (
                     (
