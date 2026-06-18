@@ -51,6 +51,7 @@ def test_reparse_returns_hx_redirect_and_requeues(app_client) -> None:
 
 def test_reparse_unknown_id_returns_404(app_client) -> None:
     """Verify reparsing a nonexistent receipt returns 404."""
+    # Given a seeded app with no receipt id 99999
     # When reparsing an id that does not exist
     response = app_client.post("/receipts/99999/reparse")
 

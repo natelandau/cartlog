@@ -613,7 +613,7 @@ def test_image_file_available_true_only_inside_storage(tmp_path) -> None:
     outside = tmp_path / "out.png"
     outside.write_bytes(b"img")
 
-    # Then only the in-storage existing file is reported available
+    # When / Then only the in-storage existing file is reported available
     assert image_file_available(str(inside), storage_dir=storage) is True
     assert image_file_available(str(outside), storage_dir=storage) is False
     assert image_file_available(str(storage / "missing.png"), storage_dir=storage) is False

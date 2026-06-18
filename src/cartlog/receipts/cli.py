@@ -10,6 +10,7 @@ from cartlog.db.session import create_session_factory
 from cartlog.receipts.service import (
     ReparseImageMissingError,
     delete_receipt,
+    image_file_available,
     reparse_receipt,
 )
 
@@ -51,6 +52,14 @@ def reparse_command(
             receipt = session.get(Receipt, receipt_id)
             if receipt is None:
                 typer.echo(f"No receipt with id {receipt_id}.", err=True)
+                raise typer.Exit(code=1)
+            # Refuse before prompting so the user is never asked to confirm a reparse that
+            # cannot run; the service raises the same error as a backstop for a file that
+            # vanishes between this check and the parse.
+            if not image_file_available(receipt.image_path, storage_dir=settings.image_storage_dir):
+                typer.echo(
+                    f"Image file for receipt {receipt_id} is missing; cannot reparse.", err=True
+                )
                 raise typer.Exit(code=1)
             typer.confirm(
                 f"Delete receipt #{receipt_id}'s parsed data and parse its image again "
