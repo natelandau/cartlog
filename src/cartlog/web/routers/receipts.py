@@ -34,6 +34,7 @@ from cartlog.web.forms import parse_review_form
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import SORT_COLUMNS, ReceiptSortKey
 from cartlog.web.templating import templates
+from cartlog.web.units_display import read_unit_system
 
 router = APIRouter()
 
@@ -74,7 +75,9 @@ def _edit_context(session: Session, receipt: Receipt, *, errors: str | None) -> 
     }
 
 
-def _items_panel_context(receipt: Receipt, settings: Settings) -> dict[str, object]:
+def _items_panel_context(
+    receipt: Receipt, settings: Settings, request: Request
+) -> dict[str, object]:
     """Build the read-only items panel context, including whether reparse can be offered."""
     return {
         "receipt": receipt,
@@ -82,6 +85,7 @@ def _items_panel_context(receipt: Receipt, settings: Settings) -> dict[str, obje
         "image_available": image_file_available(
             receipt.image_path, storage_dir=settings.image_storage_dir
         ),
+        "unit_system": read_unit_system(request),
     }
 
 
@@ -213,7 +217,7 @@ def receipt_detail(
     return templates.TemplateResponse(
         request,
         "receipt_detail.html",
-        {**_items_panel_context(receipt, settings), "is_pdf": is_pdf},
+        {**_items_panel_context(receipt, settings, request), "is_pdf": is_pdf},
     )
 
 
@@ -243,7 +247,7 @@ def receipt_items(
     """Render the read-only items panel fragment (used by Cancel to restore the view)."""
     receipt = _load_receipt(session, receipt_id, with_category=True)
     return templates.TemplateResponse(
-        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings)
+        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings, request)
     )
 
 
@@ -302,7 +306,7 @@ async def review_save(
     # Reload with the category join so the read partial renders category names post-commit.
     receipt = _load_receipt(session, receipt_id, with_category=True)
     return templates.TemplateResponse(
-        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings)
+        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings, request)
     )
 
 
@@ -350,5 +354,5 @@ def mark_reviewed(
     receipt.review_reasons.clear()
     session.commit()
     return templates.TemplateResponse(
-        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings)
+        request, "partials/_receipt_items.html", _items_panel_context(receipt, settings, request)
     )

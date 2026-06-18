@@ -26,6 +26,7 @@ from cartlog.db.sort import SortDir
 from cartlog.receipts.service import apply_line_item_edit
 from cartlog.web.dependencies import get_analytics_service, get_session
 from cartlog.web.templating import templates
+from cartlog.web.units_display import read_unit_system
 
 router = APIRouter()
 
@@ -109,6 +110,7 @@ def search_results(
             "sort": sort,
             "direction": direction,
             "product_names": service.product_names(),
+            "unit_system": read_unit_system(request),
         },
     )
 
@@ -123,7 +125,9 @@ def search_item_row(
     row = service.line_item_row(line_item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Line item not found")
-    return templates.TemplateResponse(request, "partials/_search_row.html", {"r": row})
+    return templates.TemplateResponse(
+        request, "partials/_search_row.html", {"r": row, "unit_system": read_unit_system(request)}
+    )
 
 
 @router.get("/search/items/{line_item_id}/edit", response_class=HTMLResponse)
@@ -203,7 +207,9 @@ def search_item_save(
             status_code=422,
         )
 
-    return templates.TemplateResponse(request, "partials/_search_row.html", {"r": row})
+    return templates.TemplateResponse(
+        request, "partials/_search_row.html", {"r": row, "unit_system": read_unit_system(request)}
+    )
 
 
 @router.get("/charts", response_class=HTMLResponse)

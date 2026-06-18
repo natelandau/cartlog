@@ -835,4 +835,7 @@ class AnalyticsService:
             receipt_id=receipt.id,
             line_item_id=line.id,
             needs_review=receipt.status == ReceiptStatus.NEEDS_REVIEW,
+            normalized_unit_price=line.normalized_unit_price,
+            measure_dimension=line.measure_dimension,
+            measure_status=line.measure_status,
         )

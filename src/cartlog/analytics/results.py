@@ -86,6 +86,9 @@ class SearchResult(BaseModel):
     receipt_id: int
     line_item_id: int
     needs_review: bool
+    normalized_unit_price: Decimal | None = None
+    measure_dimension: str | None = None
+    measure_status: str = "not_applicable"
 
 
 class ParsingCostSummary(BaseModel):

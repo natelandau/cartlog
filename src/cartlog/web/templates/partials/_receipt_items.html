@@ -30,12 +30,13 @@
             hx-confirm="Delete this receipt's parsed data and parse the image again from scratch? This cannot be undone.">Reparse</button>
     {% endif %}
     {# Destructive action: a redirect on success navigates the whole page, so no hx-target. #}
+    <button type="button" class="btn btn-ghost btn-sm" hx-post="/preferences/unit-system" hx-swap="none">Units: {{ "metric" if unit_system == "metric" else "imperial" }}</button>
     <button type="button" class="btn btn-ghost btn-sm ml-auto text-error" hx-delete="/receipts/{{ receipt.id }}"
             hx-confirm="Delete this receipt and all its items? This cannot be undone.">Delete receipt</button>
   </div>
   {% call table_card() %}
     <table class="table table-zebra table-sm">
-      <thead><tr><th>Description</th><th>Product</th><th>Category</th><th class="text-right">Qty</th><th class="text-right">Unit price</th><th class="text-right">Line total</th></tr></thead>
+      <thead><tr><th>Description</th><th>Product</th><th>Category</th><th class="text-right">Qty</th><th class="text-right">Unit price</th><th class="text-right">Norm $/unit</th><th class="text-right">Line total</th></tr></thead>
       <tbody>
         {% for li in receipt.line_items %}
         <tr>
@@ -44,6 +45,7 @@
           <td>{{ li.product.category.name if li.product.category else "" }}</td>
           <td class="num text-right">{{ li.quantity }}{% if li.unit %} {{ li.unit }}{% endif %}</td>
           <td class="num text-right">{{ li.unit_price }}</td>
+          <td class="num text-right">{{ li.normalized_unit_price | normalized_price(li.measure_dimension, li.measure_status, unit_system) }}{% if li.measure_status == "needs_review" %} <span class="badge badge-warning badge-xs">review</span>{% endif %}</td>
           <td class="num text-right">{{ li.line_total }}</td>
         </tr>
         {% endfor %}
