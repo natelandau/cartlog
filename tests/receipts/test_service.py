@@ -591,10 +591,16 @@ def test_reparse_receipt_image_outside_storage_raises(session, tmp_path) -> None
     outside = tmp_path / "outside.png"
     outside.write_bytes(b"img")
     receipt = _make_receipt(session, image_path=outside)
+    rid = receipt.id
 
     # When reparsing it
     with pytest.raises(ReparseImageMissingError):
-        reparse_receipt(session, receipt.id, storage_dir=storage)
+        reparse_receipt(session, rid, storage_dir=storage)
+
+    # Then the receipt and its line items remain intact and no job was created
+    assert session.get(Receipt, rid) is not None
+    assert session.query(LineItem).count() == 1
+    assert session.query(IngestionJob).count() == 0
 
 
 def test_image_file_available_true_only_inside_storage(tmp_path) -> None:
