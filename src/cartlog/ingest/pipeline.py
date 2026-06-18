@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic_ai.usage import RunUsage
+
 from cartlog.categories.reclassify import (
     DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
     reclassify_receipt,
@@ -14,9 +16,11 @@ from cartlog.categories.reclassify import (
 )
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import JobStep, ReceiptStatus
+from cartlog.ingest.cost import record_parse_cost
 from cartlog.ingest.persistence import persist_receipt
 from cartlog.ingest.queue import complete_job, fail_job, set_job_step
 from cartlog.ingest.review import build_review_reasons
+from cartlog.parsing.pricing import estimate_cost
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -80,6 +84,8 @@ def process_job(  # noqa: PLR0913
     classifier: CategoryClassifier | None = None,
     max_reclassify_attempts: int = DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
     on_step: Callable[[JobStep], None] | None = None,
+    parse_model: str | None = None,
+    classify_model: str | None = None,  # noqa: ARG001  # wired in Task 4
 ) -> Receipt | None:
     """Parse a claimed job's stored file and persist the result. Commits.
 
@@ -105,14 +111,30 @@ def process_job(  # noqa: PLR0913
         max_reclassify_attempts: Per-product cap on LLM reclassification attempts.
         on_step: Optional callback invoked with each JobStep as parsing advances, for
             progress display. The worker omits it.
+        parse_model: Provider-prefixed model id used for the parse call (e.g.
+            "anthropic:claude-opus-4-8"). None skips cost estimation but still records tokens.
+        classify_model: Provider-prefixed model id used for the classify call. None skips cost
+            estimation. Wired in Task 4.
 
     Returns:
         The committed Receipt on success, or None if the job failed.
     """
     try:
+        parse_usage = RunUsage()
         set_job_step(session, job, JobStep.EXTRACTING)
         _notify_step(on_step, JobStep.EXTRACTING)
-        parsed = parser.parse(Path(job.image_path))
+        parsed = parser.parse(Path(job.image_path), usage=parse_usage)
+        # Record-on-spend: write the parse cost to the durable ledger before the SAVING step,
+        # which may still fail. The ledger row outlives the job (and any later reparse/delete).
+        parse_cost = estimate_cost(parse_model, parse_usage) if parse_model else None
+        cost_event = record_parse_cost(  # noqa: F841  # Task 4 updates this with classify usage
+            session,
+            job_id=job.id,
+            input_tokens=parse_usage.input_tokens,
+            output_tokens=parse_usage.output_tokens,
+            model=parse_model,
+            cost=parse_cost,
+        )
         set_job_step(session, job, JobStep.SAVING)
         _notify_step(on_step, JobStep.SAVING)
         # Persist first (categories resolve here, yielding the unmapped list), then decide

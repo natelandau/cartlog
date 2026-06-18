@@ -16,6 +16,7 @@ from cartlog.db.models import (
     IngestionJob,
     JobStatus,
     JobStep,
+    ParseCostEvent,
     Product,
     Receipt,
     ReviewReasonCode,
@@ -112,7 +113,7 @@ def test_process_job_requeues_on_failure_and_keeps_file(session, tmp_path):
 
     # Given a parser that always raises and a pending job
     class FailingParser:
-        def parse(self, file_path: Path):
+        def parse(self, file_path: Path, *, usage=None):
             msg = "boom"
             raise ValueError(msg)
 
@@ -142,7 +143,7 @@ def test_process_job_marks_failed_when_retries_exhausted(session, tmp_path):
 
     # Given a failing parser and a job that has already used its retry budget
     class FailingParser:
-        def parse(self, file_path: Path):
+        def parse(self, file_path: Path, *, usage=None):
             msg = "boom"
             raise ValueError(msg)
 
@@ -185,7 +186,7 @@ def test_process_job_commits_extracting_step_before_parse(tmp_path, sample_parse
             self._result = result
             self.observed_step: str | None = None  # None until parse() runs
 
-        def parse(self, file_path: Path) -> ParsedReceiptAlias:
+        def parse(self, file_path: Path, *, usage=None) -> ParsedReceiptAlias:
             with self._factory() as other:
                 job = other.query(IngestionJob).first()
                 self.observed_step = job.step if job is not None else None
@@ -234,7 +235,7 @@ def test_process_job_clears_step_on_failure(session, tmp_path):
     """Verify a failed job carries no sub-step."""
 
     class FailingParser:
-        def parse(self, file_path):
+        def parse(self, file_path, *, usage=None):
             msg = "boom"
             raise ValueError(msg)
 
@@ -283,7 +284,7 @@ def test_process_job_callback_stops_at_failure(session, tmp_path):
     """Verify a parse failure reports only the extracting stage, not saving."""
 
     class FailingParser:
-        def parse(self, file_path):
+        def parse(self, file_path, *, usage=None):
             msg = "boom"
             raise ValueError(msg)
 
@@ -514,3 +515,101 @@ def test_process_job_reclassify_failure_leaves_item_for_review(session, fake_par
     assert bananas.category.name == "Uncategorized"
     codes = {r.code for r in receipt.review_reasons}
     assert ReviewReasonCode.UNMAPPED_CATEGORY in codes
+
+
+def test_process_job_records_parse_usage_and_cost(session, tmp_path):
+    """Verify a successful parse writes a cost event with parse tokens and a positive cost."""
+    # Given a claimed job and a parser that reports token usage into the accumulator
+    job = _enqueue(session, tmp_path)
+
+    class UsageParser:
+        def parse(self, file_path, *, usage=None):
+            if usage is not None:
+                usage.input_tokens += 1500
+                usage.output_tokens += 400
+            return ParsedReceipt(
+                store_name="Test Store",
+                purchase_date=date(2026, 1, 1),
+                currency="USD",
+                total=1.0,
+                confidence=0.95,
+                line_items=[
+                    ParsedLineItem(
+                        raw_description="item",
+                        canonical_name="item",
+                        category="",
+                        quantity=1,
+                        unit_price=1.0,
+                        line_total=1.0,
+                    )
+                ],
+            )
+
+    # When processing the job with a known parse model
+    process_job(
+        session,
+        job,
+        parser=UsageParser(),
+        review_confidence_threshold=0.0,
+        total_mismatch_tolerance=1.0,
+        max_retries=0,
+        parse_model="anthropic:claude-opus-4-8",
+    )
+
+    # Then a cost event captured the parse usage and a positive cost
+    event = session.query(ParseCostEvent).one()
+    assert event.parse_input_tokens == 1500
+    assert event.parse_output_tokens == 400
+    assert event.parse_model == "anthropic:claude-opus-4-8"
+    assert event.estimated_cost_usd is not None
+    assert event.estimated_cost_usd > 0
+
+
+def test_process_job_persists_parse_cost_even_when_saving_fails(session, tmp_path, monkeypatch):
+    """Verify the parse cost event survives a failure in a later step (record-on-spend)."""
+    # Given a parser that succeeds and reports usage, but persistence then fails
+    job = _enqueue(session, tmp_path)
+
+    class UsageParser:
+        def parse(self, file_path, *, usage=None):
+            if usage is not None:
+                usage.input_tokens += 900
+            return ParsedReceipt(
+                store_name="Test Store",
+                purchase_date=date(2026, 1, 1),
+                currency="USD",
+                total=1.0,
+                confidence=0.95,
+                line_items=[
+                    ParsedLineItem(
+                        raw_description="item",
+                        canonical_name="item",
+                        category="",
+                        quantity=1,
+                        unit_price=1.0,
+                        line_total=1.0,
+                    )
+                ],
+            )
+
+    def boom(*args: object, **kwargs: object) -> None:
+        msg = "save failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("cartlog.ingest.pipeline.persist_receipt", boom)
+
+    # When processing the job
+    result = process_job(
+        session,
+        job,
+        parser=UsageParser(),
+        review_confidence_threshold=0.0,
+        total_mismatch_tolerance=1.0,
+        max_retries=0,
+        parse_model="anthropic:claude-opus-4-8",
+    )
+
+    # Then the job failed but the spent parse tokens were committed to the ledger first
+    assert result is None
+    event = session.query(ParseCostEvent).one()
+    assert event.parse_input_tokens == 900
