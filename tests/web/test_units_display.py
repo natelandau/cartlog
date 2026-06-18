@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
 from fastapi.testclient import TestClient
 
 from cartlog.web.units_display import format_normalized
