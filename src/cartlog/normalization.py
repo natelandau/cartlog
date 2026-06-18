@@ -19,26 +19,11 @@ _SEP = "\x1f"
 # worker pool runs on threads, so give each thread its own engine instead of locking.
 _thread_local = threading.local()
 
-# Common grocery mass nouns that inflect would otherwise treat as countable.
-# Registering each as its own plural prevents equivalent_forms from ever producing
-# a "plural" form that differs from the base, so resolving e.g. "milks" never
-# renames a stored "milk" product.
-_GROCERY_MASS_NOUNS: tuple[str, ...] = (
-    "flour",
-    "milk",
-    "rice",
-    "sugar",
-    "water",
-)
-
 
 def _inflect_engine() -> inflect.engine:
     engine = getattr(_thread_local, "engine", None)
     if engine is None:
         engine = inflect.engine()
-        # Treat grocery mass nouns as uncountable (plural == singular).
-        for noun in _GROCERY_MASS_NOUNS:
-            engine.defnoun(noun, noun)
         _thread_local.engine = engine
     return engine
 

@@ -201,22 +201,6 @@ def test_resolve_does_not_force_pluralize_mass_noun(session) -> None:
     assert session.query(Product).count() == 1
 
 
-def test_resolve_mass_noun_plural_spelling_does_not_rename(session) -> None:
-    """Verify resolving a mass noun's plural spelling never renames the existing singular product."""
-    # Given a product stored under the singular mass-noun spelling
-    first = resolve_product(session, "milk")
-    session.flush()
-
-    # When the plural spelling that inflect computes ("milks") is resolved
-    second = resolve_product(session, "milks")
-    session.flush()
-
-    # Then the same product is returned and its canonical_name is NOT renamed to "milks"
-    assert second.id == first.id
-    assert second.canonical_name == "milk"
-    assert session.query(Product).count() == 1
-
-
 def test_resolve_does_not_merge_false_plural(session) -> None:
     """Verify a singular word ending in 's' (e.g. asparagus) is not merged into an erroneous stem."""
     # When asparagus is ingested with no real counterpart present
