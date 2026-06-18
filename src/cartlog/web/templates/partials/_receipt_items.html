@@ -19,7 +19,7 @@
   {% endif %}
   <div class="flex flex-wrap gap-2">
     <button type="button" class="btn btn-primary btn-sm" hx-get="/receipts/{{ receipt.id }}/edit"
-            hx-target="#items-panel" hx-swap="innerHTML">Edit items</button>
+            hx-target="#items-panel" hx-swap="innerHTML">Edit receipt</button>
     {% if receipt.status == review_status %}
     <button type="button" class="btn btn-outline btn-sm" hx-post="/receipts/{{ receipt.id }}/mark-reviewed"
             hx-target="#items-panel" hx-swap="innerHTML">Mark reviewed</button>
