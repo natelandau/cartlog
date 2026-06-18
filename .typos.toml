@@ -3,6 +3,11 @@
 
     [default.extend-words]
         criticals = "criticals"
+        # British spelling variants used as alias keys in units.py for Commonwealth receipts
+        litre = "litre"
+        litres = "litres"
+        millilitre = "millilitre"
+        millilitres = "millilitres"
 
 [files]
     extend-exclude = [
