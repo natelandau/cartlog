@@ -28,9 +28,9 @@ You need an API key for your chosen LLM provider (Anthropic by default) and one 
 
 ## Quick start with Docker
 
-Running in Docker is the fastest way to get cartlog up. Everything runs in a single container, and your receipts and data are saved on disk so they survive restarts and upgrades.
+Running in Docker is the fastest way to get cartlog up. It pulls a prebuilt, multi-architecture image (amd64 and arm64) from the GitHub Container Registry at [`ghcr.io/natelandau/cartlog`](https://github.com/natelandau/cartlog/pkgs/container/cartlog), so there is nothing to build. Everything runs in a single container, and your receipts and data are saved on disk so they survive restarts and upgrades.
 
-1. Clone this repository and change into it:
+1. Clone this repository and change into it (this gives you `compose.yaml` and the sample config):
 
     ```bash
     git clone https://github.com/natelandau/cartlog.git
@@ -45,15 +45,23 @@ Running in Docker is the fastest way to get cartlog up. Everything runs in a sin
 
     Open `.env.secret` and set the API key for your chosen provider (e.g. `ANTHROPIC_API_KEY`). Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to switch providers. Every other value is optional.
 
-3. Build and start the container:
+3. Pull the image and start the container in the background:
 
     ```bash
-    docker compose up --build
+    docker compose pull
+    docker compose up -d
     ```
 
 4. Open the web UI at [http://localhost:8000](http://localhost:8000) and upload a receipt.
 
-To run it in the background, use `docker compose up --build -d`. To stop it, run `docker compose down`. Your data persists in the `cartlog-data` volume between restarts.
+To follow the logs, run `docker compose logs -f`. To stop cartlog, run `docker compose down`. Your data persists in the `cartlog-data` volume between restarts.
+
+`compose.yaml` tracks the `latest` tag, which always points at the newest release. To pin a specific version instead, set the image to a release tag such as `ghcr.io/natelandau/cartlog:0.3`. To upgrade later, pull the newer image and recreate the container:
+
+```bash
+docker compose pull
+docker compose up -d
+```
 
 ### File ownership (PUID and PGID)
 

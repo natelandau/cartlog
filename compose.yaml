@@ -1,8 +1,11 @@
 ---
 services:
   cartlog:
+    # End users pull the prebuilt multi-arch image from the GitHub Container Registry.
+    image: ghcr.io/natelandau/cartlog:latest
+    # `build: .` lets developers build the image from source with `docker compose up --build`.
+    # It is ignored when you `docker compose pull` the published image (see CONTRIBUTING.md).
     build: .
-    image: cartlog:latest
     restart: unless-stopped
     ports:
       - "8000:8000"

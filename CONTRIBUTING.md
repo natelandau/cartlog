@@ -57,6 +57,23 @@ uv run duty dev
 The web UI is at [http://localhost:8000](http://localhost:8000). For the full
 list of CLI commands, run `uv run cartlog --help`.
 
+## Build the Docker image
+
+End users run the prebuilt image from the GitHub Container Registry
+(`ghcr.io/natelandau/cartlog`), so you don't need Docker for day-to-day work, as
+`uv run duty dev` is faster. When you change the `Dockerfile`, `compose.yaml`, or
+anything that affects the container, build and run the image from source to check
+it:
+
+```bash
+docker compose up --build
+```
+
+The `build: .` line in `compose.yaml` makes this build the image locally instead
+of pulling the published one, then starts it with the same configuration end
+users get. The CI "Test Docker Build" workflow runs the same build (multi-arch)
+plus a few smoke tests on every change to those files.
+
 ## Check your changes
 
 Run the linters and tests before you push. The same checks run in CI, so
