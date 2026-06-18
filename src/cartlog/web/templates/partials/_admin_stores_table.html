@@ -1,6 +1,6 @@
 {% from "macros/sortable.html" import sort_header with context %}
 {% from "macros/ui.html" import table_card %}
-{% macro sortable_th(label, key) %}{{ sort_header(label, key, "/admin/stores", "admin-stores", extra_qs="q=" ~ (q | urlencode) ~ "&") }}{% endmacro %}
+{% macro sortable_th(label, key, th_class="") %}{{ sort_header(label, key, "/admin/stores", "admin-stores", extra_qs="q=" ~ (q | urlencode) ~ "&", th_class=th_class) }}{% endmacro %}
 <div id="admin-stores">
   <span id="admin-stores-sort-state" hidden>
     <input type="hidden" name="sort" value="{{ sort }}" />
@@ -19,7 +19,7 @@
       <thead><tr>
         {{ sortable_th("Chain", "chain") }}
         {{ sortable_th("Location", "location") }}
-        {{ sortable_th("Visits", "visits") }}
+        {{ sortable_th("Visits", "visits", th_class="text-right") }}
       </tr></thead>
       <tbody>
         {% for store, count in rows %}

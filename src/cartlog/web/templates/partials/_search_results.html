@@ -4,7 +4,7 @@
    typing preserves the active sort. #}
 {% from "macros/sortable.html" import sort_header with context %}
 {% from "macros/ui.html" import table_card %}
-{% macro sortable_th(label, key) %}{{ sort_header(label, key, "/search/results", "search-results", extra_qs="q=" ~ (q | urlencode) ~ "&", push_url=false) }}{% endmacro %}
+{% macro sortable_th(label, key, th_class="") %}{{ sort_header(label, key, "/search/results", "search-results", extra_qs="q=" ~ (q | urlencode) ~ "&", push_url=false, th_class=th_class) }}{% endmacro %}
 <div id="search-results">
   <span id="search-sort-state" hidden>
     <input type="hidden" name="sort" value="{{ sort }}" />
@@ -19,8 +19,8 @@
         {{ sortable_th("Category", "category") }}
         {{ sortable_th("Store", "store") }}
         {{ sortable_th("Date", "date") }}
-        {{ sortable_th("Unit price", "unit_price") }}
-        {{ sortable_th("Line total", "line_total") }}
+        {{ sortable_th("Unit price", "unit_price", th_class="text-right") }}
+        {{ sortable_th("Line total", "line_total", th_class="text-right") }}
         <th></th>
       </tr></thead>
       <tbody>

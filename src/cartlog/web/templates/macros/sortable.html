@@ -11,12 +11,14 @@
      extra_qs  leading query pairs that must precede sort/direction, e.g.
                "q=eggs&" or "status=parsed&" (empty for none)
      push_url  whether the swap pushes the URL (false for fragment-only endpoints)
+     th_class  extra classes for the <th> so numeric columns can right-align their
+               label to match a `text-right` cell (empty for the default left align)
 #}
-{% macro sort_header(label, key, base_url, target, extra_qs="", push_url=true) %}
+{% macro sort_header(label, key, base_url, target, extra_qs="", push_url=true, th_class="") %}
   {% set is_active = sort == key %}
   {% set next_dir = "desc" if (is_active and direction == "asc") else "asc" %}
   {% set qs = "?" ~ extra_qs ~ "sort=" ~ key ~ "&direction=" ~ next_dir %}
-  <th {% if is_active %}aria-sort="{{ 'ascending' if direction == 'asc' else 'descending' }}"{% endif %}>
+  <th {% if th_class %}class="{{ th_class }}" {% endif %}{% if is_active %}aria-sort="{{ 'ascending' if direction == 'asc' else 'descending' }}"{% endif %}>
     <a class="inline-flex items-center gap-1 whitespace-nowrap hover:text-primary {{ 'text-primary' if is_active else '' }}"
        href="{{ base_url }}{{ qs }}" hx-get="{{ base_url }}{{ qs }}"
        hx-target="#{{ target }}" hx-swap="outerHTML"{% if push_url %} hx-push-url="true"{% endif %}>
