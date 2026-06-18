@@ -123,7 +123,7 @@ class CategoryService:
             for c in cats
             if c.id != exclude_id and (include_system or not c.is_system)
         ]
-        return sorted(pairs, key=lambda p: p[1])
+        return sorted(pairs, key=lambda p: p[1].lower())
 
     def _get(self, category_id: int) -> Category:
         """Fetch a Category by primary key or raise CategoryError if absent.
