@@ -3,9 +3,9 @@
 from datetime import date
 from decimal import Decimal
 
-from cartlog.categories.service import UNCATEGORIZED_NAME, CategoryService
 from sqlalchemy.orm import Query
 
+from cartlog.categories.service import UNCATEGORIZED_NAME, CategoryService
 from cartlog.db.base import Base
 from cartlog.db.models import Category, LineItem, Product, Receipt, Store
 from cartlog.db.session import create_session_factory
