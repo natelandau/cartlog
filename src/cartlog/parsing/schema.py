@@ -15,6 +15,13 @@ class ParsedLineItem(BaseModel):
     quantity: float = Field(default=1.0, description="Quantity purchased.")
     unit: str | None = Field(default=None, description="Unit of measure, e.g. 'lb'.")
     unit_size: str | None = Field(default=None, description="Package size, e.g. '12CT'.")
+    measure_value: float | None = Field(
+        default=None, description="Numeric size of ONE package's measurable content, e.g. 1.5."
+    )
+    measure_unit: str | None = Field(
+        default=None,
+        description="Unit for measure_value, one of the allowed unit tokens (e.g. 'l', 'oz').",
+    )
     unit_price: float = Field(description="Price per unit.")
     line_total: float = Field(description="Total price for this line.")
 

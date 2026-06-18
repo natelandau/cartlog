@@ -96,3 +96,13 @@ def test_build_prompt_falls_back_when_no_categories(allowed):
 
     # Then the constrained section is absent
     assert "Allowed categories:" not in prompt
+
+
+def test_prompt_lists_allowed_measure_units():
+    """Verify the prompt contains measure field names and an allowed unit token."""
+    # Given categories for a constrained prompt
+    prompt = _build_prompt(["produce", "dairy & eggs"])
+
+    # Then measure guidance and at least one canonical unit token appear
+    assert "measure_value" in prompt
+    assert "floz" in prompt  # an allowed unit token appears in the guidance
