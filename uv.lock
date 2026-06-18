@@ -132,7 +132,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.4,<2" },
     { name = "fastapi", specifier = ">=0.137.1,<1" },
-    { name = "inflect", specifier = ">=7.5.0" },
+    { name = "inflect", specifier = ">=7.5.0,<8" },
     { name = "jinja2", specifier = ">=3.1.6,<4" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pydantic-ai-slim", extras = ["anthropic", "google", "openai"], specifier = ">=1.107.0,<2" },

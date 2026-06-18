@@ -21,7 +21,7 @@ from cartlog.normalization import equivalent_forms
     ],
 )
 def test_singular_and_plural_share_forms(singular: str, plural: str) -> None:
-    """Both spellings produce overlapping form sets and the same plural anchor."""
+    """Verify singular and plural spellings share equivalent forms and the same plural anchor."""
     # When both variants are reduced to their equivalent forms
     sing = equivalent_forms(singular)
     plur = equivalent_forms(plural)
@@ -44,7 +44,7 @@ def test_mass_nouns_include_their_own_spelling(word: str) -> None:
 
 
 def test_equivalent_forms_normalizes_case_and_whitespace() -> None:
-    """Forms are normalized (lowercased, trimmed) before comparison."""
+    """Verify equivalent forms are normalized by lowercasing and trimming."""
     # When a messy spelling is reduced
     forms = equivalent_forms("  Bananas ")
 
@@ -55,7 +55,7 @@ def test_equivalent_forms_normalizes_case_and_whitespace() -> None:
 
 
 def test_equivalent_forms_is_thread_safe() -> None:
-    """Calling equivalent_forms across threads returns correct, consistent results."""
+    """Verify equivalent_forms returns consistent results across concurrent threads."""
     # When the helper is hammered from many threads
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda _: equivalent_forms("bananas"), range(200)))

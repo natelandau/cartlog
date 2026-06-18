@@ -51,15 +51,18 @@ def resolve_product(
         .all()
     )
     if matches:
-        # Deterministic survivor: prefer the product already named in the plural form.
+        # Prefer the product already named in the plural form; fall back to the oldest
+        # (lowest id) match so legacy duplicates resolve to a stable survivor.
         survivor = next(
             (p for p in matches if normalize_text(p.canonical_name) == nf.plural),
             matches[0],
         )
-        # Prefer plural only once a plural spelling has actually been seen; never force it.
+        # Adopt the plural spelling once it has actually been seen, but never force it. Store
+        # the normalized nf.plural, not the raw input, so an un-normalized name from the edit
+        # form cannot overwrite a clean canonical_name with stray case or whitespace.
         incoming_is_plural = normalize_text(canonical_name) == nf.plural
         if incoming_is_plural and normalize_text(survivor.canonical_name) != nf.plural:
-            survivor.canonical_name = canonical_name
+            survivor.canonical_name = nf.plural
         return survivor
 
     return _get_or_create(session, Product, defaults=defaults, canonical_name=canonical_name)
