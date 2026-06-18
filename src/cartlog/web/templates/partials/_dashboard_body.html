@@ -4,9 +4,9 @@
 <div id="dashboard-body" class="flex flex-col gap-4">
 
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <div class="join" role="group" aria-label="Time range">
+    <div role="tablist" class="tabs tabs-box tabs-sm w-fit" aria-label="Time range">
       {% for r in ranges %}
-        <a class="btn join-item btn-sm {{ 'btn-active btn-primary' if r == range else '' }}"
+        <a role="tab" class="tab {{ 'tab-active bg-primary text-primary-content' if r == range else '' }}"
            href="/?range={{ r.value }}"
            hx-get="/?range={{ r.value }}" hx-target="#dashboard-body"
            hx-swap="outerHTML" hx-push-url="true">{{ range_label(r) }}</a>
