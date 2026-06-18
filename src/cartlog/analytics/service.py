@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, or_
@@ -42,6 +42,7 @@ from cartlog.db.models import (
     Store,
 )
 from cartlog.db.query_helpers import escape_like
+from cartlog.units import RESOLVED
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Query, Session
@@ -477,6 +478,9 @@ class AnalyticsService:
                 line_total=line.line_total,
                 receipt_id=receipt.id,
                 needs_review=receipt.status == ReceiptStatus.NEEDS_REVIEW,
+                normalized_unit_price=line.normalized_unit_price,
+                measure_dimension=line.measure_dimension,
+                measure_status=line.measure_status,
             )
             for line, receipt, store_row in query.all()
         ]
@@ -528,9 +532,22 @@ class AnalyticsService:
             by_store.setdefault((point.store_chain, point.store_location), []).append(point)
 
         rows: list[StoreComparisonRow] = []
-        for (chain, location), points in by_store.items():
-            min_price, max_price, avg_price = _price_stats([p.unit_price for p in points])
-            latest = max(points, key=lambda p: (p.purchase_date, p.receipt_id))
+        for (chain, location), store_points in by_store.items():
+            min_price, max_price, avg_price = _price_stats([p.unit_price for p in store_points])
+            latest = max(store_points, key=lambda p: (p.purchase_date, p.receipt_id))
+            resolved = [p for p in store_points if p.measure_status == RESOLVED]
+            dimension = resolved[0].measure_dimension if resolved else None
+            # Average only points of the same dimension; mixing $/g and $/each is meaningless.
+            same_dim = [p for p in resolved if p.measure_dimension == dimension]
+            avg_norm = (
+                (
+                    (
+                        sum((p.normalized_unit_price for p in same_dim), Decimal(0)) / len(same_dim)
+                    ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+                )
+                if same_dim
+                else None
+            )
             rows.append(
                 StoreComparisonRow(
                     store_chain=chain,
@@ -539,10 +556,19 @@ class AnalyticsService:
                     min_unit_price=min_price,
                     max_unit_price=max_price,
                     latest_unit_price=latest.unit_price,
-                    purchase_count=len(points),
+                    purchase_count=len(store_points),
+                    avg_normalized_unit_price=avg_norm,
+                    measure_dimension=dimension,
+                    normalized_count=len(same_dim),
                 )
             )
-        rows.sort(key=lambda r: r.avg_unit_price)
+        # Sort by normalized price when available (honest), falling back to raw average.
+        rows.sort(
+            key=lambda r: (
+                r.avg_normalized_unit_price is None,
+                r.avg_normalized_unit_price or r.avg_unit_price,
+            )
+        )
         return StoreComparison(product=product, rows=rows)
 
     def _category_ids_for(self, name: str) -> list[int]:

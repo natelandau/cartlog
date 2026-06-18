@@ -19,6 +19,9 @@ class PricePoint(BaseModel):
     line_total: Decimal
     receipt_id: int
     needs_review: bool
+    normalized_unit_price: Decimal | None = None
+    measure_dimension: str | None = None
+    measure_status: str = "not_applicable"
 
 
 class PriceHistory(BaseModel):
@@ -41,6 +44,9 @@ class StoreComparisonRow(BaseModel):
     max_unit_price: Decimal
     latest_unit_price: Decimal
     purchase_count: int
+    avg_normalized_unit_price: Decimal | None = None
+    measure_dimension: str | None = None
+    normalized_count: int = 0
 
 
 class StoreComparison(BaseModel):

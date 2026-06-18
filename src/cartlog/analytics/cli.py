@@ -94,9 +94,11 @@ def store_comparison_command(
         return
     for row in result.rows:
         store = _store_label(row.store_chain, row.store_location)
+        norm = row.avg_normalized_unit_price
+        norm_txt = f" norm={norm}" if norm is not None else " norm=n/a"
         typer.echo(
             f"{store:<32} avg={row.avg_unit_price:>8} "
-            f"min={row.min_unit_price} max={row.max_unit_price} n={row.purchase_count}"
+            f"min={row.min_unit_price} max={row.max_unit_price} n={row.purchase_count}{norm_txt}"
         )
 
 
