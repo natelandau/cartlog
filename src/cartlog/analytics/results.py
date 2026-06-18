@@ -99,13 +99,6 @@ class MonthlySpend(BaseModel):
     receipt_count: int
 
 
-class TrendPoint(BaseModel):
-    """One labeled sample in a simple time series, oldest first."""
-
-    label: str
-    value: Decimal
-
-
 class HeatmapCell(BaseModel):
     """One day's spend, for the activity calendar."""
 
@@ -159,7 +152,6 @@ class DashboardData(BaseModel):
     kpis: list[KpiCard]
     needs_review: int
     monthly_spend: list[MonthlySpend]
-    avg_receipt_trend: list[TrendPoint]
     heatmap: list[HeatmapCell]
     categories: list[CategorySpendRow]
     unclassified_spend: Decimal

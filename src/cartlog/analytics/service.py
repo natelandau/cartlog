@@ -26,7 +26,6 @@ from cartlog.analytics.results import (
     StoreComparisonRow,
     StoreRow,
     TopProduct,
-    TrendPoint,
 )
 from cartlog.analytics.search_sort import SEARCH_SORT_COLUMNS, SearchSortKey
 from cartlog.categories.service import UNCATEGORIZED_NAME
@@ -123,15 +122,6 @@ class AnalyticsService:
         rows = self._counted_receipts(start=start, end=end).all()
         return self._bucket_monthly(rows)
 
-    @staticmethod
-    def avg_receipt_trend(monthly: list[MonthlySpend]) -> list[TrendPoint]:
-        """Derive the average receipt total per month from a monthly-spend series.
-
-        Takes an already-computed `monthly` list rather than re-querying, so a caller that
-        also needs `monthly_spend` (e.g. the dashboard) pays for the receipt scan once.
-        """
-        return [TrendPoint(label=m.month, value=(m.total / m.receipt_count)) for m in monthly]
-
     def month_comparison(self, *, today: date | None = None) -> MonthComparison:
         """Contrast the current calendar month with the previous one.
 
@@ -198,6 +188,9 @@ class AnalyticsService:
 
         receipt_series = [m.receipt_count for m in monthly]
         spend_series = [m.total for m in monthly]
+        avg_series = [m.total / m.receipt_count for m in monthly]
+        avg_receipt = total_spend / receipt_count if receipt_count else Decimal(0)
+        prior_avg = prior_spend / prior_count if prior_count else Decimal(0)
 
         return [
             KpiCard(
@@ -211,6 +204,12 @@ class AnalyticsService:
                 value=f"${total_spend:,.2f}",
                 points=spend_series,
                 delta_pct=_pct_change(prior_spend, total_spend),
+            ),
+            KpiCard(
+                label="Avg receipt",
+                value=f"${avg_receipt:,.2f}",
+                points=avg_series,
+                delta_pct=_pct_change(prior_avg, avg_receipt),
             ),
             KpiCard(
                 label="Items",
@@ -373,8 +372,6 @@ class AnalyticsService:
             .filter(Receipt.status == ReceiptStatus.NEEDS_REVIEW)
             .count()
         )
-        # Scan the receipt window once for the monthly series; the average-trend chart is a
-        # pure derivation of it rather than a second identical query.
         monthly = self.monthly_spend(start=start, end=end)
         # Compute category spend once so both the row list and the unclassified total come
         # from the same query result rather than paying for two identical queries.
@@ -384,7 +381,6 @@ class AnalyticsService:
             kpis=self.kpis(preset, today=today),
             needs_review=needs_review,
             monthly_spend=monthly,
-            avg_receipt_trend=self.avg_receipt_trend(monthly),
             heatmap=self.activity_heatmap(start=start, end=end),
             categories=cat_spend.rows,
             unclassified_spend=cat_spend.unclassified_spend,

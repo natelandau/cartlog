@@ -88,17 +88,60 @@ def jobs_badge_partial(
     )
 
 
-@router.get("/jobs/{job_id}/partial", response_class=HTMLResponse)
-def job_status_partial(
-    job_id: int,
+def _parse_job_ids(raw: str) -> list[int]:
+    """Parse a comma-separated job-id list into ordered unique ints, dropping junk.
+
+    The upload page passes the ids of the jobs it just created so the progress card's
+    denominator matches what the user submitted; ignore anything non-numeric defensively.
+
+    Args:
+        raw: The raw `ids` query value, e.g. "12,13,14".
+
+    Returns:
+        list[int]: Unique job ids in first-seen order.
+    """
+    ids: list[int] = []
+    for part in raw.split(","):
+        token = part.strip()
+        if token.isdigit():
+            value = int(token)
+            if value not in ids:
+                ids.append(value)
+    return ids
+
+
+# Declared before /jobs/{job_id}/partial so "progress" is not captured as a job id.
+@router.get("/jobs/progress/partial", response_class=HTMLResponse)
+def jobs_progress_partial(
     request: Request,
+    ids: str,
     session: Annotated[Session, Depends(get_session)],
 ) -> HTMLResponse:
-    """Render a single job's status as an HTML fragment so the upload page can poll it."""
-    job = session.get(IngestionJob, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return templates.TemplateResponse(request, "partials/_job_status.html", {"job": job})
+    """Render one progress card summarizing a single bulk upload's jobs.
+
+    The card self-polls while any tracked job is still processing and stops once every job is
+    terminal. Tracking jobs by id (rather than the global active list) keeps the count scoped
+    to this upload and stable even after the jobs finish.
+    """
+    job_ids = _parse_job_ids(ids)
+    total = len(job_ids)
+    jobs = session.query(IngestionJob).filter(IngestionJob.id.in_(job_ids)).all() if job_ids else []
+    done = sum(1 for job in jobs if job.status == JobStatus.DONE)
+    failed = sum(1 for job in jobs if job.status == JobStatus.FAILED)
+    finished = done + failed
+    return templates.TemplateResponse(
+        request,
+        "partials/_upload_progress.html",
+        {
+            "ids_csv": ",".join(str(i) for i in job_ids),
+            "total": total,
+            "done": done,
+            "failed": failed,
+            "finished": finished,
+            "percent": round(finished / total * 100) if total else 0,
+            "all_terminal": total > 0 and finished >= total,
+        },
+    )
 
 
 @router.get("/jobs/{job_id}")

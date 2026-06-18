@@ -4,9 +4,9 @@
 <div id="dashboard-body" class="flex flex-col gap-4">
 
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <div class="join" role="group" aria-label="Time range">
+    <div role="tablist" class="tabs tabs-box tabs-sm w-fit" aria-label="Time range">
       {% for r in ranges %}
-        <a class="btn join-item btn-sm {{ 'btn-active btn-primary' if r == range else '' }}"
+        <a role="tab" class="tab {{ 'tab-active bg-primary text-primary-content' if r == range else '' }}"
            href="/?range={{ r.value }}"
            hx-get="/?range={{ r.value }}" hx-target="#dashboard-body"
            hx-swap="outerHTML" hx-push-url="true">{{ range_label(r) }}</a>
@@ -18,7 +18,7 @@
   </div>
 
   {# Band 1: KPIs #}
-  <section class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+  <section class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
     {% for card in data.kpis %}{{ viz.kpi_card(card) }}{% endfor %}
   </section>
 
@@ -42,17 +42,11 @@
     </article>
   </section>
 
-  <section class="grid gap-4 md:grid-cols-2">
+  <section>
     <article class="card border border-base-300 bg-base-100 shadow-sm">
       <div class="card-body gap-3">
         <h2 class="card-title text-lg">Activity</h2>
-        {% if data.heatmap %}{{ viz.heatmap(data.heatmap) }}{% else %}<p class="text-base-content/60">No activity in this range.</p>{% endif %}
-      </div>
-    </article>
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Avg receipt size</h2>
-        {% if data.avg_receipt_trend %}{{ viz.sparkline(data.avg_receipt_trend | map(attribute="value") | list, label="Average receipt total", current="$%.2f"|format(data.avg_receipt_trend[-1].value)) }}{% else %}<p class="text-base-content/60">No receipts yet.</p>{% endif %}
+        {% if heatmap_grid %}{{ viz.heatmap(heatmap_grid) }}{% else %}<p class="text-base-content/60">No activity in this range.</p>{% endif %}
       </div>
     </article>
   </section>

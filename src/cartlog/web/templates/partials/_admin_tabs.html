@@ -1,8 +1,13 @@
-{# Shared admin sub-navigation. The including page sets `admin_active` to one of the keys
-   below to highlight the current area. #}
-<div role="tablist" class="tabs tabs-box mb-4 w-fit">
-  <a role="tab" href="/admin/products" class="tab {{ 'tab-active' if admin_active == 'products' else '' }}">Products</a>
-  <a role="tab" href="/admin/transformations" class="tab {{ 'tab-active' if admin_active == 'transformations' else '' }}">Transformations</a>
-  <a role="tab" href="/admin/stores" class="tab {{ 'tab-active' if admin_active == 'stores' else '' }}">Stores</a>
-  <a role="tab" href="/admin/store-merges" class="tab {{ 'tab-active' if admin_active == 'store_merges' else '' }}">Store merges</a>
+{# Admin sub-navigation for a tabbed section. The including page sets:
+     admin_section  "product" or "store" — which section's tabs to show
+     admin_active   "list" or "merges"   — which sub-tab is current
+   Categories and Jobs are single views and do not include this partial. #}
+{% set _section_tabs = {
+  "product": [("/admin/products", "list", "List"), ("/admin/transformations", "merges", "Merges")],
+  "store": [("/admin/stores", "list", "List"), ("/admin/store-merges", "merges", "Merges")],
+} %}
+<div role="tablist" class="tabs tabs-border mb-4 w-full justify-start border-b border-base-300">
+  {% for href, key, label in _section_tabs[admin_section] %}
+  <a role="tab" href="{{ href }}" class="tab {{ 'tab-active' if admin_active == key else '' }}">{{ label }}</a>
+  {% endfor %}
 </div>

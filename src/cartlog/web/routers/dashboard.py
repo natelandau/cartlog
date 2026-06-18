@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session, contains_eager
 
-from cartlog.analytics.ranges import RangePreset
+from cartlog.analytics.ranges import RangePreset, resolve_range
 from cartlog.analytics.service import AnalyticsService
 from cartlog.db.models import Receipt, ReceiptStatus
 from cartlog.db.sort import SortDir
@@ -17,6 +17,7 @@ from cartlog.web.dependencies import get_analytics_service, get_session
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import SORT_KEYS, ReceiptSortKey
 from cartlog.web.templating import templates
+from cartlog.web.viz import build_calendar_heatmap
 
 router = APIRouter()
 
@@ -51,6 +52,8 @@ def dashboard(
 ) -> HTMLResponse:
     """Render the data-rich overview for the chosen range, plus a sortable recent table."""
     data = service.dashboard(range_)
+    start, end = resolve_range(range_)
+    heatmap_grid = build_calendar_heatmap(data.heatmap, start=start, end=end)
 
     recent = (
         session.query(Receipt)
@@ -67,6 +70,7 @@ def dashboard(
         _dashboard_template(request),
         {
             "data": data,
+            "heatmap_grid": heatmap_grid,
             "range": range_,
             "ranges": list(RangePreset),
             "receipts": recent,

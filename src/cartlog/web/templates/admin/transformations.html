@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Transformations · cartlog{% endblock %}
+{% block title %}Product management · cartlog{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-3xl font-semibold tracking-tight">Transformations</h1>
+<h1 class="mb-4 text-3xl font-semibold tracking-tight">Product management</h1>
 {% from "macros/admin.html" import search_box %}
-{% set admin_active = "transformations" %}
+{% set admin_section = "product" %}
+{% set admin_active = "merges" %}
 {% include "partials/_admin_tabs.html" %}
 
 {{ search_box("/admin/transformations", "admin-transformations", "admin-transformations-sort-state", "Filter transformations…", "Filter transformations", q) }}

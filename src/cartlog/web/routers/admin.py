@@ -111,7 +111,10 @@ def admin_index(request: Request) -> HTMLResponse:
 def _all_product_names(session: Session) -> list[str]:
     """Return every product name, ordered, for the merge-target datalist."""
     return [
-        name for (name,) in session.query(Product.canonical_name).order_by(Product.canonical_name)
+        name
+        for (name,) in session.query(Product.canonical_name).order_by(
+            func.lower(Product.canonical_name)
+        )
     ]
 
 

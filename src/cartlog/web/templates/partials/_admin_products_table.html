@@ -1,6 +1,6 @@
 {% from "macros/sortable.html" import sort_header with context %}
 {% from "macros/ui.html" import table_card %}
-{% macro sortable_th(label, key) %}{{ sort_header(label, key, "/admin/products", "admin-products", extra_qs="q=" ~ (q | urlencode) ~ "&") }}{% endmacro %}
+{% macro sortable_th(label, key, th_class="") %}{{ sort_header(label, key, "/admin/products", "admin-products", extra_qs="q=" ~ (q | urlencode) ~ "&", th_class=th_class) }}{% endmacro %}
 <div id="admin-products">
   <span id="admin-products-sort-state" hidden>
     <input type="hidden" name="sort" value="{{ sort }}" />
@@ -11,7 +11,7 @@
     <table class="table table-zebra">
       <thead><tr>
         {{ sortable_th("Product", "name") }}
-        {{ sortable_th("Occurrences", "occurrences") }}
+        {{ sortable_th("Occurrences", "occurrences", th_class="text-right") }}
         {{ sortable_th("Category", "category") }}
         <th class="w-80">Merge into</th>
       </tr></thead>
@@ -24,9 +24,9 @@
           <td>
             <form class="merge-form join w-full" hx-get="/admin/products/{{ product.id }}/merge/confirm"
                   hx-target="#admin-dialog" hx-swap="innerHTML">
-              <input class="input input-sm join-item w-full" type="search" name="target" list="admin-product-names"
+              <input class="input input-sm join-item min-w-0 flex-1" type="search" name="target" list="admin-product-names"
                      placeholder="Merge into…" aria-label="Target product" required />
-              <button type="submit" class="btn btn-outline btn-sm join-item">Merge</button>
+              <button type="submit" class="btn btn-outline btn-sm join-item shrink-0">Merge</button>
             </form>
           </td>
         </tr>

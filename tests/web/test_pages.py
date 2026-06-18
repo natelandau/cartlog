@@ -128,20 +128,6 @@ def test_upload_page_allows_multiple_file_selection(app_client):
     assert 'name="files"' in response.text
 
 
-def test_job_status_partial_renders_status(app_client):
-    """Verify the job-status partial renders the current job state as HTML."""
-    # Given an enqueued job
-    files = {"files": ("scan.png", b"\x89PNG fake", "image/png")}
-    job_id = app_client.post("/receipts", files=files).json()["accepted"][0]["job_id"]
-
-    # When polling the HTML partial
-    response = app_client.get(f"/jobs/{job_id}/partial")
-
-    # Then it returns an HTML fragment reflecting status
-    assert response.status_code == 200
-    assert "pending" in response.text.lower()
-
-
 def test_search_page_renders_box(app_client):
     """Verify GET /search renders a search input."""
     # When loading the search page

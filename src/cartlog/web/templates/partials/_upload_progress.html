@@ -1,0 +1,33 @@
+{#
+  Single self-updating upload-progress card. While any tracked job is still processing the
+  root element re-fetches itself every 2s and replaces itself (outerHTML); once every job is
+  terminal the polling attributes are dropped so the chain stops. `ids_csv` carries the job
+  ids from this upload so the count denominator matches what the user submitted.
+#}
+<div
+  class="card border border-base-300 bg-base-100 shadow-sm"
+  {% if not all_terminal %}hx-get="/jobs/progress/partial?ids={{ ids_csv }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <div class="card-body gap-3">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="card-title text-lg">
+        {% if all_terminal %}
+          {% if failed %}Upload finished{% else %}Upload complete{% endif %}
+        {% else %}
+          <span class="loading loading-spinner loading-sm text-primary" aria-hidden="true"></span>
+          Processing receipts
+        {% endif %}
+      </h2>
+      <span class="text-sm font-medium text-base-content/60">{{ percent }}%</span>
+    </div>
+
+    <progress
+      class="progress w-full {{ 'progress-error' if failed and all_terminal else 'progress-primary' }}"
+      value="{{ finished }}" max="{{ total }}"></progress>
+
+    <p class="text-sm">
+      <span class="font-semibold">{{ done }} of {{ total }}</span> done{% if failed %}<span class="font-medium text-error"> · {{ failed }} failed</span>{% endif %}
+    </p>
+
+    <a class="link link-primary text-sm self-start" href="/jobs">View details on the Jobs page →</a>
+  </div>
+</div>

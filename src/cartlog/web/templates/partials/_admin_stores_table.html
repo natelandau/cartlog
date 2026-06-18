@@ -1,6 +1,6 @@
 {% from "macros/sortable.html" import sort_header with context %}
 {% from "macros/ui.html" import table_card %}
-{% macro sortable_th(label, key) %}{{ sort_header(label, key, "/admin/stores", "admin-stores", extra_qs="q=" ~ (q | urlencode) ~ "&") }}{% endmacro %}
+{% macro sortable_th(label, key, th_class="") %}{{ sort_header(label, key, "/admin/stores", "admin-stores", extra_qs="q=" ~ (q | urlencode) ~ "&", th_class=th_class) }}{% endmacro %}
 <div id="admin-stores">
   <span id="admin-stores-sort-state" hidden>
     <input type="hidden" name="sort" value="{{ sort }}" />
@@ -8,29 +8,37 @@
   </span>
   {% if rows %}
   {% call table_card() %}
-    <table class="table table-zebra">
+    {#
+      Each store spans two rows: the data on top, the merge control on its own full-width
+      row below. A native <select>'s selected value is not clipped by overflow in Chrome, so
+      a long store label would paint over the Merge button when the control was squeezed into
+      a narrow cell; giving it the full table width keeps long labels from colliding. The
+      first row drops its bottom border so the pair reads as one store.
+    #}
+    <table class="table">
       <thead><tr>
         {{ sortable_th("Chain", "chain") }}
         {{ sortable_th("Location", "location") }}
-        {{ sortable_th("Visits", "visits") }}
-        <th class="w-80">Merge into</th>
+        {{ sortable_th("Visits", "visits", th_class="text-right") }}
       </tr></thead>
       <tbody>
         {% for store, count in rows %}
-        <tr class="hover">
+        <tr class="[&>td]:border-b-0">
           <td>{{ store.chain_name }}</td>
           <td>{{ store.location or "—" }}</td>
           <td class="num text-right">{{ count }}</td>
-          <td>
-            <form class="merge-form join w-full" hx-get="/admin/stores/{{ store.id }}/merge/confirm"
+        </tr>
+        <tr>
+          <td colspan="3" class="pt-0">
+            <form class="merge-form join w-full max-w-2xl" hx-get="/admin/stores/{{ store.id }}/merge/confirm"
                   hx-target="#admin-dialog" hx-swap="innerHTML">
-              <select class="select select-sm join-item w-full" name="target_id" aria-label="Target store" required>
+              <select class="select select-sm join-item min-w-0 flex-1" name="target_id" aria-label="Merge {{ store.chain_name }} into" required>
                 <option value="" selected disabled>Merge into…</option>
                 {% for other in stores if other.id != store.id %}
                 <option value="{{ other.id }}">{{ other.chain_name }} — {{ other.location or "—" }}</option>
                 {% endfor %}
               </select>
-              <button type="submit" class="btn btn-outline btn-sm join-item">Merge</button>
+              <button type="submit" class="btn btn-outline btn-sm join-item shrink-0">Merge</button>
             </form>
           </td>
         </tr>

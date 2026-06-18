@@ -1,7 +1,7 @@
 {# Shared admin filter box: a daisyUI search input that swaps a table fragment as you type.
    `target` and `sort_state` are bare element ids (no leading '#'). #}
 {% macro search_box(endpoint, target, sort_state, placeholder, aria, value="") %}
-<label class="input input-bordered mb-4 flex w-full max-w-md items-center gap-2">
+<label class="input input-bordered mb-4 flex w-full max-w-md items-center gap-2 border-base-300 bg-base-100 shadow-sm">
   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
   <input
     class="grow"
