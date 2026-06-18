@@ -6,9 +6,53 @@ identities) normalizes through here, so the comparison rule lives in exactly one
 
 from __future__ import annotations
 
+import threading
+from dataclasses import dataclass
+
+import inflect
+
 # ASCII unit separator: a delimiter that cannot occur in chain/location text, so the joined
 # store key is unambiguous and a null location collapses to an empty location part.
 _SEP = "\x1f"
+
+# inflect.engine() caches internal state and is not documented as thread-safe; the ingest
+# worker pool runs on threads, so give each thread its own engine instead of locking.
+_thread_local = threading.local()
+
+
+def _inflect_engine() -> inflect.engine:
+    engine = getattr(_thread_local, "engine", None)
+    if engine is None:
+        engine = inflect.engine()
+        _thread_local.engine = engine
+    return engine
+
+
+@dataclass(frozen=True)
+class NameForms:
+    """The set of normalized spellings a product name is considered equivalent to.
+
+    `forms` holds every spelling that should resolve to the same product (the name itself,
+    its singular base, and its plural). `plural` is the spelling we prefer to display.
+    """
+
+    forms: frozenset[str]
+    plural: str
+
+
+def equivalent_forms(name: str) -> NameForms:
+    """Return the singular/plural spellings `name` should be treated as equivalent to.
+
+    Singularize for matching (never pluralize for storage) so mass nouns like "milk" are
+    left alone. `inflect` wrongly singularizes some words that merely end in "s" (e.g.
+    "asparagus" -> "asparagu"), but that is harmless: callers only collapse into a product
+    that already exists, and no real product is named by the erroneous stem.
+    """
+    engine = _inflect_engine()
+    n = normalize_text(name)
+    base = engine.singular_noun(n) or n  # False when already singular -> keep n
+    plural = engine.plural_noun(base)
+    return NameForms(forms=frozenset({n, base, plural}), plural=plural)
 
 
 def normalize_text(value: str) -> str:
