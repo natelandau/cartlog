@@ -675,6 +675,6 @@ def test_process_job_records_classify_usage_and_sums_cost(session, tmp_path):
     assert event.classify_output_tokens == 50
     assert event.classify_model == "anthropic:claude-haiku-4-5"
     parse_only = estimate_cost(
-        "anthropic:claude-opus-4-8", RunUsage(input_tokens=1000, output_tokens=200)
+        model="anthropic:claude-opus-4-8", usage=RunUsage(input_tokens=1000, output_tokens=200)
     )
     assert event.estimated_cost_usd > parse_only

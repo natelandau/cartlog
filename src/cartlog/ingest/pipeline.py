@@ -128,7 +128,7 @@ def process_job(  # noqa: PLR0913
         parsed = parser.parse(Path(job.image_path), usage=parse_usage)
         # Record-on-spend: write the parse cost to the durable ledger before the SAVING step,
         # which may still fail. The ledger row outlives the job (and any later reparse/delete).
-        parse_cost = estimate_cost(parse_model, parse_usage) if parse_model else None
+        parse_cost = estimate_cost(model=parse_model, usage=parse_usage) if parse_model else None
         cost_event = record_parse_cost(
             session,
             job_id=job.id,
@@ -161,17 +161,6 @@ def process_job(  # noqa: PLR0913
                 max_attempts=max_reclassify_attempts,
                 usage=classify_usage,
             )
-            classify_cost = (
-                estimate_cost(classify_model, classify_usage) if classify_model else None
-            )
-            record_classify_cost(
-                session,
-                cost_event,
-                input_tokens=classify_usage.input_tokens,
-                output_tokens=classify_usage.output_tokens,
-                model=classify_model,
-                cost=classify_cost,
-            )
         reasons = build_review_reasons(
             parsed,
             unmapped=unmapped,
@@ -194,4 +183,32 @@ def process_job(  # noqa: PLR0913
             retry_backoff_base_seconds=retry_backoff_base_seconds,
         )
         return None
+    # Record classify spend only after complete_job has committed the receipt and its job link
+    # together. record_classify_cost commits, so doing it earlier (before complete_job) would
+    # prematurely commit the flushed-but-unlinked receipt and its pending review reasons,
+    # reopening a crash window that could orphan the receipt and duplicate it on retry. This is
+    # best-effort: the receipt already succeeded, so a pricing or ledger-write failure here must
+    # never fail it.
+    if classifier is not None:
+        try:
+            classify_cost = (
+                estimate_cost(model=classify_model, usage=classify_usage)
+                if classify_model
+                else None
+            )
+            record_classify_cost(
+                session,
+                cost_event,
+                input_tokens=classify_usage.input_tokens,
+                output_tokens=classify_usage.output_tokens,
+                model=classify_model,
+                cost=classify_cost,
+            )
+        except Exception:  # noqa: BLE001  # cost tracking must never fail a committed receipt
+            logger.warning(
+                "Failed to record classify cost for job %s; receipt %s is unaffected",
+                job.id,
+                receipt.id,
+                exc_info=True,
+            )
     return receipt

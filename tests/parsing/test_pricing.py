@@ -13,7 +13,7 @@ def test_estimate_cost_known_model_returns_positive_decimal():
     usage = RunUsage(input_tokens=1000, output_tokens=500)
 
     # When estimating the cost
-    cost = estimate_cost("anthropic:claude-opus-4-8", usage)
+    cost = estimate_cost(model="anthropic:claude-opus-4-8", usage=usage)
 
     # Then the cost is a positive Decimal
     assert isinstance(cost, Decimal)
@@ -26,7 +26,7 @@ def test_estimate_cost_unknown_model_returns_none():
     usage = RunUsage(input_tokens=1000, output_tokens=500)
 
     # When estimating the cost
-    cost = estimate_cost("anthropic:totally-made-up-model-xyz", usage)
+    cost = estimate_cost(model="anthropic:totally-made-up-model-xyz", usage=usage)
 
     # Then no cost is returned
     assert cost is None

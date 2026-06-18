@@ -66,5 +66,5 @@ def record_classify_cost(
     event.classify_input_tokens = input_tokens
     event.classify_output_tokens = output_tokens
     event.classify_model = model
-    event.estimated_cost_usd = _add_costs(event.estimated_cost_usd, cost)
+    event.estimated_cost_usd = _add_costs(existing=event.estimated_cost_usd, addition=cost)
     session.commit()
