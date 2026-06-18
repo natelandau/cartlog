@@ -5,6 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.exc import IntegrityError
+
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import LineItem, Receipt
 
@@ -33,9 +35,19 @@ def _get_or_create[ModelT: Base](
     extra construction values applied only when a new row is created.
     """
     instance = session.query(model).filter_by(**filters).one_or_none()
-    if instance is None:
-        instance = model(**filters, **(defaults or {}))
-        session.add(instance)
+    if instance is not None:
+        return instance
+    # The ingestion worker pool is multithreaded, so another worker can insert the same row
+    # between our lookup and our insert. Do the insert inside a SAVEPOINT: on a unique
+    # collision only the savepoint rolls back, and we re-read the row the other worker
+    # committed, rather than letting the whole receipt fail and re-run the LLM parse.
+    try:
+        with session.begin_nested():
+            instance = model(**filters, **(defaults or {}))
+            session.add(instance)
+            session.flush()
+    except IntegrityError:
+        return session.query(model).filter_by(**filters).one()
     return instance
 
 

@@ -4,8 +4,12 @@ from datetime import date
 from decimal import Decimal
 
 from cartlog.categories.service import UNCATEGORIZED_NAME, CategoryService
+from sqlalchemy.orm import Query
+
+from cartlog.db.base import Base
 from cartlog.db.models import Category, LineItem, Product, Receipt, Store
-from cartlog.ingest.persistence import persist_receipt
+from cartlog.db.session import create_session_factory
+from cartlog.ingest.persistence import _get_or_create, persist_receipt
 from cartlog.parsing.schema import ParsedLineItem, ParsedReceipt
 
 
@@ -145,3 +149,37 @@ def test_persist_blank_category_not_reported_as_unmapped(session) -> None:
     product = session.query(Product).filter_by(canonical_name="mystery item").one()
     assert product.category.name == UNCATEGORIZED_NAME
     assert unmapped == []
+
+
+def test_get_or_create_resolves_concurrent_unique_collision(tmp_path, mocker) -> None:
+    """Verify _get_or_create resolves to the existing row when a concurrent insert wins the unique race."""
+    # Given two sessions on a shared on-disk database (in-memory SQLite cannot be shared
+    # across connections, and the race only exists between separate connections)
+    factory = create_session_factory(f"sqlite:///{tmp_path / 'race.db'}")
+    engine = factory.kw["bind"]
+    with factory() as setup:
+        Base.metadata.create_all(setup.get_bind())
+    session_a = factory()
+    session_b = factory()
+    try:
+        # Given a competing worker has already created and committed "bananas"
+        session_a.add(Product(canonical_name="bananas"))
+        session_a.commit()
+        winner_id = session_a.query(Product).filter_by(canonical_name="bananas").one().id
+
+        # Given worker B's lookup misses it (simulating A committing in B's read->insert window)
+        stale = mocker.patch.object(Query, "one_or_none", autospec=True)
+        stale.side_effect = [None]  # only the get-or-create lookup is mocked; the retry uses one()
+
+        # When B get-or-creates the same name, its insert hits the unique constraint
+        product = _get_or_create(session_b, Product, canonical_name="bananas")
+        mocker.stopall()  # restore real queries for the assertions below
+        session_b.commit()
+
+        # Then B resolves to the committed row instead of raising or creating a duplicate
+        assert product.id == winner_id
+        assert session_b.query(Product).filter_by(canonical_name="bananas").count() == 1
+    finally:
+        session_b.close()
+        session_a.close()
+        engine.dispose()
