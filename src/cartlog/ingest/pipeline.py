@@ -112,10 +112,10 @@ def process_job(  # noqa: PLR0913
         max_reclassify_attempts: Per-product cap on LLM reclassification attempts.
         on_step: Optional callback invoked with each JobStep as parsing advances, for
             progress display. The worker omits it.
-        parse_model: Provider-prefixed model id used for the parse call (e.g.
-            "anthropic:claude-opus-4-8"). None skips cost estimation but still records tokens.
-        classify_model: Provider-prefixed model id used for the classify call. None skips cost
-            estimation. Wired in Task 4.
+        parse_model: Provider-prefixed model id used to price the parse call (e.g.
+            "anthropic:claude-opus-4-8"). None skips cost estimation but still records token counts.
+        classify_model: Provider-prefixed model id used to price the classify call. None skips cost
+            estimation but still records token counts.
 
     Returns:
         The committed Receipt on success, or None if the job failed.
