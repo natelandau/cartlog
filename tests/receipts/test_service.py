@@ -621,6 +621,71 @@ def test_image_file_available_true_only_inside_storage(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Normalization recompute on edit
+# ---------------------------------------------------------------------------
+
+
+def test_edit_recomputes_normalization(session) -> None:
+    """Verify editing a line recomputes its normalization columns from unit/unit_size."""
+    # Given a receipt with a line item that has no unit_size (so normalization is not_applicable)
+    product = Product(canonical_name="milk", category=Category(name="dairy"))
+    store = Store(chain_name="Safeway", location="Main St")
+    receipt = Receipt(
+        store=store,
+        purchase_date=date(2026, 3, 1),
+        total=Decimal("4.50"),
+        currency="USD",
+        image_path="/tmp/x.png",  # noqa: S108
+        raw_parser_json="{}",
+        source="cli",
+        status="parsed",
+    )
+    receipt.line_items.append(
+        LineItem(
+            product=product,
+            raw_description="MILK",
+            quantity=Decimal(1),
+            unit="ea",
+            unit_size=None,
+            unit_price=Decimal("4.50"),
+            line_total=Decimal("4.50"),
+        )
+    )
+    session.add(receipt)
+    session.commit()
+
+    # When applying an edit that supplies a volume unit_size
+    line = receipt.line_items[0]
+    edit = ReceiptEdit(
+        chain_name="Safeway",
+        location="Main St",
+        purchase_date=date(2026, 3, 1),
+        total=Decimal("4.50"),
+        currency="USD",
+        lines=[
+            LineEdit(
+                line_id=line.id,
+                raw_description="MILK 1.5L",
+                canonical_name="milk",
+                category_id=None,
+                quantity=Decimal(1),
+                unit="ea",
+                unit_size="1.5L",
+                unit_price=Decimal("4.50"),
+                line_total=Decimal("4.50"),
+            )
+        ],
+    )
+    apply_receipt_edit(session, receipt, edit)
+
+    # Then normalization columns are recomputed from the new unit_size
+    session.refresh(line)
+    assert line.measure_status == "resolved"
+    assert line.measure_dimension == "volume"
+    assert line.normalized_unit_price == Decimal("0.003000")
+
+
+# ---------------------------------------------------------------------------
 # Parse cost durability tests
 # ---------------------------------------------------------------------------
 
