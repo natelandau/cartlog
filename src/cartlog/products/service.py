@@ -44,7 +44,12 @@ def resolve_product(
     # recomputed every call from inflect's rules plus the current product set, so no rule
     # is persisted (which would otherwise break the ProductMerge delete contract).
     nf = equivalent_forms(canonical_name)
-    matches = session.query(Product).filter(func.lower(Product.canonical_name).in_(nf.forms)).all()
+    matches = (
+        session.query(Product)
+        .filter(func.lower(Product.canonical_name).in_(nf.forms))
+        .order_by(Product.id)
+        .all()
+    )
     if matches:
         # Deterministic survivor: prefer the product already named in the plural form.
         survivor = next(
