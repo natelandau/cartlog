@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+
 import pytest
 
 from cartlog.normalization import equivalent_forms
@@ -50,3 +52,14 @@ def test_equivalent_forms_normalizes_case_and_whitespace() -> None:
     assert "banana" in forms.forms
     assert "bananas" in forms.forms
     assert forms.plural == "bananas"
+
+
+def test_equivalent_forms_is_thread_safe() -> None:
+    """Calling equivalent_forms across threads returns correct, consistent results."""
+    # When the helper is hammered from many threads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda _: equivalent_forms("bananas"), range(200)))
+
+    # Then every call agrees on the plural anchor (no engine state corruption)
+    assert all(r.plural == "banana" + "s" for r in results)
+    assert all("banana" in r.forms for r in results)
