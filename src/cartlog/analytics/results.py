@@ -82,6 +82,22 @@ class SearchResult(BaseModel):
     needs_review: bool
 
 
+class ParsingCostSummary(BaseModel):
+    """Estimated LLM parsing cost over a range: total, priced-event count, and per-parse average."""
+
+    total: Decimal
+    receipt_count: int
+    avg_per_receipt: Decimal
+
+
+class ParsingCostOverview(BaseModel):
+    """The three LLM-cost figures shown on the admin page."""
+
+    total_all_time: Decimal
+    total_last_30_days: Decimal
+    avg_per_receipt: Decimal
+
+
 class KpiCard(BaseModel):
     """A headline metric: preformatted value, optional sparkline series, optional delta."""
 
