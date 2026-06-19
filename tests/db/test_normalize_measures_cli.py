@@ -17,7 +17,7 @@ def _seed(session, *, unit, unit_size):
         purchase_date=date(2026, 3, 1),
         total=Decimal("4.50"),
         currency="USD",
-        image_path="/tmp/x.png",
+        image_path="/tmp/x.png",  # noqa: S108
         raw_parser_json="{}",
         source="cli",
         status="parsed",
@@ -26,7 +26,7 @@ def _seed(session, *, unit, unit_size):
         LineItem(
             product=product,
             raw_description="MILK",
-            quantity=Decimal("1"),
+            quantity=Decimal(1),
             unit=unit,
             unit_size=unit_size,
             unit_price=Decimal("4.50"),

@@ -44,10 +44,10 @@ def test_persist_populates_normalized_columns_from_llm_measure(session):
     receipt, _ = persist_receipt(
         session,
         parsed,
-        image_path="/tmp/x.png",
+        image_path="/tmp/x.png",  # noqa: S108
         source="cli",
         status="parsed",
-        raw_json="{}",  # noqa: S108
+        raw_json="{}",
     )
     session.flush()
     line = receipt.line_items[0]
@@ -72,10 +72,10 @@ def test_persist_marks_unmeasured_line_not_applicable(session):
     receipt, _ = persist_receipt(
         session,
         parsed,
-        image_path="/tmp/x.png",
+        image_path="/tmp/x.png",  # noqa: S108
         source="cli",
         status="parsed",
-        raw_json="{}",  # noqa: S108
+        raw_json="{}",
     )
     session.flush()
     assert receipt.line_items[0].measure_status == "not_applicable"

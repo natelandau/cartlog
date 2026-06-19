@@ -1,4 +1,5 @@
-# tests/analytics/test_category_unit_comparison.py
+"""Tests for category_unit_comparison ranking products by normalized price."""
+
 from datetime import date
 from decimal import Decimal
 
@@ -27,6 +28,7 @@ def _line(product, *, unit, unit_size, qty, total):
 
 
 def test_category_units_ranks_weight_products(session):
+    """Verify weight products in a category rank cheapest-per-gram first."""
     produce = Category(name="produce")
     bananas = Product(canonical_name="bananas", category=produce)
     grapes = Product(canonical_name="grapes", category=produce)
@@ -34,9 +36,9 @@ def test_category_units_ranks_weight_products(session):
     r = Receipt(
         store=store,
         purchase_date=date(2026, 1, 1),
-        total=Decimal("10"),
+        total=Decimal(10),
         currency="USD",
-        image_path="/tmp/x.png",
+        image_path="/tmp/x.png",  # noqa: S108
         raw_parser_json="{}",
         source="cli",
         status=ReceiptStatus.PARSED,
@@ -64,7 +66,7 @@ def test_category_units_excludes_resolved_row_with_null_price(session):
     r = Receipt(
         store=store,
         purchase_date=date(2026, 1, 1),
-        total=Decimal("5"),
+        total=Decimal(5),
         currency="USD",
         image_path="/tmp/x.png",  # noqa: S108
         raw_parser_json="{}",

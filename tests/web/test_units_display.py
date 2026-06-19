@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
-
-from fastapi.testclient import TestClient
+from typing import TYPE_CHECKING
 
 from cartlog.web.units_display import format_normalized
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
 
 
 def test_imperial_weight():

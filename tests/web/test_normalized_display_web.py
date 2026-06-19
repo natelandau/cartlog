@@ -15,7 +15,6 @@ import pytest
 from cartlog.db.models import Category, LineItem, Product, Receipt, ReceiptStatus, Store
 from cartlog.web.units_display import format_normalized
 
-
 # ---------------------------------------------------------------------------
 # Filter contract guard: ensures the template's filter call produces the
 # value the rendering assertions look for. If this breaks, the column is
@@ -66,7 +65,7 @@ def receipt_with_normalized(app_client) -> int:
         line = LineItem(
             product=milk,
             raw_description="NORM MILK 1.5L",
-            quantity=Decimal("1"),
+            quantity=Decimal(1),
             unit="ea",
             unit_size="1.5L",
             unit_price=Decimal("4.50"),
@@ -174,7 +173,7 @@ def test_search_item_row_includes_unit_system(app_client, receipt_with_normalize
     """Verify the single-row endpoint passes unit_system so the cell renders without error."""
     # Given the seeded line item's id
     with app_client.app.state.session_factory() as session:
-        from cartlog.db.models import LineItem, Product
+        from cartlog.db.models import LineItem, Product  # noqa: PLC0415
 
         line = (
             session.query(LineItem)
