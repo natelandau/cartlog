@@ -13,6 +13,74 @@ from cartlog.ingest.persistence import _get_or_create, persist_receipt
 from cartlog.parsing.schema import ParsedLineItem, ParsedReceipt
 
 
+def _receipt_with(item: ParsedLineItem) -> ParsedReceipt:
+    return ParsedReceipt(
+        store_name="Safeway",
+        store_location="Main St",
+        purchase_date=date(2026, 3, 1),
+        currency="USD",
+        total=item.line_total,
+        confidence=0.9,
+        line_items=[item],
+    )
+
+
+def test_persist_populates_normalized_columns_from_llm_measure(session):
+    """Verify normalization columns are populated from LLM-provided measure on persist."""
+    parsed = _receipt_with(
+        ParsedLineItem(
+            raw_description="MILK 1.5L",
+            canonical_name="milk",
+            category="dairy & eggs",
+            quantity=1,
+            unit="ea",
+            unit_size="1.5L",
+            measure_value=1.5,
+            measure_unit="l",
+            unit_price=4.5,
+            line_total=4.5,
+        )
+    )
+    receipt, _ = persist_receipt(
+        session,
+        parsed,
+        image_path="/tmp/x.png",  # noqa: S108
+        source="cli",
+        status="parsed",
+        raw_json="{}",
+    )
+    session.flush()
+    line = receipt.line_items[0]
+    assert line.measure_status == "resolved"
+    assert line.measure_dimension == "volume"
+    assert line.measure_quantity == Decimal("1500.0000")
+    assert line.normalized_unit_price == Decimal("0.003000")
+
+
+def test_persist_marks_unmeasured_line_not_applicable(session):
+    """Verify a line item with no unit or size is marked not_applicable after persist."""
+    parsed = _receipt_with(
+        ParsedLineItem(
+            raw_description="APPLE",
+            canonical_name="apple",
+            category="produce",
+            quantity=1,
+            unit_price=0.99,
+            line_total=0.99,
+        )
+    )
+    receipt, _ = persist_receipt(
+        session,
+        parsed,
+        image_path="/tmp/x.png",  # noqa: S108
+        source="cli",
+        status="parsed",
+        raw_json="{}",
+    )
+    session.flush()
+    assert receipt.line_items[0].measure_status == "not_applicable"
+
+
 def test_persist_receipt_creates_rows(session, sample_parsed_receipt):
     """Verify persisting a receipt creates the receipt, stores, products, and categories."""
     receipt, _unmapped = persist_receipt(

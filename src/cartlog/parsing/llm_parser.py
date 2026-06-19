@@ -9,6 +9,7 @@ from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.settings import ModelSettings
 
 from cartlog.parsing.schema import ParsedReceipt
+from cartlog.units import ALLOWED_UNIT_TOKENS
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -45,15 +46,24 @@ _CATEGORY_RULES = (
     "tags (shelf stable, refrigerated); only use 'frozen' when frozen changes the product "
     "itself (frozen berries vs fresh). Allowed categories:\n{allowed}"
 )
+# Appended to every prompt so the model knows which unit tokens are canonical.
+_MEASURE_RULES = (
+    " For each line also return a structured package measure: 'measure_value' (a number) and "
+    "'measure_unit' (exactly one of: {units}). Use the net content of ONE package (e.g. a 1.5L "
+    "milk -> measure_value 1.5, measure_unit 'l'; a 12-count egg carton -> 12, 'ct'). Leave both "
+    "null for items sold loose by weight where the quantity already carries the unit (e.g. "
+    "bananas priced per lb), and for items with no measurable size (a single apple)."
+)
 
 
 def _build_prompt(allowed_categories: list[str] | None) -> str:
-    """Build the parser prompt, constraining categories to the allowed list when provided."""
+    """Build the parser prompt, constraining categories and measure units to allowed lists."""
+    measure = _MEASURE_RULES.format(units=", ".join(ALLOWED_UNIT_TOKENS))
     if allowed_categories:
         bulleted = "\n".join(f"- {name}" for name in allowed_categories)
-        return _PROMPT_BASE + _CATEGORY_RULES.format(allowed=bulleted)
+        return _PROMPT_BASE + _CATEGORY_RULES.format(allowed=bulleted) + measure
     # No categories seeded yet: fall back to free-form guidance.
-    return _PROMPT_BASE + " Use a single category like 'dairy & eggs' or 'produce'."
+    return _PROMPT_BASE + " Use a single category like 'dairy & eggs' or 'produce'." + measure
 
 
 class LLMReceiptParser:

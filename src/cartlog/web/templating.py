@@ -12,6 +12,7 @@ from typing import Any, cast
 from fastapi.templating import Jinja2Templates
 
 from cartlog.analytics.ranges import range_label
+from cartlog.web.units_display import format_normalized
 from cartlog.web.viz import bar_percents, heatmap_intensity, sparkline_points
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -27,3 +28,7 @@ _globals["bar_percents"] = bar_percents
 _globals["heatmap_intensity"] = heatmap_intensity
 # Single source of truth for range captions, shared with the chips and the provenance line.
 _globals["range_label"] = range_label
+
+_filters: dict[str, Any] = cast("dict[str, Any]", templates.env.filters)
+# Templates call `value | normalized_price(dimension, status, unit_system)`.
+_filters["normalized_price"] = format_normalized

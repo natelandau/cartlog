@@ -7,6 +7,7 @@
   <td>{{ r.store_chain }}</td>
   <td><a class="link link-primary num" href="/receipts/{{ r.receipt_id }}">{{ r.purchase_date }}</a></td>
   <td class="num text-right">{{ r.unit_price }}</td>
+  <td class="num text-right">{{ r.normalized_unit_price | normalized_price(r.measure_dimension, r.measure_status, unit_system) }}</td>
   <td class="num text-right">{{ r.line_total }}</td>
   <td>
     <button type="button" class="btn btn-ghost btn-xs"

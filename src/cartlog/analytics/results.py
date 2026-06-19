@@ -19,6 +19,9 @@ class PricePoint(BaseModel):
     line_total: Decimal
     receipt_id: int
     needs_review: bool
+    normalized_unit_price: Decimal | None = None
+    measure_dimension: str | None = None
+    measure_status: str = "not_applicable"
 
 
 class PriceHistory(BaseModel):
@@ -41,6 +44,9 @@ class StoreComparisonRow(BaseModel):
     max_unit_price: Decimal
     latest_unit_price: Decimal
     purchase_count: int
+    avg_normalized_unit_price: Decimal | None = None
+    measure_dimension: str | None = None
+    normalized_count: int = 0
 
 
 class StoreComparison(BaseModel):
@@ -80,6 +86,9 @@ class SearchResult(BaseModel):
     receipt_id: int
     line_item_id: int
     needs_review: bool
+    normalized_unit_price: Decimal | None = None
+    measure_dimension: str | None = None
+    measure_status: str = "not_applicable"
 
 
 class ParsingCostSummary(BaseModel):
@@ -147,6 +156,23 @@ class PriceTrendRow(BaseModel):
     points: list[Decimal]  # unit price over time, oldest first
     current_price: Decimal
     change_pct: float | None
+
+
+class CategoryUnitRow(BaseModel):
+    """A product's average normalized price within a category, for one dimension."""
+
+    canonical_name: str
+    measure_dimension: str
+    avg_normalized_unit_price: Decimal
+    line_count: int
+
+
+class CategoryUnitComparison(BaseModel):
+    """Products in a category ranked by normalized price, weight and volume kept separate."""
+
+    category: str
+    weight_rows: list[CategoryUnitRow]
+    volume_rows: list[CategoryUnitRow]
 
 
 class MonthComparison(BaseModel):

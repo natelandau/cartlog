@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, or_
@@ -13,6 +13,8 @@ from cartlog.analytics.ranges import RangePreset, prior_range, range_label, reso
 from cartlog.analytics.results import (
     CategorySpend,
     CategorySpendRow,
+    CategoryUnitComparison,
+    CategoryUnitRow,
     DashboardData,
     HeatmapCell,
     KpiCard,
@@ -42,6 +44,7 @@ from cartlog.db.models import (
     Store,
 )
 from cartlog.db.query_helpers import escape_like
+from cartlog.units import RESOLVED, VOLUME, WEIGHT
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Query, Session
@@ -477,6 +480,9 @@ class AnalyticsService:
                 line_total=line.line_total,
                 receipt_id=receipt.id,
                 needs_review=receipt.status == ReceiptStatus.NEEDS_REVIEW,
+                normalized_unit_price=line.normalized_unit_price,
+                measure_dimension=line.measure_dimension,
+                measure_status=line.measure_status,
             )
             for line, receipt, store_row in query.all()
         ]
@@ -528,9 +534,25 @@ class AnalyticsService:
             by_store.setdefault((point.store_chain, point.store_location), []).append(point)
 
         rows: list[StoreComparisonRow] = []
-        for (chain, location), points in by_store.items():
-            min_price, max_price, avg_price = _price_stats([p.unit_price for p in points])
-            latest = max(points, key=lambda p: (p.purchase_date, p.receipt_id))
+        for (chain, location), store_points in by_store.items():
+            min_price, max_price, avg_price = _price_stats([p.unit_price for p in store_points])
+            latest = max(store_points, key=lambda p: (p.purchase_date, p.receipt_id))
+            resolved = [p for p in store_points if p.measure_status == RESOLVED]
+            dimension = resolved[0].measure_dimension if resolved else None
+            # Average only points of the same dimension; mixing $/g and $/each is meaningless.
+            same_dim = [p for p in resolved if p.measure_dimension == dimension]
+            # Defend the sum below against a data-integrity violation: a RESOLVED row should
+            # always carry a normalized price, but guard so a NULL can never crash the average.
+            same_dim = [p for p in same_dim if p.normalized_unit_price is not None]
+            avg_norm = (
+                (
+                    (
+                        sum((p.normalized_unit_price for p in same_dim), Decimal(0)) / len(same_dim)
+                    ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+                )
+                if same_dim
+                else None
+            )
             rows.append(
                 StoreComparisonRow(
                     store_chain=chain,
@@ -539,10 +561,23 @@ class AnalyticsService:
                     min_unit_price=min_price,
                     max_unit_price=max_price,
                     latest_unit_price=latest.unit_price,
-                    purchase_count=len(points),
+                    purchase_count=len(store_points),
+                    avg_normalized_unit_price=avg_norm,
+                    measure_dimension=dimension,
+                    normalized_count=len(same_dim),
                 )
             )
-        rows.sort(key=lambda r: r.avg_unit_price)
+        # Sort by normalized price when available (honest), falling back to raw average.
+        # Use an explicit None check, not `or`: a free item's normalized price is Decimal(0),
+        # which is falsy and would wrongly fall back to the raw unit price.
+        rows.sort(
+            key=lambda r: (
+                r.avg_normalized_unit_price is None,
+                r.avg_normalized_unit_price
+                if r.avg_normalized_unit_price is not None
+                else r.avg_unit_price,
+            )
+        )
         return StoreComparison(product=product, rows=rows)
 
     def _category_ids_for(self, name: str) -> list[int]:
@@ -615,6 +650,79 @@ class AnalyticsService:
         rows.sort(key=lambda r: r.total_spend, reverse=True)
         total_spend = sum(running.values(), Decimal(0))
         return CategorySpend(rows=rows, total_spend=total_spend, unclassified_spend=unclassified)
+
+    def category_unit_comparison(
+        self,
+        category: str,
+        *,
+        store: str | None = None,
+        start: date | None = None,
+        end: date | None = None,
+    ) -> CategoryUnitComparison:
+        """Rank products in a category by average normalized price, cheapest first.
+
+        Weight and volume are ranked in separate lists; the two dimensions are not
+        commensurable. Count items are excluded because $/each is only same-product
+        comparable. Only resolved lines contribute.
+
+        Args:
+            category: Category name to filter on (case-insensitive).
+            store: Optional store chain name to filter on (case-insensitive).
+            start: Optional earliest purchase date (inclusive).
+            end: Optional latest purchase date (inclusive).
+
+        Returns:
+            CategoryUnitComparison: Weight and volume rows each sorted cheapest-first.
+        """
+        query = (
+            self._session.query(
+                Product.canonical_name, LineItem.measure_dimension, LineItem.normalized_unit_price
+            )
+            .join(Product, LineItem.product_id == Product.id)
+            .join(Category, Product.category_id == Category.id)
+            .join(Receipt, LineItem.receipt_id == Receipt.id)
+            .join(Store, Receipt.store_id == Store.id)
+            .filter(Receipt.status.in_(COUNTED_STATUSES))
+            .filter(LineItem.measure_status == RESOLVED)
+            # A RESOLVED row should always carry a normalized price; guard so a NULL from a
+            # data-integrity violation cannot reach the Decimal sum below and crash it.
+            .filter(LineItem.normalized_unit_price.isnot(None))
+            .filter(LineItem.measure_dimension.in_((WEIGHT, VOLUME)))
+            .filter(func.lower(Category.name) == category.lower())
+        )
+        query = _apply_store_filter(query, store)
+        query = _apply_date_range(query, start=start, end=end)
+
+        # Average per (product, dimension) in Python over Decimal to avoid SQLite float drift.
+        sums: dict[tuple[str, str], Decimal] = {}
+        counts: dict[tuple[str, str], int] = {}
+        for name, dimension, price in query.all():
+            key = (name, dimension)
+            sums[key] = sums.get(key, Decimal(0)) + price
+            counts[key] = counts.get(key, 0) + 1
+
+        rows = [
+            CategoryUnitRow(
+                canonical_name=name,
+                measure_dimension=dimension,
+                avg_normalized_unit_price=(
+                    sums[(name, dimension)] / counts[(name, dimension)]
+                ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
+                line_count=counts[(name, dimension)],
+            )
+            for (name, dimension) in sums
+        ]
+        weight_rows = sorted(
+            (r for r in rows if r.measure_dimension == WEIGHT),
+            key=lambda r: r.avg_normalized_unit_price,
+        )
+        volume_rows = sorted(
+            (r for r in rows if r.measure_dimension == VOLUME),
+            key=lambda r: r.avg_normalized_unit_price,
+        )
+        return CategoryUnitComparison(
+            category=category, weight_rows=weight_rows, volume_rows=volume_rows
+        )
 
     def search(
         self,
@@ -734,4 +842,7 @@ class AnalyticsService:
             receipt_id=receipt.id,
             line_item_id=line.id,
             needs_review=receipt.status == ReceiptStatus.NEEDS_REVIEW,
+            normalized_unit_price=line.normalized_unit_price,
+            measure_dimension=line.measure_dimension,
+            measure_status=line.measure_status,
         )

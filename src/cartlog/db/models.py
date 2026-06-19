@@ -207,6 +207,15 @@ class LineItem(Base):
     unit_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    # Normalized measure derived at ingest/edit by cartlog.units; see measure_status.
+    measure_quantity: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    measure_dimension: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    normalized_unit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    # resolved | not_applicable | needs_review. Default covers rows inserted before
+    # normalization runs (e.g. a bare LineItem in a test or a pending backfill).
+    measure_status: Mapped[str] = mapped_column(
+        String(16), default="not_applicable", server_default="not_applicable"
+    )
 
     receipt: Mapped[Receipt] = relationship(back_populates="line_items")
     product: Mapped[Product] = relationship(back_populates="line_items")

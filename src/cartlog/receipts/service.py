@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from cartlog.db.models import Category, IngestionJob, JobStatus, LineItem, Receipt, Store
 from cartlog.ingest.persistence import _get_or_create
 from cartlog.products.service import resolve_product
+from cartlog.units import normalize_line_item
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -144,6 +145,18 @@ def apply_receipt_edit(session: Session, receipt: Receipt, edit: ReceiptEdit) ->
         item.unit_size = line.unit_size
         item.unit_price = line.unit_price
         item.line_total = line.line_total
+
+        # Recompute deterministically from unit/unit_size; the edit form carries no llm_measure.
+        norm = normalize_line_item(
+            quantity=line.quantity,
+            unit=line.unit,
+            unit_size=line.unit_size,
+            line_total=line.line_total,
+        )
+        item.measure_quantity = norm.measure_quantity
+        item.measure_dimension = norm.measure_dimension
+        item.normalized_unit_price = norm.normalized_unit_price
+        item.measure_status = norm.measure_status
 
     # Lines the operator dropped from the form are deleted (cascades via the relationship).
     for line_id, item in existing.items():

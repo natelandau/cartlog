@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import LineItem, Receipt
+from cartlog.units import normalize_line_item
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -112,16 +113,35 @@ def persist_receipt(
         from cartlog.products.service import resolve_product  # noqa: PLC0415
 
         product = resolve_product(session, item.canonical_name, defaults={"category": category})
+        quantity = _money(item.quantity)
+        line_total = _money(item.line_total)
+        # Build llm_measure only when the LLM provided both a numeric value and a unit string.
+        llm_measure = (
+            (item.measure_value, item.measure_unit)
+            if item.measure_value is not None and item.measure_unit
+            else None
+        )
+        norm = normalize_line_item(
+            quantity=quantity,
+            unit=item.unit,
+            unit_size=item.unit_size,
+            line_total=line_total,
+            llm_measure=llm_measure,
+        )
         receipt.line_items.append(
             LineItem(
                 product=product,
                 raw_description=item.raw_description,
                 original_category=item.category,
-                quantity=_money(item.quantity),
+                quantity=quantity,
                 unit=item.unit,
                 unit_size=item.unit_size,
                 unit_price=_money(item.unit_price),
-                line_total=_money(item.line_total),
+                line_total=line_total,
+                measure_quantity=norm.measure_quantity,
+                measure_dimension=norm.measure_dimension,
+                normalized_unit_price=norm.normalized_unit_price,
+                measure_status=norm.measure_status,
             )
         )
 
