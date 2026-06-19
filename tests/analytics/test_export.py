@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import json
 from datetime import date
+from decimal import Decimal
 
+from cartlog.analytics.export import ExportFormat, export_filename, render_export
+from cartlog.analytics.results import LineItemExportRow
 from cartlog.analytics.service import AnalyticsService
 from cartlog.db.models import Product, ReceiptStatus, Store
 from tests.factories import make_line, make_receipt
@@ -85,3 +91,82 @@ def test_export_line_items_uncategorized_product_has_none_category(session):
     assert len(rows) == 1
     assert rows[0].canonical_name == "mystery item"
     assert rows[0].category is None
+
+
+def _sample_row() -> LineItemExportRow:
+    return LineItemExportRow(
+        purchase_date=date(2026, 1, 15),
+        store_chain="Safeway",
+        store_location="Main St",
+        receipt_id=1,
+        receipt_status="parsed",
+        currency="USD",
+        raw_description="LRG EGGS 12CT",
+        canonical_name="eggs",
+        category="dairy",
+        quantity=Decimal(1),
+        unit=None,
+        unit_size="12CT",
+        unit_price=Decimal("3.00"),
+        line_total=Decimal("3.00"),
+        measure_quantity=None,
+        measure_dimension=None,
+        normalized_unit_price=None,
+        measure_status="not_applicable",
+    )
+
+
+def test_render_export_csv_has_header_and_rows():
+    """Verify CSV output carries a header plus one row per item, with None as blank."""
+    # Given one export row
+    rows = [_sample_row()]
+
+    # When rendering to CSV
+    content, media_type, ext = render_export(rows, ExportFormat.CSV)
+
+    # Then the header and a single data row are present
+    parsed = list(csv.DictReader(io.StringIO(content)))
+    assert media_type == "text/csv"
+    assert ext == "csv"
+    assert len(parsed) == 1
+    assert parsed[0]["canonical_name"] == "eggs"
+    assert parsed[0]["unit_price"] == "3.00"  # Decimal preserved as string
+    assert parsed[0]["unit"] == ""  # None rendered blank
+
+
+def test_render_export_json_shape():
+    """Verify JSON output is a list of objects with Decimals as strings."""
+    # Given one export row
+    rows = [_sample_row()]
+
+    # When rendering to JSON
+    content, media_type, ext = render_export(rows, ExportFormat.JSON)
+
+    # Then the payload parses to one object with string decimals
+    payload = json.loads(content)
+    assert media_type == "application/json"
+    assert ext == "json"
+    assert len(payload) == 1
+    assert payload[0]["unit_price"] == "3.00"
+    assert payload[0]["unit"] is None
+
+
+def test_render_export_empty_is_valid():
+    """Verify an empty result still yields a valid CSV header and a JSON empty list."""
+    # Given no rows
+    csv_content, _, _ = render_export([], ExportFormat.CSV)
+    json_content, _, _ = render_export([], ExportFormat.JSON)
+
+    # Then the CSV is a header line only and the JSON is an empty array
+    assert csv_content.splitlines()[0].startswith("purchase_date,")
+    assert len(list(csv.DictReader(io.StringIO(csv_content)))) == 0
+    assert json.loads(json_content) == []
+
+
+def test_export_filename_is_dated():
+    """Verify the filename embeds the date and format extension."""
+    # Given a fixed date
+    name = export_filename(ExportFormat.CSV, date(2026, 6, 18))
+
+    # Then the filename is dated with the right extension
+    assert name == "cartlog-export-2026-06-18.csv"
