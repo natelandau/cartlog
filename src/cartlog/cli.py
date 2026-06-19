@@ -22,6 +22,7 @@ from cartlog.config import Settings, get_settings
 from cartlog.db.cli import db_app
 from cartlog.db.models import IngestionJob, JobStatus, JobStep, Receipt
 from cartlog.db.session import create_session_factory
+from cartlog.ingest.folder_watcher import folder_watcher
 from cartlog.ingest.pipeline import process_job
 from cartlog.ingest.queue import claim_job, enqueue_job
 from cartlog.ingest.worker import run_worker, worker_pool
@@ -369,6 +370,7 @@ def serve(
                 count=workers,
                 classifier=classifier,
             ),
+            folder_watcher(session_factory, settings),
             suppress(KeyboardInterrupt),
         ):
             server.run()

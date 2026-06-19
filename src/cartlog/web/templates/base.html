@@ -56,7 +56,7 @@
       // swapping 422 re-renders so validation errors display inline without a full page reload.
       document.body.addEventListener("htmx:beforeSwap", function (event) {
         const target = event.detail.target;
-        const allowed = ["items-panel", "category-panel"];
+        const allowed = ["items-panel", "category-panel", "folder-settings"];
         // search rows have dynamic ids (search-row-<line_item_id>); match by prefix so the
         // inline editor's 422 re-render displays its error instead of being dropped.
         const isSearchRow = target && target.id && target.id.startsWith("search-row-");

@@ -28,6 +28,10 @@ PDF_MEDIA_TYPE = "application/pdf"
 # Every file suffix cartlog accepts on upload and can parse; upload routes reject anything else.
 SUPPORTED_SUFFIXES: frozenset[str] = frozenset({*IMAGE_MEDIA_TYPES, PDF_SUFFIX})
 
+# How long a watched-folder file must sit unchanged before it is imported, so a receipt still
+# being copied or synced is never grabbed mid-write. Fixed rather than user-configurable.
+FOLDER_SETTLE_SECONDS: float = 10.0
+
 # Default cap on how many times the LLM reclassifier is spent on one stubborn product. The
 # runtime value is configurable via CARTLOG_MAX_RECLASSIFY_ATTEMPTS; this is the code default.
 DEFAULT_MAX_RECLASSIFY_ATTEMPTS = 2

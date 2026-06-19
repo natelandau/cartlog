@@ -15,6 +15,7 @@ cartlog takes a receipt photo and gives you back spending you can search and cha
 - Turn a photo or PDF of a receipt into itemized data, read for you by your chosen LLM provider
 - Sort every item into a category automatically, and recheck anything it could not place
 - Upload receipts and fix anything that needs a second look in your browser, or re-read a receipt from its saved image when a parse needs another pass
+- Drop receipts into a synced watch folder and have them imported automatically, no upload step
 - Keep using the app while your receipts are read in the background
 - Chart a product's price history, compare prices across stores by normalized unit price, and total your spending by category
 - Export your line items to CSV or JSON, filtered by date, store, or category, from the browser or the command line

@@ -1,4 +1,4 @@
-"""Integrations area: configure how receipts reach cartlog (Apple Shortcut, and later watch folder and email)."""
+"""Integrations area: configure how receipts reach cartlog from outside the app (Apple Shortcut)."""
 
 from __future__ import annotations
 
