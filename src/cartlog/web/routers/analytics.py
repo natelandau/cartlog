@@ -6,9 +6,10 @@ from datetime import date  # noqa: TC003  # used at runtime by FastAPI for query
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session  # noqa: TC002  # runtime import for FastAPI Depends resolution
 
+from cartlog.analytics.export import ExportFormat, export_filename, render_export
 from cartlog.analytics.results import (
     CategorySpend,
     PriceHistory,
@@ -21,6 +22,7 @@ from cartlog.analytics.search_sort import SearchSortKey
 # module's namespace, so AnalyticsService must be importable at runtime.
 from cartlog.analytics.service import AnalyticsService
 from cartlog.categories.service import CategoryService
+from cartlog.clock import naive_utcnow
 from cartlog.db.models import LineItem
 from cartlog.db.sort import SortDir
 from cartlog.receipts.service import apply_line_item_edit
@@ -79,6 +81,31 @@ def search_api(
 ) -> list[SearchResult]:
     """Return free-text search results as JSON."""
     return service.search(q, limit=limit)
+
+
+@router.get("/export")
+def export_download(
+    service: ServiceDep,
+    fmt: Annotated[ExportFormat, Query(alias="format")] = ExportFormat.CSV,
+    from_: Annotated[date | None, Query(alias="from")] = None,
+    to: Annotated[date | None, Query()] = None,
+    store: Annotated[str | None, Query()] = None,
+    category: Annotated[str | None, Query()] = None,
+) -> Response:
+    """Stream the raw line-item dataset as a CSV or JSON file download.
+
+    Empty ?store=/?category= mean "no filter" rather than matching the empty string.
+    """
+    rows = service.export_line_items(
+        start=from_, end=to, store=store or None, category=category or None
+    )
+    content, media_type, _ext = render_export(rows, fmt)
+    filename = export_filename(fmt, naive_utcnow().date())
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/search", response_class=HTMLResponse)
