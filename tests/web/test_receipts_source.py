@@ -1,0 +1,42 @@
+"""Tests that the upload route labels jobs with the submitted source."""
+
+from __future__ import annotations
+
+from cartlog.db.models import IngestionJob
+
+
+def _png_bytes() -> bytes:
+    # Minimal non-empty payload; the worker never runs in these tests, so the
+    # bytes only need to be stored, not parsed.
+    return b"\x89PNG\r\n\x1a\n" + b"0" * 32
+
+
+def test_upload_labels_job_with_submitted_source(app_client):
+    """Verify a submitted source form field becomes the job's source."""
+    # When uploading with an explicit source
+    response = app_client.post(
+        "/receipts",
+        files=[("files", ("receipt.png", _png_bytes(), "image/png"))],
+        data={"source": "ios"},
+    )
+
+    # Then the enqueued job carries that source
+    assert response.status_code == 202
+    with app_client.app.state.session_factory() as session:
+        sources = [job.source for job in session.query(IngestionJob).all()]
+    assert sources == ["ios"]
+
+
+def test_upload_defaults_source_to_web(app_client):
+    """Verify omitting the source form field defaults the job source to web."""
+    # When uploading without a source field
+    response = app_client.post(
+        "/receipts",
+        files=[("files", ("receipt.png", _png_bytes(), "image/png"))],
+    )
+
+    # Then the job source is the web default
+    assert response.status_code == 202
+    with app_client.app.state.session_factory() as session:
+        sources = [job.source for job in session.query(IngestionJob).all()]
+    assert sources == ["web"]

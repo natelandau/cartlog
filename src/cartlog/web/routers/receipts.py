@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import ValidationError
 
@@ -97,12 +97,18 @@ def _table_template(request: Request, full_page: str) -> str:
 
 
 async def _store_and_enqueue(
-    file: UploadFile, *, session: Session, settings: Settings
+    file: UploadFile, *, session: Session, settings: Settings, source: str = "web"
 ) -> dict[str, object]:
     """Validate, store, and enqueue one uploaded receipt file, returning its accepted record.
 
     Raise ValueError with a human-readable reason when the file's type is unsupported or its
     size exceeds the cap, so the batch route can report it per-file instead of failing wholesale.
+
+    Args:
+        file: The uploaded receipt file.
+        session: SQLAlchemy session; enqueue commits on success.
+        settings: Runtime settings supplying the size cap and storage directory.
+        source: Ingestion source label stored on the job (e.g. 'web', 'ios').
     """
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
@@ -124,7 +130,7 @@ async def _store_and_enqueue(
             tmp_path = Path(tmp.name)
             tmp.write(data)
         job = enqueue_job(
-            session, src_path=tmp_path, source="web", storage_dir=settings.image_storage_dir
+            session, src_path=tmp_path, source=source, storage_dir=settings.image_storage_dir
         )
         return {"filename": file.filename, "job_id": job.id, "status": job.status}
     finally:
@@ -139,18 +145,22 @@ async def upload_receipts(
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     response: Response,
+    source: Annotated[str, Form()] = "web",
 ) -> dict[str, object]:
     """Accept one or more receipt uploads, enqueuing the valid ones and reporting the rest.
 
     Returns {accepted, rejected}; the status is 202 when at least one file was enqueued and
     400 when every file was rejected (or none were sent), so a single bad file in a batch does
-    not block the rest.
+    not block the rest. The optional `source` field labels jobs by channel (e.g. an iOS
+    Shortcut sends 'ios'); it defaults to 'web' for the browser uploader.
     """
     accepted: list[dict[str, object]] = []
     rejected: list[dict[str, str]] = []
     for file in files:
         try:
-            accepted.append(await _store_and_enqueue(file, session=session, settings=settings))
+            accepted.append(
+                await _store_and_enqueue(file, session=session, settings=settings, source=source)
+            )
         except ValueError as exc:
             rejected.append({"filename": file.filename or "(unnamed)", "reason": str(exc)})
     response.status_code = 202 if accepted else 400
