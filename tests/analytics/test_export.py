@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import date
 
 from cartlog.analytics.service import AnalyticsService
-from cartlog.db.models import ReceiptStatus
+from cartlog.db.models import Product, ReceiptStatus, Store
+from tests.factories import make_line, make_receipt
 
 
 def test_export_line_items_includes_all_statuses(analytics_session):
@@ -60,3 +61,27 @@ def test_export_line_items_date_filter(analytics_session):
     # Then only r2, r3, r4 line items remain
     assert len(rows) == 5
     assert min(r.purchase_date for r in rows) == date(2026, 2, 10)
+
+
+def test_export_line_items_uncategorized_product_has_none_category(session):
+    """Verify products with no category export with category=None via the OUTER join."""
+    # Given a store and a product with no category
+    store = Store(chain_name="TestMart", location=None)
+    product = Product(canonical_name="mystery item", category=None)
+    receipt = make_receipt(
+        store,
+        date(2026, 4, 1),
+        ReceiptStatus.PARSED,
+        [make_line(product, raw="MYSTERY ITEM", qty="1", unit_price="5.00", line_total="5.00")],
+    )
+    session.add_all([store, product, receipt])
+    session.commit()
+
+    # When exporting all line items
+    service = AnalyticsService(session)
+    rows = service.export_line_items()
+
+    # Then the exported row carries category=None
+    assert len(rows) == 1
+    assert rows[0].canonical_name == "mystery item"
+    assert rows[0].category is None
