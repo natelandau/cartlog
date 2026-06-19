@@ -153,6 +153,38 @@ def test_render_export_json_shape():
     assert payload[0]["quantity"] == "1"
 
 
+def test_render_export_csv_escapes_only_risky_text_cells():
+    """Verify CSV quote-escapes a formula-triggering text cell but leaves numbers numeric."""
+    # Given a row with an injection-style description and a (legitimate) negative line total
+    row = _sample_row().model_copy(
+        update={"raw_description": "=SUM(1+1)", "line_total": Decimal("-3.00")}
+    )
+
+    # When rendering to CSV
+    content, _, _ = render_export([row], ExportFormat.CSV)
+    parsed = list(csv.DictReader(io.StringIO(content)))
+
+    # Then the risky text cell is neutralized with a leading quote
+    assert parsed[0]["raw_description"] == "'=SUM(1+1)"
+    # And a non-risky text cell is untouched
+    assert parsed[0]["canonical_name"] == "eggs"
+    # And the negative numeric value is preserved as a number, not escaped to text
+    assert parsed[0]["line_total"] == "-3.00"
+
+
+def test_render_export_json_does_not_escape_formulas():
+    """Verify JSON output is not formula-escaped, since only spreadsheets evaluate formulas."""
+    # Given a row with a formula-style description
+    row = _sample_row().model_copy(update={"raw_description": "=1+1"})
+
+    # When rendering to JSON
+    content, _, _ = render_export([row], ExportFormat.JSON)
+
+    # Then the value is unchanged
+    payload = json.loads(content)
+    assert payload[0]["raw_description"] == "=1+1"
+
+
 def test_render_export_empty_is_valid():
     """Verify an empty result still yields a valid CSV header and a JSON empty list."""
     # Given no rows

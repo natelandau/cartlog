@@ -6,10 +6,10 @@ from datetime import date  # noqa: TC003  # used at runtime by FastAPI for query
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session  # noqa: TC002  # runtime import for FastAPI Depends resolution
 
-from cartlog.analytics.export import ExportFormat, export_filename, render_export
+from cartlog.analytics.export import ExportFormat, export_filename, iter_export, media_type_for
 from cartlog.analytics.results import (
     CategorySpend,
     PriceHistory,
@@ -91,19 +91,19 @@ def export_download(
     to: Annotated[date | None, Query()] = None,
     store: Annotated[str | None, Query()] = None,
     category: Annotated[str | None, Query()] = None,
-) -> Response:
+) -> StreamingResponse:
     """Stream the raw line-item dataset as a CSV or JSON file download.
 
+    The payload is serialized and sent in row-sized chunks rather than buffered whole.
     Empty ?store=/?category= mean "no filter" rather than matching the empty string.
     """
     rows = service.export_line_items(
         start=from_, end=to, store=store or None, category=category or None
     )
-    content, media_type, _ext = render_export(rows, fmt)
     filename = export_filename(fmt, naive_utcnow().date())
-    return Response(
-        content=content,
-        media_type=media_type,
+    return StreamingResponse(
+        iter_export(rows, fmt),
+        media_type=media_type_for(fmt),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
