@@ -9,7 +9,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from cartlog.units import COUNT, RESOLVED, VOLUME, WEIGHT
+from cartlog.constants import COUNT, VOLUME, WEIGHT
+from cartlog.units import RESOLVED
 
 if TYPE_CHECKING:
     from fastapi import Request

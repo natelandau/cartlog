@@ -8,27 +8,19 @@ from pydantic_ai import Agent, BinaryContent
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.settings import ModelSettings
 
+from cartlog.constants import (
+    ALLOWED_UNIT_TOKENS,
+    IMAGE_MEDIA_TYPES,
+    PDF_MEDIA_TYPE,
+    PDF_SUFFIX,
+)
 from cartlog.parsing.schema import ParsedReceipt
-from cartlog.units import ALLOWED_UNIT_TOKENS
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from pydantic_ai.models import Model
     from pydantic_ai.usage import RunUsage
-
-_IMAGE_MEDIA_TYPES: dict[str, str] = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".webp": "image/webp",
-    ".gif": "image/gif",
-}
-_PDF_SUFFIX = ".pdf"
-_PDF_MEDIA_TYPE = "application/pdf"
-
-# File suffixes this parser can ingest; reused by upload sources to reject unsupported files.
-SUPPORTED_SUFFIXES: frozenset[str] = frozenset({*_IMAGE_MEDIA_TYPES, _PDF_SUFFIX})
 
 # Token budget for the parse response; large receipts need headroom for every line item.
 _MAX_TOKENS = 4096
@@ -127,10 +119,10 @@ class LLMReceiptParser:
             ValueError: If the file extension is not a supported image or PDF type.
         """
         suffix = file_path.suffix.lower()
-        if suffix == _PDF_SUFFIX:
-            media_type = _PDF_MEDIA_TYPE
-        elif suffix in _IMAGE_MEDIA_TYPES:
-            media_type = _IMAGE_MEDIA_TYPES[suffix]
+        if suffix == PDF_SUFFIX:
+            media_type = PDF_MEDIA_TYPE
+        elif suffix in IMAGE_MEDIA_TYPES:
+            media_type = IMAGE_MEDIA_TYPES[suffix]
         else:
             # Validate before reading so an unsupported file is rejected without I/O.
             msg = f"Unsupported file type: {file_path.suffix}"

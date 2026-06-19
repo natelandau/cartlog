@@ -15,7 +15,16 @@ from fastapi.staticfiles import StaticFiles
 
 from cartlog.config import get_settings
 from cartlog.db.session import create_session_factory
-from cartlog.web.routers import admin, analytics, categories, dashboard, jobs, preferences, receipts
+from cartlog.web.routers import (
+    admin,
+    analytics,
+    categories,
+    dashboard,
+    integrations,
+    jobs,
+    preferences,
+    receipts,
+)
 from cartlog.web.templating import templates
 
 if TYPE_CHECKING:
@@ -54,6 +63,7 @@ def create_app(*, dev: bool = False) -> FastAPI:
     app.include_router(categories.router)
     app.include_router(admin.router)
     app.include_router(preferences.router)
+    app.include_router(integrations.router)
     return app
 
 

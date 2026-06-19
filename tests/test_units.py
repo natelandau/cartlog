@@ -4,14 +4,11 @@ from decimal import Decimal
 
 import pytest
 
+from cartlog.constants import COUNT, UNIT_FACTORS, VOLUME, WEIGHT
 from cartlog.units import (
-    COUNT,
     NEEDS_REVIEW,
     NOT_APPLICABLE,
     RESOLVED,
-    UNIT_FACTORS,
-    VOLUME,
-    WEIGHT,
     normalize_line_item,
     normalize_unit_token,
     parse_size,

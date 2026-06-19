@@ -110,6 +110,14 @@ For development, or to run cartlog without Docker, install it with uv.
 
     The web UI is at [http://localhost:8000](http://localhost:8000). Pass `--host`, `--port`, or `--workers` to change how it runs.
 
+## Send receipts with Apple Shortcuts
+
+You can send receipt images or PDFs directly from the share sheet on iPhone, iPad, or Mac to cartlog without installing any app. The built-in Shortcuts app handles the upload.
+
+Open **Admin -> Integrations** (at `/admin/integrations`) in the web UI and tap **Install the Shortcut**. When you add it, the Shortcut asks once for your cartlog URL; use the upload endpoint shown on that page. cartlog just needs to be reachable from the device.
+
+Once the Shortcut is installed, open a receipt in Photos or Files, tap the share button, and run the Shortcut. The receipt appears in cartlog within a few seconds.
+
 ## Command-line usage
 
 The web UI covers everyday use, but every action is also available from the `cartlog` command. With Docker, run these inside the container, for example `docker compose exec cartlog cartlog query category-spend`.

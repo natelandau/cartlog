@@ -9,12 +9,9 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.usage import RunUsage
 
-from cartlog.categories.reclassify import (
-    DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
-    reclassify_receipt,
-    unmapped_categories_for,
-)
+from cartlog.categories.reclassify import reclassify_receipt, unmapped_categories_for
 from cartlog.categories.service import CategoryService
+from cartlog.constants import DEFAULT_MAX_RECLASSIFY_ATTEMPTS
 from cartlog.db.models import JobStep, ReceiptStatus
 from cartlog.ingest.cost import record_classify_cost, record_parse_cost
 from cartlog.ingest.persistence import persist_receipt
