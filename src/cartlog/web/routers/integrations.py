@@ -76,6 +76,13 @@ def save_folder_settings(
     elif enabled:
         error = "Set a watch directory before enabling the folder channel."
 
+    # Reject intervals the poller cannot honor: a zero/negative poll interval would busy-loop
+    # or crash the watcher thread, and a negative settle window would grab files mid-write.
+    if error is None and poll_interval <= 0:
+        error = "Poll interval must be greater than zero seconds."
+    elif error is None and settle_seconds < 0:
+        error = "Settle window cannot be negative."
+
     if error is None:
         config.watch_dir = cleaned or None
         config.enabled = enabled

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 import time
 from contextlib import contextmanager
@@ -39,14 +40,67 @@ def get_folder_config(session: Session) -> FolderIngestConfig:
 
 
 def _move_to_unique(src: Path, dest_dir: Path) -> Path:
-    """Move `src` into `dest_dir`, appending -1, -2, ... if the name is already taken."""
+    """Move `src` into `dest_dir`, appending -1, -2, ... if the name is already taken.
+
+    Uses shutil.move rather than Path.rename so the move succeeds even when the destination
+    is on a different filesystem than the source, which happens for synced watch folders
+    (cloud mounts, network shares) where a plain rename raises OSError(EXDEV).
+    """
     dest_dir.mkdir(parents=True, exist_ok=True)
     candidate = dest_dir / src.name
     counter = 1
     while candidate.exists():
         candidate = dest_dir / f"{src.stem}-{counter}{src.suffix}"
         counter += 1
-    return src.rename(candidate)
+    shutil.move(src, candidate)
+    return candidate
+
+
+def _is_settled_receipt(
+    entry: Path, *, reserved: set[str], settle_seconds: float, now: float
+) -> bool:
+    """Return whether `entry` is a settled receipt file ready to ingest.
+
+    Returns False (and never raises) for the bookkeeping subdirs, unsupported suffixes, files
+    still inside the settle window, and entries that vanished between the listing and the stat.
+    """
+    try:
+        if not entry.is_file() or entry.name in reserved:
+            return False
+        if entry.suffix.lower() not in SUPPORTED_SUFFIXES:
+            return False
+        return now - entry.stat().st_mtime >= settle_seconds
+    except OSError:
+        # A sync client can move or delete a file between the listing and the stat; treat it
+        # as not-ready this pass rather than letting the error abort the whole scan.
+        logger.warning("Skipping %s: not accessible this pass", entry.name)
+        return False
+
+
+def _claim_and_enqueue(
+    session: Session, entry: Path, *, processed_dir: Path, failed_dir: Path, storage_dir: Path
+) -> bool:
+    """Claim one file by moving it to processed/, enqueue it, and return whether it was enqueued.
+
+    The file is moved out of the scan path before enqueuing, so an enqueue or move failure can
+    never leave it where the next pass would re-enqueue (and duplicate) it. A file whose enqueue
+    raises is moved on to failed/ so a poison file never blocks the folder.
+    """
+    try:
+        claimed = _move_to_unique(entry, processed_dir)
+    except OSError:
+        logger.exception("Could not claim %s; leaving it for the next pass", entry.name)
+        return False
+    try:
+        enqueue_job(session, src_path=claimed, source="folder", storage_dir=storage_dir)
+    except Exception:
+        logger.exception("Failed to enqueue %s; moving to failed", claimed.name)
+        try:
+            _move_to_unique(claimed, failed_dir)
+        except OSError:
+            logger.exception("Could not move %s to failed", claimed.name)
+        return False
+    return True
 
 
 def scan_folder_once(
@@ -59,9 +113,11 @@ def scan_folder_once(
     """Enqueue every settled receipt file in the watch dir once; return the count enqueued.
 
     A file is "settled" when its modification time is at least `settle_seconds` in the
-    past, so partially-synced files are not grabbed mid-write. Enqueued files move to the
-    processed subdir; files whose enqueue raises move to the failed subdir so a poison file
-    never blocks the folder. `now` is injected (epoch seconds) so the settle check is testable.
+    past, so partially-synced files are not grabbed mid-write. Each settled file is first
+    moved out of the scan path into the processed subdir (claiming it so a later failure can
+    never leave it to be re-enqueued and duplicated), then enqueued; a file whose enqueue
+    raises is moved on to the failed subdir so a poison file never blocks the folder. `now`
+    is injected (epoch seconds) so the settle check is testable.
 
     Args:
         session: Session used to enqueue jobs.
@@ -80,20 +136,18 @@ def scan_folder_once(
 
     enqueued = 0
     for entry in sorted(watch.iterdir()):
-        if not entry.is_file() or entry.name in reserved:
+        if not _is_settled_receipt(
+            entry, reserved=reserved, settle_seconds=config.settle_seconds, now=now
+        ):
             continue
-        if entry.suffix.lower() not in SUPPORTED_SUFFIXES:
-            continue
-        if now - entry.stat().st_mtime < config.settle_seconds:
-            continue
-        try:
-            enqueue_job(session, src_path=entry, source="folder", storage_dir=storage_dir)
-        except Exception:
-            logger.exception("Failed to enqueue %s; moving to failed", entry.name)
-            _move_to_unique(entry, failed_dir)
-            continue
-        _move_to_unique(entry, processed_dir)
-        enqueued += 1
+        if _claim_and_enqueue(
+            session,
+            entry,
+            processed_dir=processed_dir,
+            failed_dir=failed_dir,
+            storage_dir=storage_dir,
+        ):
+            enqueued += 1
     return enqueued
 
 
@@ -121,6 +175,9 @@ def run_folder_watcher(
             config = get_folder_config(session)
             interval = config.poll_interval
             if config.enabled and config.watch_dir:
+                # Record the attempt time so the "Last polled" status is honest even when the
+                # scan fails, not just on success.
+                config.last_run_at = naive_utcnow()
                 try:
                     scan_folder_once(
                         session,
@@ -128,7 +185,6 @@ def run_folder_watcher(
                         storage_dir=settings.image_storage_dir,
                         now=time.time(),
                     )
-                    config.last_run_at = naive_utcnow()
                     config.last_error = None
                 except Exception as exc:
                     logger.exception("Watch-folder poll failed")
@@ -137,7 +193,10 @@ def run_folder_watcher(
         # Re-check stop before sleeping so shutdown is not delayed by a full poll interval.
         if stop is not None and stop():
             break
-        time.sleep(interval)
+        # Guard against a misconfigured non-positive interval that would busy-loop (sleep 0)
+        # or crash the thread (negative raises ValueError); the UI rejects these, but a row
+        # edited out-of-band must not be able to take the poller down.
+        time.sleep(interval if interval > 0 else 10.0)
 
 
 @contextmanager

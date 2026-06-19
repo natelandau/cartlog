@@ -294,12 +294,16 @@ class FolderIngestConfig(Base):
     __tablename__ = "folder_ingest_config"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=func.false())
     watch_dir: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    processed_subdir: Mapped[str] = mapped_column(String(255), default="processed")
-    failed_subdir: Mapped[str] = mapped_column(String(255), default="failed")
-    poll_interval: Mapped[float] = mapped_column(Float, default=10.0)
-    settle_seconds: Mapped[float] = mapped_column(Float, default=5.0)
+    processed_subdir: Mapped[str] = mapped_column(
+        String(255), default="processed", server_default="processed"
+    )
+    failed_subdir: Mapped[str] = mapped_column(
+        String(255), default="failed", server_default="failed"
+    )
+    poll_interval: Mapped[float] = mapped_column(Float, default=10.0, server_default="10.0")
+    settle_seconds: Mapped[float] = mapped_column(Float, default=5.0, server_default="5.0")
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(

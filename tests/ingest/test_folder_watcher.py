@@ -83,6 +83,24 @@ def test_scan_enqueues_settled_file_and_moves_to_processed(session, tmp_path):
     assert (watch / "processed" / "receipt.png").exists()
 
 
+def test_scan_does_not_re_enqueue_processed_file(session, tmp_path):
+    """Verify a second scan does not re-enqueue a file already moved into processed/."""
+    # Given a watch dir with a settled png that one scan has already processed
+    watch, config = _make_watch_dir(tmp_path)
+    session.add(config)
+    session.commit()
+    _drop(watch, "receipt.png", age_seconds=60)
+    first = scan_folder_once(session, config, storage_dir=tmp_path / "storage", now=time.time())
+
+    # When scanning the same folder again
+    second = scan_folder_once(session, config, storage_dir=tmp_path / "storage", now=time.time())
+
+    # Then only the first scan enqueued it; the processed copy is never picked up again
+    assert first == 1
+    assert second == 0
+    assert session.query(IngestionJob).count() == 1
+
+
 def test_scan_skips_files_within_settle_window(session, tmp_path):
     """Verify a freshly written file inside the settle window is left untouched."""
     # Given a watch dir with a just-written png

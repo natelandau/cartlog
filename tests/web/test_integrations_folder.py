@@ -59,3 +59,27 @@ def test_post_folder_rejects_missing_dir(app_client, tmp_path):
     with app_client.app.state.session_factory() as session:
         config = get_folder_config(session)
         assert config.watch_dir != str(missing)
+
+
+def test_post_folder_rejects_non_positive_poll_interval(app_client, tmp_path):
+    """Verify a zero poll interval is rejected so the poller cannot busy-loop."""
+    # Given an otherwise valid, writable directory
+    watch = tmp_path / "inbox"
+    watch.mkdir()
+
+    # When saving with a poll interval of zero
+    response = app_client.post(
+        "/admin/integrations/folder",
+        data={
+            "enabled": "on",
+            "watch_dir": str(watch),
+            "poll_interval": "0",
+            "settle_seconds": "5",
+        },
+    )
+
+    # Then an error is shown and the bad interval is not persisted
+    assert "greater than zero" in response.text.lower()
+    with app_client.app.state.session_factory() as session:
+        config = get_folder_config(session)
+        assert config.poll_interval != 0
