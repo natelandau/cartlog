@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -20,6 +21,7 @@ from cartlog.db.session import create_session_factory
 from cartlog.ingest.queue import enqueue_job
 from cartlog.ingest.worker import run_worker as real_run_worker
 from cartlog.web.templating import templates
+from tests.factories import seed_temp_db
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -333,3 +335,53 @@ def test_ingest_command_errors_without_provider_key(tmp_path, monkeypatch):
     # And no ingestion jobs were persisted, confirming the guard fires before any DB write
     with _verify_session(settings.database_url) as session:
         assert session.query(IngestionJob).count() == 0
+
+
+def test_export_command_writes_csv(tmp_path, monkeypatch):
+    """Verify `cartlog export` writes a CSV file covering every line item."""
+    # Given a seeded temp database and settings pointing at it
+    db_url = seed_temp_db(tmp_path, "export.db")
+    monkeypatch.setattr(cli_module, "get_settings", lambda: Settings(database_url=db_url))
+    out = tmp_path / "out.csv"
+
+    # When exporting to CSV
+    result = runner.invoke(cli_module.app, ["export", "-o", str(out), "-f", "csv"])
+
+    # Then the command succeeds and the file has a header plus 7 data rows
+    assert result.exit_code == 0, result.output
+    lines = out.read_text(encoding="utf-8").splitlines()
+    assert lines[0].startswith("purchase_date,")
+    assert len(lines) == 8  # header + 7 line items (incl. the failed receipt)
+    assert "7" in result.output  # row-count confirmation
+
+
+def test_export_command_writes_json_with_filters(tmp_path, monkeypatch):
+    """Verify `cartlog export --format json` honors the store filter."""
+    # Given a seeded temp database
+    db_url = seed_temp_db(tmp_path, "export.db")
+    monkeypatch.setattr(cli_module, "get_settings", lambda: Settings(database_url=db_url))
+    out = tmp_path / "out.json"
+
+    # When exporting Safeway rows as JSON
+    result = runner.invoke(
+        cli_module.app, ["export", "-o", str(out), "-f", "json", "--store", "safeway"]
+    )
+
+    # Then only Safeway's 5 line items are written
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert len(payload) == 5
+    assert {row["store_chain"] for row in payload} == {"Safeway"}
+
+
+def test_export_command_requires_output(tmp_path, monkeypatch):
+    """Verify omitting --output is a usage error."""
+    # Given settings (DB irrelevant; parsing fails first)
+    db_url = seed_temp_db(tmp_path, "export.db")
+    monkeypatch.setattr(cli_module, "get_settings", lambda: Settings(database_url=db_url))
+
+    # When invoking export with no --output
+    result = runner.invoke(cli_module.app, ["export"])
+
+    # Then it exits non-zero with a missing-option error
+    assert result.exit_code != 0
