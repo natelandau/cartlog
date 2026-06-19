@@ -98,6 +98,13 @@ def _apply_store_filter(query: Query, store: str | None) -> Query:
     return query
 
 
+def _apply_category_filter(query: Query, category: str | None) -> Query:
+    """Filter a Category-joined query to one category name (case-insensitive), if given."""
+    if category is not None:
+        query = query.filter(func.lower(Category.name) == category.lower())
+    return query
+
+
 class AnalyticsService:
     """Run headline household queries and free-text search against a session."""
 
@@ -762,8 +769,7 @@ class AnalyticsService:
         )
         query = _apply_date_range(query, start=start, end=end)
         query = _apply_store_filter(query, store)
-        if category is not None:
-            query = query.filter(func.lower(Category.name) == category.lower())
+        query = _apply_category_filter(query, category)
         query = query.order_by(Receipt.purchase_date, Receipt.id, LineItem.id)
 
         return [

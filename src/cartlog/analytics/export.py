@@ -8,32 +8,15 @@ import json
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from cartlog.analytics.results import LineItemExportRow
+
 if TYPE_CHECKING:
     from datetime import date
 
-    from cartlog.analytics.results import LineItemExportRow
-
-# Column order for CSV (also the header row) and the key order callers can rely on.
-_FIELDS = [
-    "purchase_date",
-    "store_chain",
-    "store_location",
-    "receipt_id",
-    "receipt_status",
-    "currency",
-    "raw_description",
-    "canonical_name",
-    "category",
-    "quantity",
-    "unit",
-    "unit_size",
-    "unit_price",
-    "line_total",
-    "measure_quantity",
-    "measure_dimension",
-    "normalized_unit_price",
-    "measure_status",
-]
+# CSV column order (also the header row) and the key order callers can rely on. Derived from
+# the model so the columns cannot drift from LineItemExportRow's fields; model_fields preserves
+# declaration order.
+_FIELDS = list(LineItemExportRow.model_fields)
 
 
 class ExportFormat(StrEnum):
@@ -68,8 +51,8 @@ def render_export(rows: list[LineItemExportRow], fmt: ExportFormat) -> tuple[str
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=_FIELDS, extrasaction="ignore")
     writer.writeheader()
-    for d in dicts:
-        writer.writerow({key: "" if d[key] is None else d[key] for key in _FIELDS})
+    # The csv module writes None as an empty string, so None-able fields need no remapping.
+    writer.writerows(dicts)
     return buffer.getvalue(), _MEDIA_TYPES[fmt], fmt.value
 
 
