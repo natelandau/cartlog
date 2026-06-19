@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from cartlog.categories.service import CategoryService
+from cartlog.constants import DEFAULT_MAX_RECLASSIFY_ATTEMPTS
 from cartlog.parsing.category_classifier import ProductToClassify
 
 if TYPE_CHECKING:
@@ -26,9 +27,6 @@ if TYPE_CHECKING:
 
     from cartlog.db.models import Product, Receipt
     from cartlog.parsing.category_classifier import CategoryClassifier
-
-# Default cap on how many times the LLM reclassifier is spent on one stubborn product.
-DEFAULT_MAX_RECLASSIFY_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)

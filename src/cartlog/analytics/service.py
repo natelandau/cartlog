@@ -35,6 +35,7 @@ from cartlog.analytics.results import (
 from cartlog.analytics.search_sort import SEARCH_SORT_COLUMNS, SearchSortKey
 from cartlog.categories.service import UNCATEGORIZED_NAME
 from cartlog.clock import naive_utcnow
+from cartlog.constants import VOLUME, WEIGHT
 from cartlog.db.models import (
     Category,
     LineItem,
@@ -45,7 +46,7 @@ from cartlog.db.models import (
     Store,
 )
 from cartlog.db.query_helpers import escape_like
-from cartlog.units import RESOLVED, VOLUME, WEIGHT
+from cartlog.units import RESOLVED
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Query, Session

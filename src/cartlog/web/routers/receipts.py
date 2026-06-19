@@ -18,10 +18,10 @@ from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 
 from cartlog.categories.service import CategoryService
 from cartlog.config import Settings, get_settings
+from cartlog.constants import SUPPORTED_SUFFIXES
 from cartlog.db.models import LineItem, Product, Receipt, ReceiptStatus
 from cartlog.db.sort import SortDir
 from cartlog.ingest.queue import enqueue_job
-from cartlog.parsing.llm_parser import SUPPORTED_SUFFIXES
 from cartlog.receipts.service import (
     ReparseImageMissingError,
     apply_receipt_edit,
@@ -108,7 +108,7 @@ async def _store_and_enqueue(
         file: The uploaded receipt file.
         session: SQLAlchemy session; enqueue commits on success.
         settings: Runtime settings supplying the size cap and storage directory.
-        source: Ingestion source label stored on the job (e.g. 'web', 'ios').
+        source: Ingestion source label stored on the job (e.g. 'web', 'shortcut').
     """
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
@@ -153,8 +153,8 @@ async def upload_receipts(
 
     Returns {accepted, rejected}; the status is 202 when at least one file was enqueued and
     400 when every file was rejected (or none were sent), so a single bad file in a batch does
-    not block the rest. The optional `source` field labels jobs by channel (e.g. an iOS
-    Shortcut sends 'ios'); it defaults to 'web' for the browser uploader.
+    not block the rest. The optional `source` field labels jobs by channel (e.g. an Apple
+    Shortcut sends 'shortcut'); it defaults to 'web' for the browser uploader.
     """
     accepted: list[dict[str, object]] = []
     rejected: list[dict[str, str]] = []
