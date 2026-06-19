@@ -1,0 +1,83 @@
+<div id="folder-settings">
+  <form hx-post="/admin/settings/folder" hx-target="#folder-settings" hx-swap="outerHTML" class="space-y-5">
+
+    {% if saved %}
+    <div role="status" class="alert alert-success alert-soft py-2 text-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+      <span>Watch folder settings saved.</span>
+    </div>
+    {% endif %}
+
+    {# Enable toggle: text on the left, control on the right, the convention for a setting row. #}
+    <label class="flex cursor-pointer items-start justify-between gap-4">
+      <span>
+        <span class="block font-medium">Enable watch folder</span>
+        <span class="block text-sm text-base-content/60">Scan the folder and import receipts automatically.</span>
+      </span>
+      <input type="checkbox" name="enabled" class="toggle toggle-primary" {% if values.enabled %}checked{% endif %} />
+    </label>
+
+    <div class="divider my-0"></div>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Watch directory</legend>
+      <label class="input w-full{% if errors.watch_dir %} input-error{% endif %}">
+        <input type="text" name="watch_dir" value="{{ values.watch_dir }}"
+               placeholder="/data/receipts/inbox" class="grow" autocomplete="off" spellcheck="false"
+               {% if errors.watch_dir %}aria-invalid="true"{% endif %} />
+      </label>
+      {% if errors.watch_dir %}
+      <p class="mt-1 text-sm text-error">{{ errors.watch_dir }}</p>
+      {% else %}
+      <p class="mt-1 text-sm text-base-content/60">Absolute path to a folder cartlog can read and write.</p>
+      {% endif %}
+    </fieldset>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <fieldset class="fieldset min-w-0">
+        <legend class="fieldset-legend">Check every</legend>
+        <label class="input w-full{% if errors.poll_interval %} input-error{% endif %}">
+          <input type="number" name="poll_interval" value="{{ '%g'|format(values.poll_interval) }}"
+                 min="1" step="1" class="grow"
+                 {% if errors.poll_interval %}aria-invalid="true"{% endif %} />
+          <span class="text-base-content/60">seconds</span>
+        </label>
+        {% if errors.poll_interval %}
+        <p class="mt-1 text-sm text-error">{{ errors.poll_interval }}</p>
+        {% else %}
+        <p class="mt-1 text-sm text-base-content/60">How often cartlog scans the folder.</p>
+        {% endif %}
+      </fieldset>
+
+      <fieldset class="fieldset min-w-0">
+        <legend class="fieldset-legend">Settle window</legend>
+        <label class="input w-full{% if errors.settle_seconds %} input-error{% endif %}">
+          <input type="number" name="settle_seconds" value="{{ '%g'|format(values.settle_seconds) }}"
+                 min="0" step="1" class="grow"
+                 {% if errors.settle_seconds %}aria-invalid="true"{% endif %} />
+          <span class="text-base-content/60">seconds</span>
+        </label>
+        {% if errors.settle_seconds %}
+        <p class="mt-1 text-sm text-error">{{ errors.settle_seconds }}</p>
+        {% else %}
+        <p class="mt-1 text-sm text-base-content/60">Wait this long after a file stops changing before importing it, so a still-syncing receipt isn't grabbed half-written.</p>
+        {% endif %}
+      </fieldset>
+    </div>
+
+    {% if folder.last_run_at or folder.last_error %}
+    <div class="rounded-box bg-base-200 px-3 py-2 text-sm">
+      {% if folder.last_run_at %}
+      <p class="text-base-content/70">Last polled {{ folder.last_run_at.strftime("%Y-%m-%d %H:%M") }} UTC</p>
+      {% endif %}
+      {% if folder.last_error %}
+      <p class="text-error">Last error: {{ folder.last_error }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="flex justify-end">
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </div>
+  </form>
+</div>
