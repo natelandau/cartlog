@@ -112,7 +112,7 @@ For development, or to run cartlog without Docker, install it with uv.
 
 ## Send receipts from iOS
 
-You can send receipt photos directly from the iOS share sheet to cartlog without installing any app. The built-in Shortcuts app handles the upload. cartlog must be reachable from your phone over your private network - for example via Tailscale, a VPN, or a reverse proxy.
+You can send receipt photos directly from the iOS share sheet to cartlog without installing any app. The built-in Shortcuts app handles the upload. cartlog just needs to be reachable from your phone.
 
 The upload endpoint is shown on the **Settings** page in the web UI (open **Admin -> Settings**, at `/admin/settings`, once cartlog is running).
 
