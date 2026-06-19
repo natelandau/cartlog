@@ -210,18 +210,9 @@ Local and self-hosted models work through that same OpenAI-compatible path. They
 
 > **Important:** The parse model must support image (vision) input and structured output, because cartlog hands it the receipt picture and asks for a typed result. To read PDF receipts, the model must also accept PDF documents. The classify model needs structured output only, since it works from text. Point either variable at a model that lacks these capabilities and ingestion fails: the parse step errors and the receipt is flagged for review. Current frontier models from Anthropic, OpenAI, and Google meet all three requirements; many smaller and local models do not. Test one receipt before switching your whole setup.
 
-## Development
+## Contributing
 
-This project uses uv for packaging, `ruff` for linting and formatting, and `ty` for type checking. The [duty](https://pawamoy.github.io/duty/) task runner wraps the common workflows.
-
-```bash
-uv sync            # install dependencies
-uv run duty dev    # serve in development mode (templates and CSS reload on change)
-uv run duty lint   # run ruff, ty, typos, and pre-commit hooks
-uv run duty test   # run the test suite
-```
-
-The web UI is styled with Tailwind CSS v4 and daisyUI v5. `uv run cartlog serve` compiles the stylesheet on startup, so you rarely need to build it by hand, but `npm run build:css` produces it directly.
+Want to help improve cartlog? See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up a development environment, run the checks, and open a pull request.
 
 ## License
 
