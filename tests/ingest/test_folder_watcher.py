@@ -6,10 +6,12 @@ import os
 import time
 from typing import TYPE_CHECKING
 
+from cartlog.config import Settings
 from cartlog.db.models import FolderIngestConfig, IngestionJob, JobStatus
 from cartlog.ingest.folder_watcher import (
     _move_to_unique,
     get_folder_config,
+    run_folder_watcher,
     scan_folder_once,
 )
 
@@ -152,3 +154,24 @@ def test_move_to_unique_suffixes_on_collision(tmp_path):
     assert moved == dest / "receipt-1.png"
     assert (dest / "receipt.png").read_bytes() == b"existing"
     assert moved.read_bytes() == b"new"
+
+
+def test_run_folder_watcher_noop_when_disabled(session_factory, tmp_path):
+    """Verify the loop does nothing and exits when the config is disabled."""
+    # Given a disabled config and a one-shot stop
+    with session_factory() as s:
+        s.add(FolderIngestConfig(id=1, enabled=False))
+        s.commit()
+    settings = Settings(database_url="sqlite://", image_storage_dir=tmp_path / "storage")
+    calls = {"n": 0}
+
+    def stop() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 1  # allow exactly one loop pass
+
+    # When running the loop
+    run_folder_watcher(session_factory, settings, stop=stop)
+
+    # Then no jobs were created
+    with session_factory() as s:
+        assert s.query(IngestionJob).count() == 0

@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from cartlog.clock import naive_utcnow
 from cartlog.constants import SUPPORTED_SUFFIXES
 from cartlog.db.models import FolderIngestConfig
 from cartlog.ingest.queue import enqueue_job
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
+    from collections.abc import Callable, Iterator
+
+    from sqlalchemy.orm import Session, sessionmaker
+
+    from cartlog.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -87,3 +95,75 @@ def scan_folder_once(
         _move_to_unique(entry, processed_dir)
         enqueued += 1
     return enqueued
+
+
+def run_folder_watcher(
+    session_factory: sessionmaker[Session],
+    settings: Settings,
+    *,
+    stop: Callable[[], bool] | None = None,
+) -> None:
+    """Continuously scan the watch folder, re-reading config each pass so UI edits apply live.
+
+    Each pass opens its own session, loads the current config, and (when enabled) scans once.
+    Errors are recorded on the config row and logged, never raised, so one bad pass cannot
+    kill the thread. Sleeps `poll_interval` between passes, but checks `stop` first so a
+    shutdown is not delayed by a full interval.
+
+    Args:
+        session_factory: Factory yielding sessions bound to the application database.
+        settings: Runtime settings supplying the image storage directory.
+        stop: Optional predicate checked each iteration; the loop exits when it returns True.
+    """
+    while stop is None or not stop():
+        interval = 10.0
+        with session_factory() as session:
+            config = get_folder_config(session)
+            interval = config.poll_interval
+            if config.enabled and config.watch_dir:
+                try:
+                    scan_folder_once(
+                        session,
+                        config,
+                        storage_dir=settings.image_storage_dir,
+                        now=time.time(),
+                    )
+                    config.last_run_at = naive_utcnow()
+                    config.last_error = None
+                except Exception as exc:
+                    logger.exception("Watch-folder poll failed")
+                    config.last_error = str(exc)
+                session.commit()
+        # Re-check stop before sleeping so shutdown is not delayed by a full poll interval.
+        if stop is not None and stop():
+            break
+        time.sleep(interval)
+
+
+@contextmanager
+def folder_watcher(
+    session_factory: sessionmaker[Session], settings: Settings
+) -> Iterator[threading.Thread]:
+    """Run the watch-folder poller in a daemon thread for the duration of the block.
+
+    Always started by `serve`; the channel's enabled state lives in the database, so an
+    unconfigured folder is simply a no-op poll. The thread is signaled to stop and joined
+    on exit, mirroring the worker pool's lifecycle.
+    """
+    stop_event = threading.Event()
+    thread = threading.Thread(
+        target=run_folder_watcher,
+        kwargs={
+            "session_factory": session_factory,
+            "settings": settings,
+            "stop": stop_event.is_set,
+        },
+        name="cartlog-folder-watcher",
+        daemon=True,
+    )
+    thread.start()
+    try:
+        yield thread
+    finally:
+        stop_event.set()
+        thread.join(timeout=5.0)
