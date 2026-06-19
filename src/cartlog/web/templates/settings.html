@@ -11,6 +11,13 @@
         No app to install. cartlog must be reachable from your phone over your private
         network (for example Tailscale, a VPN, or a reverse proxy).
       </p>
+      {% if ios_shortcut_url %}
+      <a href="{{ ios_shortcut_url }}" class="btn btn-primary w-fit">Add to iOS</a>
+      <p class="text-sm opacity-80">
+        After adding the Shortcut, paste the endpoint below when it asks for your cartlog URL.
+        Prefer to build the Shortcut by hand? Follow the numbered steps instead.
+      </p>
+      {% endif %}
       <p class="text-sm">Post receipts to this endpoint:</p>
       <code class="block w-full rounded bg-base-200 p-2 text-sm break-all">{{ upload_url }}</code>
       <ol class="list-decimal space-y-1 pl-5 text-sm opacity-80">

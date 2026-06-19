@@ -114,9 +114,9 @@ For development, or to run cartlog without Docker, install it with uv.
 
 You can send receipt photos directly from the iOS share sheet to cartlog without installing any app. The built-in Shortcuts app handles the upload. cartlog must be reachable from your phone over your private network - for example via Tailscale, a VPN, or a reverse proxy.
 
-The upload endpoint is shown on the **Settings** page in the web UI (visit `/settings` once cartlog is running).
+The upload endpoint is shown on the **Settings** page in the web UI (open **Admin -> Settings**, at `/admin/settings`, once cartlog is running).
 
-To set up the Shortcut:
+To set up the Shortcut by hand:
 
 1. Open the Shortcuts app and create a new shortcut that *Receives images from the share sheet*.
 2. Add a **Get Contents of URL** action with the URL shown on the Settings page.
@@ -125,6 +125,8 @@ To set up the Shortcut:
 5. Add a **Text** field named `source` set to `ios`.
 
 Once the Shortcut is saved, open any photo in the Photos app, tap the share button, and run the Shortcut. The receipt appears in cartlog within a few seconds.
+
+If you host a prebuilt iCloud Shortcut, set `CARTLOG_IOS_SHORTCUT_URL` to its share link. The Settings page then shows an **Add to iOS** button linking to it, and the button is hidden when the variable is unset.
 
 ## Command-line usage
 
