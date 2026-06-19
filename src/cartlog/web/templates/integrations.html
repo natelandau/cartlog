@@ -16,5 +16,16 @@
       <code class="block w-full rounded bg-base-200 p-2 text-sm break-all">{{ upload_url }}</code>
     </div>
   </section>
+
+  <section class="card border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body gap-3">
+      <h2 class="card-title">Watch folder</h2>
+      <p class="text-sm opacity-80">
+        Drop receipt images or PDFs into a synced folder and cartlog ingests them
+        automatically, moving each into a processed subfolder when done.
+      </p>
+      {% include "partials/_integrations_folder.html" %}
+    </div>
+  </section>
 </div>
 {% endblock %}

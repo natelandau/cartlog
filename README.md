@@ -118,6 +118,14 @@ Open **Admin -> Integrations** (at `/admin/integrations`) in the web UI and tap 
 
 Once the Shortcut is installed, open a receipt in Photos or Files, tap the share button, and run the Shortcut. The receipt appears in cartlog within a few seconds.
 
+## Ingest from a watched folder
+
+cartlog can watch a synced folder (Dropbox, iCloud Drive, Syncthing, a network share, and so on) and ingest any receipt image or PDF dropped into it, with no upload step.
+
+Open **Admin -> Integrations** (at `/admin/integrations`), find the **Watch folder** panel, enter the absolute path to a folder cartlog can read and write, tick **Enabled**, and save. The directory must already exist and be writable; cartlog rejects a path it cannot use.
+
+cartlog polls the folder on the configured interval. A file is picked up only once it has gone untouched for the settle window (so a half-synced file is never grabbed mid-write). Ingested files move into a `processed/` subfolder; a file that fails to enqueue moves into `failed/` so one bad file never blocks the rest. The poll interval and settle window are both adjustable on the panel, and changes take effect on the next poll without a restart.
+
 ## Command-line usage
 
 The web UI covers everyday use, but every action is also available from the `cartlog` command. With Docker, run these inside the container, for example `docker compose exec cartlog cartlog query category-spend`.

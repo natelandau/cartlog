@@ -1,0 +1,26 @@
+<div id="folder-settings">
+  <form hx-post="/admin/integrations/folder" hx-target="#folder-settings" hx-swap="outerHTML" class="space-y-3">
+    {% if error %}<div class="alert alert-error text-sm">{{ error }}</div>{% endif %}
+    {% if folder.last_run_at %}<p class="text-xs opacity-70">Last polled: {{ folder.last_run_at }}</p>{% endif %}
+    {% if folder.last_error %}<p class="text-xs text-error">Last error: {{ folder.last_error }}</p>{% endif %}
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="enabled" class="checkbox checkbox-sm" {% if folder.enabled %}checked{% endif %}>
+      Enabled
+    </label>
+    <label class="form-control">
+      <span class="label-text text-sm">Watch directory (absolute path)</span>
+      <input type="text" name="watch_dir" value="{{ folder.watch_dir or '' }}" class="input input-bordered input-sm w-full">
+    </label>
+    <div class="flex gap-3">
+      <label class="form-control">
+        <span class="label-text text-sm">Poll interval (s)</span>
+        <input type="number" step="0.1" name="poll_interval" value="{{ folder.poll_interval }}" class="input input-bordered input-sm w-32">
+      </label>
+      <label class="form-control">
+        <span class="label-text text-sm">Settle window (s)</span>
+        <input type="number" step="0.1" name="settle_seconds" value="{{ folder.settle_seconds }}" class="input input-bordered input-sm w-32">
+      </label>
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+  </form>
+</div>
