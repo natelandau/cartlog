@@ -374,12 +374,8 @@ def test_export_command_writes_json_with_filters(tmp_path, monkeypatch):
     assert {row["store_chain"] for row in payload} == {"Safeway"}
 
 
-def test_export_command_requires_output(tmp_path, monkeypatch):
+def test_export_command_requires_output():
     """Verify omitting --output is a usage error."""
-    # Given settings (DB irrelevant; parsing fails first)
-    db_url = seed_temp_db(tmp_path, "export.db")
-    monkeypatch.setattr(cli_module, "get_settings", lambda: Settings(database_url=db_url))
-
     # When invoking export with no --output
     result = runner.invoke(cli_module.app, ["export"])
 

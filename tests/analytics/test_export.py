@@ -8,7 +8,7 @@ import json
 from datetime import date
 from decimal import Decimal
 
-from cartlog.analytics.export import ExportFormat, export_filename, render_export
+from cartlog.analytics.export import _FIELDS, ExportFormat, export_filename, render_export
 from cartlog.analytics.results import LineItemExportRow
 from cartlog.analytics.service import AnalyticsService
 from cartlog.db.models import Product, ReceiptStatus, Store
@@ -132,6 +132,7 @@ def test_render_export_csv_has_header_and_rows():
     assert parsed[0]["canonical_name"] == "eggs"
     assert parsed[0]["unit_price"] == "3.00"  # Decimal preserved as string
     assert parsed[0]["unit"] == ""  # None rendered blank
+    assert parsed[0]["quantity"] == "1"
 
 
 def test_render_export_json_shape():
@@ -149,6 +150,7 @@ def test_render_export_json_shape():
     assert len(payload) == 1
     assert payload[0]["unit_price"] == "3.00"
     assert payload[0]["unit"] is None
+    assert payload[0]["quantity"] == "1"
 
 
 def test_render_export_empty_is_valid():
@@ -158,7 +160,7 @@ def test_render_export_empty_is_valid():
     json_content, _, _ = render_export([], ExportFormat.JSON)
 
     # Then the CSV is a header line only and the JSON is an empty array
-    assert csv_content.splitlines()[0].startswith("purchase_date,")
+    assert csv_content.splitlines()[0] == ",".join(_FIELDS)
     assert len(list(csv.DictReader(io.StringIO(csv_content)))) == 0
     assert json.loads(json_content) == []
 
@@ -170,3 +172,4 @@ def test_export_filename_is_dated():
 
     # Then the filename is dated with the right extension
     assert name == "cartlog-export-2026-06-18.csv"
+    assert export_filename(ExportFormat.JSON, date(2026, 6, 18)) == "cartlog-export-2026-06-18.json"

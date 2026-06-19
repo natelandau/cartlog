@@ -59,7 +59,9 @@ def test_dashboard_renders_export_buttons(app_client):
     # Jinja2 auto-escapes & to &amp; in HTML attribute values
     assert response.status_code == 200
     assert "/export?format=csv&amp;from=" in response.text
+    assert "&amp;to=" in response.text
     assert "/export?format=json&amp;from=" in response.text
+    assert response.text.count("&amp;to=") >= 2
 
 
 def test_dashboard_all_time_export_omits_dates(app_client):
