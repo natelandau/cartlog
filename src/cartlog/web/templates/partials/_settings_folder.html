@@ -33,37 +33,20 @@
       {% endif %}
     </fieldset>
 
-    <div class="grid gap-4 sm:grid-cols-2">
-      <fieldset class="fieldset min-w-0">
-        <legend class="fieldset-legend">Check every</legend>
-        <label class="input w-full{% if errors.poll_interval %} input-error{% endif %}">
-          <input type="number" name="poll_interval" value="{{ '%g'|format(values.poll_interval) }}"
-                 min="1" step="1" class="grow"
-                 {% if errors.poll_interval %}aria-invalid="true"{% endif %} />
-          <span class="text-base-content/60">seconds</span>
-        </label>
-        {% if errors.poll_interval %}
-        <p class="mt-1 text-sm text-error">{{ errors.poll_interval }}</p>
-        {% else %}
-        <p class="mt-1 text-sm text-base-content/60">How often cartlog scans the folder.</p>
-        {% endif %}
-      </fieldset>
-
-      <fieldset class="fieldset min-w-0">
-        <legend class="fieldset-legend">Settle window</legend>
-        <label class="input w-full{% if errors.settle_seconds %} input-error{% endif %}">
-          <input type="number" name="settle_seconds" value="{{ '%g'|format(values.settle_seconds) }}"
-                 min="0" step="1" class="grow"
-                 {% if errors.settle_seconds %}aria-invalid="true"{% endif %} />
-          <span class="text-base-content/60">seconds</span>
-        </label>
-        {% if errors.settle_seconds %}
-        <p class="mt-1 text-sm text-error">{{ errors.settle_seconds }}</p>
-        {% else %}
-        <p class="mt-1 text-sm text-base-content/60">Wait this long after a file stops changing before importing it, so a still-syncing receipt isn't grabbed half-written.</p>
-        {% endif %}
-      </fieldset>
-    </div>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Check every</legend>
+      <label class="input w-full sm:max-w-xs{% if errors.poll_interval %} input-error{% endif %}">
+        <input type="number" name="poll_interval" value="{{ '%g'|format(values.poll_interval) }}"
+               min="1" step="1" class="grow"
+               {% if errors.poll_interval %}aria-invalid="true"{% endif %} />
+        <span class="text-base-content/60">seconds</span>
+      </label>
+      {% if errors.poll_interval %}
+      <p class="mt-1 text-sm text-error">{{ errors.poll_interval }}</p>
+      {% else %}
+      <p class="mt-1 text-sm text-base-content/60">How often cartlog scans the folder for new receipts.</p>
+      {% endif %}
+    </fieldset>
 
     {% if folder.last_run_at or folder.last_error %}
     <div class="rounded-box bg-base-200 px-3 py-2 text-sm">

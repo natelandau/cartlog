@@ -39,7 +39,6 @@ def upgrade() -> None:
             server_default="failed",
         ),
         sa.Column("poll_interval", sa.Float(), nullable=False, server_default="10.0"),
-        sa.Column("settle_seconds", sa.Float(), nullable=False, server_default="5.0"),
         sa.Column("last_run_at", sa.DateTime(), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),

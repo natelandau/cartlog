@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cartlog.clock import naive_utcnow
-from cartlog.constants import SUPPORTED_SUFFIXES
+from cartlog.constants import FOLDER_SETTLE_SECONDS, SUPPORTED_SUFFIXES
 from cartlog.db.models import FolderIngestConfig
 from cartlog.ingest.queue import enqueue_job
 
@@ -56,9 +56,7 @@ def _move_to_unique(src: Path, dest_dir: Path) -> Path:
     return candidate
 
 
-def _is_settled_receipt(
-    entry: Path, *, reserved: set[str], settle_seconds: float, now: float
-) -> bool:
+def _is_settled_receipt(entry: Path, *, reserved: set[str], now: float) -> bool:
     """Return whether `entry` is a settled receipt file ready to ingest.
 
     Returns False (and never raises) for the bookkeeping subdirs, unsupported suffixes, files
@@ -69,7 +67,7 @@ def _is_settled_receipt(
             return False
         if entry.suffix.lower() not in SUPPORTED_SUFFIXES:
             return False
-        return now - entry.stat().st_mtime >= settle_seconds
+        return now - entry.stat().st_mtime >= FOLDER_SETTLE_SECONDS
     except OSError:
         # A sync client can move or delete a file between the listing and the stat; treat it
         # as not-ready this pass rather than letting the error abort the whole scan.
@@ -112,7 +110,7 @@ def scan_folder_once(
 ) -> int:
     """Enqueue every settled receipt file in the watch dir once; return the count enqueued.
 
-    A file is "settled" when its modification time is at least `settle_seconds` in the
+    A file is "settled" when its modification time is at least FOLDER_SETTLE_SECONDS in the
     past, so partially-synced files are not grabbed mid-write. Each settled file is first
     moved out of the scan path into the processed subdir (claiming it so a later failure can
     never leave it to be re-enqueued and duplicated), then enqueued; a file whose enqueue
@@ -136,9 +134,7 @@ def scan_folder_once(
 
     enqueued = 0
     for entry in sorted(watch.iterdir()):
-        if not _is_settled_receipt(
-            entry, reserved=reserved, settle_seconds=config.settle_seconds, now=now
-        ):
+        if not _is_settled_receipt(entry, reserved=reserved, now=now):
             continue
         if _claim_and_enqueue(
             session,

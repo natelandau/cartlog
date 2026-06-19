@@ -16,7 +16,7 @@ from cartlog.web.templating import templates
 
 router = APIRouter()
 
-# poll_interval below this would let the poller busy-loop; settle below zero is meaningless.
+# A poll_interval below this would let the poller busy-loop, so the form rejects it.
 _MIN_POLL_INTERVAL = 1.0
 
 
@@ -39,7 +39,6 @@ def _folder_view(
             "enabled": config.enabled,
             "watch_dir": config.watch_dir or "",
             "poll_interval": config.poll_interval,
-            "settle_seconds": config.settle_seconds,
         }
     return {"folder": config, "values": values, "errors": errors or {}, "saved": saved}
 
@@ -69,7 +68,6 @@ def save_folder_settings(
     watch_dir: Annotated[str, Form()] = "",
     enabled: Annotated[bool, Form()] = False,  # noqa: FBT002 - FastAPI binds this form toggle field
     poll_interval: Annotated[float, Form()] = 10.0,
-    settle_seconds: Annotated[float, Form()] = 5.0,
 ) -> HTMLResponse:
     """Validate and persist the watch-folder config; re-render the panel with field-level errors.
 
@@ -92,8 +90,6 @@ def save_folder_settings(
 
     if poll_interval < _MIN_POLL_INTERVAL:
         errors["poll_interval"] = "Must be at least 1 second."
-    if settle_seconds < 0:
-        errors["settle_seconds"] = "Cannot be negative."
 
     if errors:
         session.rollback()
@@ -103,7 +99,6 @@ def save_folder_settings(
                 "enabled": enabled,
                 "watch_dir": cleaned,
                 "poll_interval": poll_interval,
-                "settle_seconds": settle_seconds,
             },
             errors=errors,
         )
@@ -114,7 +109,6 @@ def save_folder_settings(
     config.watch_dir = cleaned or None
     config.enabled = enabled
     config.poll_interval = poll_interval
-    config.settle_seconds = settle_seconds
     session.commit()
     return templates.TemplateResponse(
         request, "partials/_settings_folder.html", _folder_view(session, saved=True)

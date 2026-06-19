@@ -15,6 +15,7 @@ cartlog takes a receipt photo and gives you back spending you can search and cha
 - Turn a photo or PDF of a receipt into itemized data, read for you by your chosen LLM provider
 - Sort every item into a category automatically, and recheck anything it could not place
 - Upload receipts and fix anything that needs a second look in your browser, or re-read a receipt from its saved image when a parse needs another pass
+- Drop receipts into a synced watch folder and have them imported automatically, no upload step
 - Keep using the app while your receipts are read in the background
 - Chart a product's price history, compare prices across stores by normalized unit price, and total your spending by category
 - Export your line items to CSV or JSON, filtered by date, store, or category, from the browser or the command line
@@ -117,14 +118,6 @@ You can send receipt images or PDFs directly from the share sheet on iPhone, iPa
 Open **Admin -> Integrations** (at `/admin/integrations`) in the web UI and tap **Install the Shortcut**. When you add it, the Shortcut asks once for your cartlog URL; use the upload endpoint shown on that page. cartlog just needs to be reachable from the device.
 
 Once the Shortcut is installed, open a receipt in Photos or Files, tap the share button, and run the Shortcut. The receipt appears in cartlog within a few seconds.
-
-## Ingest from a watched folder
-
-cartlog can watch a synced folder (Dropbox, iCloud Drive, Syncthing, a network share, and so on) and ingest any receipt image or PDF dropped into it, with no upload step.
-
-Open **Admin -> Settings** (at `/admin/settings`), find the **Watch folder** panel, enter the absolute path to a folder cartlog can read and write, turn on **Enable watch folder**, and save. The directory must already exist and be writable; cartlog rejects a path it cannot use.
-
-cartlog polls the folder on the configured interval. A file is picked up only once it has gone untouched for the settle window (so a half-synced file is never grabbed mid-write). Ingested files move into a `processed/` subfolder; a file that fails to enqueue moves into `failed/` so one bad file never blocks the rest. The poll interval and settle window are both adjustable on the panel, and changes take effect on the next poll without a restart.
 
 ## Command-line usage
 

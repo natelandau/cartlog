@@ -303,7 +303,6 @@ class FolderIngestConfig(Base):
         String(255), default="failed", server_default="failed"
     )
     poll_interval: Mapped[float] = mapped_column(Float, default=10.0, server_default="10.0")
-    settle_seconds: Mapped[float] = mapped_column(Float, default=5.0, server_default="5.0")
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(

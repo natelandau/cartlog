@@ -30,7 +30,6 @@ def test_get_folder_config_creates_singleton_with_defaults(session):
     assert config.processed_subdir == "processed"
     assert config.failed_subdir == "failed"
     assert config.poll_interval == 10.0
-    assert config.settle_seconds == 5.0
 
 
 def test_get_folder_config_returns_same_row(session):
@@ -51,7 +50,7 @@ def test_get_folder_config_returns_same_row(session):
 def _make_watch_dir(tmp_path: Path) -> tuple[Path, FolderIngestConfig]:
     watch = tmp_path / "inbox"
     watch.mkdir()
-    config = FolderIngestConfig(id=1, enabled=True, watch_dir=str(watch), settle_seconds=5.0)
+    config = FolderIngestConfig(id=1, enabled=True, watch_dir=str(watch))
     return watch, config
 
 

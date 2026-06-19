@@ -13,7 +13,7 @@ def test_settings_renders_folder_panel(app_client):
     # Then the folder panel is present
     assert response.status_code == 200
     assert "Watch folder" in response.text
-    assert "Settle window" in response.text
+    assert "Watch directory" in response.text
 
 
 def test_admin_index_links_to_settings(app_client):
@@ -49,7 +49,6 @@ def test_post_folder_persists_valid_config(app_client, tmp_path):
             "enabled": "on",
             "watch_dir": str(watch),
             "poll_interval": "10",
-            "settle_seconds": "5",
         },
     )
 
@@ -72,7 +71,6 @@ def test_post_folder_rejects_missing_dir(app_client, tmp_path):
             "enabled": "on",
             "watch_dir": str(missing),
             "poll_interval": "10",
-            "settle_seconds": "5",
         },
     )
 
@@ -99,7 +97,6 @@ def test_post_folder_rejects_non_positive_poll_interval(app_client, tmp_path):
             "enabled": "on",
             "watch_dir": str(watch),
             "poll_interval": "0",
-            "settle_seconds": "5",
         },
     )
 
