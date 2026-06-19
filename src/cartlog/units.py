@@ -181,7 +181,7 @@ def normalize_line_item(
     # which only describes a per-package size (relevant when unit is a count/null token).
     if unit_token is not None and UNIT_FACTORS[unit_token][0] in (WEIGHT, VOLUME):
         dimension, factor = UNIT_FACTORS[unit_token]
-        return _resolved(quantity * factor, dimension, line_total)
+        return _resolved(total_base=quantity * factor, dimension=dimension, line_total=line_total)
 
     # Steps 1/3: a per-package measure from the LLM (preferred) or parsed from unit_size.
     measure: tuple[Decimal, str] | None = None
@@ -196,13 +196,15 @@ def normalize_line_item(
         value, token = measure
         dimension, factor = UNIT_FACTORS[token]
         if dimension in (WEIGHT, VOLUME):
-            return _resolved(quantity * value * factor, dimension, line_total)
+            return _resolved(
+                total_base=quantity * value * factor, dimension=dimension, line_total=line_total
+            )
         # Count packaging (e.g. "12CT"): base is total count.
-        return _resolved(quantity * value, COUNT, line_total)
+        return _resolved(total_base=quantity * value, dimension=COUNT, line_total=line_total)
 
     # Step 4: only a count unit is present -> $/each.
     if unit_token is not None and UNIT_FACTORS[unit_token][0] == COUNT:
-        return _resolved(quantity, COUNT, line_total)
+        return _resolved(total_base=quantity, dimension=COUNT, line_total=line_total)
 
     # Step 5: nothing parseable. Leftover measure-looking text means a bad read; otherwise
     # the line genuinely has no measure (a single apple, a loaf of bread).

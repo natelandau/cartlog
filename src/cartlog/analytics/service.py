@@ -568,10 +568,14 @@ class AnalyticsService:
                 )
             )
         # Sort by normalized price when available (honest), falling back to raw average.
+        # Use an explicit None check, not `or`: a free item's normalized price is Decimal(0),
+        # which is falsy and would wrongly fall back to the raw unit price.
         rows.sort(
             key=lambda r: (
                 r.avg_normalized_unit_price is None,
-                r.avg_normalized_unit_price or r.avg_unit_price,
+                r.avg_normalized_unit_price
+                if r.avg_normalized_unit_price is not None
+                else r.avg_unit_price,
             )
         )
         return StoreComparison(product=product, rows=rows)
@@ -680,6 +684,9 @@ class AnalyticsService:
             .join(Store, Receipt.store_id == Store.id)
             .filter(Receipt.status.in_(COUNTED_STATUSES))
             .filter(LineItem.measure_status == RESOLVED)
+            # A RESOLVED row should always carry a normalized price; guard so a NULL from a
+            # data-integrity violation cannot reach the Decimal sum below and crash it.
+            .filter(LineItem.normalized_unit_price.isnot(None))
             .filter(LineItem.measure_dimension.in_((WEIGHT, VOLUME)))
             .filter(func.lower(Category.name) == category.lower())
         )
