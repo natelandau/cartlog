@@ -73,6 +73,8 @@ def dashboard(
             "heatmap_grid": heatmap_grid,
             "range": range_,
             "ranges": list(RangePreset),
+            "range_start": start,
+            "range_end": end,
             "receipts": recent,
             "sort": sort,
             "direction": direction,

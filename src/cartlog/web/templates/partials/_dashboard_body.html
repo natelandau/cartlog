@@ -3,6 +3,7 @@
 {% import "partials/_viz.html" as viz %}
 <div id="dashboard-body" class="flex flex-col gap-4">
 
+  {% set date_qs = ('&from=' ~ range_start ~ '&to=' ~ range_end) if range_start and range_end else '' %}
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div role="tablist" class="tabs tabs-box tabs-sm w-fit" aria-label="Time range">
       {% for r in ranges %}
@@ -12,9 +13,13 @@
            hx-swap="outerHTML" hx-push-url="true">{{ range_label(r) }}</a>
       {% endfor %}
     </div>
-    {% if data.needs_review %}
-      <a class="badge badge-warning badge-lg gap-1" href="/receipts?status=needs_review">{{ data.needs_review }} need review</a>
-    {% endif %}
+    <div class="flex flex-wrap items-center gap-2">
+      {% if data.needs_review %}
+        <a class="badge badge-warning badge-lg gap-1" href="/receipts?status=needs_review">{{ data.needs_review }} need review</a>
+      {% endif %}
+      <a class="btn btn-sm btn-outline" href="/export?format=csv{{ date_qs }}">Export CSV</a>
+      <a class="btn btn-sm btn-outline" href="/export?format=json{{ date_qs }}">Export JSON</a>
+    </div>
   </div>
 
   {# Band 1: KPIs #}

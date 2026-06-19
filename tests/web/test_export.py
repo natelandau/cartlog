@@ -46,3 +46,29 @@ def test_export_rejects_unknown_format(app_client):
 
     # Then the request is rejected
     assert response.status_code == 422
+
+
+def test_dashboard_renders_export_buttons(app_client):
+    """Verify the dashboard shows CSV and JSON export links carrying the range dates."""
+    # Given the seeded app
+
+    # When loading the dashboard scoped to this year
+    response = app_client.get("/?range=ytd")
+
+    # Then both export links are present and carry from/to bounds
+    # Jinja2 auto-escapes & to &amp; in HTML attribute values
+    assert response.status_code == 200
+    assert "/export?format=csv&amp;from=" in response.text
+    assert "/export?format=json&amp;from=" in response.text
+
+
+def test_dashboard_all_time_export_omits_dates(app_client):
+    """Verify the all-time range produces unbounded export links (no from/to)."""
+    # Given the seeded app
+
+    # When loading the dashboard for all time
+    response = app_client.get("/?range=all")
+
+    # Then the export links carry no date bounds
+    assert "/export?format=csv" in response.text
+    assert "from=None" not in response.text  # open range must not leak a literal "None"
