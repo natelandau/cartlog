@@ -57,6 +57,10 @@ uv run duty dev
 The web UI is at [http://localhost:8000](http://localhost:8000). For the full
 list of CLI commands, run `uv run cartlog --help`.
 
+The web UI is styled with Tailwind CSS v4 and daisyUI v5. `cartlog serve`
+compiles the stylesheet on startup, so you rarely build it by hand, but
+`npm run build:css` produces it directly.
+
 ## Build the Docker image
 
 End users run the prebuilt image from the GitHub Container Registry

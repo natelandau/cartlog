@@ -14,9 +14,11 @@ cartlog takes a receipt photo and gives you back spending you can search and cha
 
 - Turn a photo or PDF of a receipt into itemized data, read for you by your chosen LLM provider
 - Sort every item into a category automatically, and recheck anything it could not place
-- Upload receipts, fix anything that needs a second look, and browse spending charts in your browser
+- Upload receipts and fix anything that needs a second look in your browser, or re-read a receipt from its saved image when a parse needs another pass
 - Keep using the app while your receipts are read in the background
-- See a product's price history, compare prices between stores, and total your spending by category
+- Chart a product's price history, compare prices across stores by normalized unit price, and total your spending by category
+- Export your line items to CSV or JSON, filtered by date, store, or category, from the browser or the command line
+- See what each receipt cost to read, so your LLM spend stays visible
 - Keep all your data in a single file, with no separate database to install or maintain
 
 ## Requirements
@@ -129,6 +131,9 @@ uv run cartlog query price-history "bananas"
 # Compare a product's price across stores, cheapest first
 uv run cartlog query store-comparison "whole milk"
 
+# Rank a category's products by normalized unit price (weight and volume separately)
+uv run cartlog query category-units "dairy"
+
 # Total spend by category
 uv run cartlog query category-spend
 
@@ -136,9 +141,22 @@ uv run cartlog query category-spend
 uv run cartlog query search "coffee"
 ```
 
+Export your line items to a file, optionally filtered by date, store, or category. The `--output` path is required, and `--format` is `csv` (the default) or `json`:
+
+```bash
+# Everything, as CSV
+uv run cartlog export --output groceries.csv
+
+# One store's dairy purchases from this year, as JSON
+uv run cartlog export --output dairy.json --format json --store "Whole Foods" --category dairy --from 2026-01-01
+```
+
+In the browser, the dashboard has **Export CSV** and **Export JSON** buttons that download the same data for the date range you have selected.
+
 Other commands:
 
 - `cartlog worker` reads any waiting receipts on its own, without starting the web server.
+- `cartlog receipts reparse` re-reads a receipt from its saved image, replacing the earlier parse.
 - `cartlog receipts delete` removes a receipt and everything stored with it, including its image.
 - `cartlog db seed` sets up the categories cartlog uses, adding any that are missing.
 
@@ -192,18 +210,9 @@ Local and self-hosted models work through that same OpenAI-compatible path. They
 
 > **Important:** The parse model must support image (vision) input and structured output, because cartlog hands it the receipt picture and asks for a typed result. To read PDF receipts, the model must also accept PDF documents. The classify model needs structured output only, since it works from text. Point either variable at a model that lacks these capabilities and ingestion fails: the parse step errors and the receipt is flagged for review. Current frontier models from Anthropic, OpenAI, and Google meet all three requirements; many smaller and local models do not. Test one receipt before switching your whole setup.
 
-## Development
+## Contributing
 
-This project uses uv for packaging, `ruff` for linting and formatting, and `ty` for type checking. The [duty](https://pawamoy.github.io/duty/) task runner wraps the common workflows.
-
-```bash
-uv sync            # install dependencies
-uv run duty dev    # serve in development mode (templates and CSS reload on change)
-uv run duty lint   # run ruff, ty, typos, and pre-commit hooks
-uv run duty test   # run the test suite
-```
-
-The web UI is styled with Tailwind CSS v4 and daisyUI v5. `uv run cartlog serve` compiles the stylesheet on startup, so you rarely need to build it by hand, but `npm run build:css` produces it directly.
+Want to help improve cartlog? See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up a development environment, run the checks, and open a pull request.
 
 ## License
 

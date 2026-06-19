@@ -2,6 +2,7 @@
 
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import datetime  # noqa: TC003  # Typer resolves command annotations at runtime
 from pathlib import Path  # noqa: TC003  # Typer resolves command annotations at runtime
 
 import typer
@@ -12,6 +13,8 @@ from rich.console import Console
 from sqlalchemy.orm import Session  # noqa: TC002  # used in helper annotations at runtime
 
 from cartlog.analytics.cli import query_app
+from cartlog.analytics.export import ExportFormat, render_export
+from cartlog.analytics.service import AnalyticsService
 from cartlog.bootstrap import prepare_runtime
 from cartlog.categories.service import CategoryService
 from cartlog.cli_progress import StageChecklist
@@ -37,6 +40,44 @@ console = Console()
 @app.callback()
 def main() -> None:
     """cartlog: scan, parse, and store grocery receipts."""
+
+
+@app.command("export")
+def export_command(
+    output: Path = typer.Option(..., "--output", "-o", help="Destination file path (required)."),
+    export_format: ExportFormat = typer.Option(
+        ExportFormat.CSV, "--format", "-f", help="Output format."
+    ),
+    store: str | None = typer.Option(
+        None, "--store", help="Filter to a store chain (case-insensitive)."
+    ),
+    category: str | None = typer.Option(
+        None, "--category", help="Filter to a category (case-insensitive)."
+    ),
+    start: datetime | None = typer.Option(
+        None, "--from", formats=["%Y-%m-%d"], help="Earliest purchase date (inclusive)."
+    ),
+    end: datetime | None = typer.Option(
+        None, "--to", formats=["%Y-%m-%d"], help="Latest purchase date (inclusive)."
+    ),
+) -> None:
+    """Export raw line-item data to a CSV or JSON file."""
+    settings = get_settings()
+    session_factory = create_session_factory(settings.database_url)
+    try:
+        with session_factory() as session:
+            rows = AnalyticsService(session).export_line_items(
+                start=start.date() if start else None,
+                end=end.date() if end else None,
+                store=store,
+                category=category,
+            )
+    finally:
+        session_factory.kw["bind"].dispose()
+
+    content, _media_type, _ext = render_export(rows, export_format)
+    output.write_text(content, encoding="utf-8")
+    console.print(f"Exported {len(rows)} row(s) to {output}")
 
 
 def _build_model(model_id: str) -> Model:

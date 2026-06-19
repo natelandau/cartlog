@@ -18,6 +18,7 @@ from cartlog.analytics.results import (
     DashboardData,
     HeatmapCell,
     KpiCard,
+    LineItemExportRow,
     MonthComparison,
     MonthlySpend,
     ParsingCostOverview,
@@ -94,6 +95,13 @@ def _apply_store_filter(query: Query, store: str | None) -> Query:
     """Filter a Store-joined query to one chain name (case-insensitive), if given."""
     if store is not None:
         query = query.filter(func.lower(Store.chain_name) == store.lower())
+    return query
+
+
+def _apply_category_filter(query: Query, category: str | None) -> Query:
+    """Filter a Category-joined query to one category name (case-insensitive), if given."""
+    if category is not None:
+        query = query.filter(func.lower(Category.name) == category.lower())
     return query
 
 
@@ -723,6 +731,70 @@ class AnalyticsService:
         return CategoryUnitComparison(
             category=category, weight_rows=weight_rows, volume_rows=volume_rows
         )
+
+    def export_line_items(
+        self,
+        *,
+        start: date | None = None,
+        end: date | None = None,
+        store: str | None = None,
+        category: str | None = None,
+    ) -> list[LineItemExportRow]:
+        """Return every line item as a flat export row, filtered by date/store/category.
+
+        Unlike the dashboard queries this applies no receipt-status filter: any receipt that
+        has line items is included, so an exported file is a faithful dump of the user's data
+        rather than the counted-only subset the analytics figures report. Rows are ordered
+        oldest purchase first for stable, diff-friendly output.
+
+        Args:
+            start: Optional earliest purchase date (inclusive).
+            end: Optional latest purchase date (inclusive).
+            store: Optional store chain name to filter on (case-insensitive).
+            category: Optional category name to filter on (case-insensitive).
+
+        Returns:
+            list[LineItemExportRow]: Flat export rows ordered oldest purchase first.
+        """
+        query = (
+            self._session.query(LineItem)
+            .join(LineItem.receipt)
+            .join(Receipt.store)
+            .join(LineItem.product)
+            .outerjoin(Product.category)
+            .options(
+                contains_eager(LineItem.receipt).contains_eager(Receipt.store),
+                contains_eager(LineItem.product).contains_eager(Product.category),
+            )
+        )
+        query = _apply_date_range(query, start=start, end=end)
+        query = _apply_store_filter(query, store)
+        query = _apply_category_filter(query, category)
+        query = query.order_by(Receipt.purchase_date, Receipt.id, LineItem.id)
+
+        return [
+            LineItemExportRow(
+                purchase_date=li.receipt.purchase_date,
+                store_chain=li.receipt.store.chain_name,
+                store_location=li.receipt.store.location,
+                receipt_id=li.receipt_id,
+                receipt_status=li.receipt.status,
+                currency=li.receipt.currency,
+                raw_description=li.raw_description,
+                canonical_name=li.product.canonical_name,
+                category=li.product.category.name if li.product.category else None,
+                quantity=li.quantity,
+                unit=li.unit,
+                unit_size=li.unit_size,
+                unit_price=li.unit_price,
+                line_total=li.line_total,
+                measure_quantity=li.measure_quantity,
+                measure_dimension=li.measure_dimension,
+                normalized_unit_price=li.normalized_unit_price,
+                measure_status=li.measure_status,
+            )
+            for li in query.all()
+        ]
 
     def search(
         self,

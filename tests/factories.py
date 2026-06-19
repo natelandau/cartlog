@@ -102,7 +102,7 @@ def seed_receipts(session: Session) -> None:
             make_line(milk, raw="2% MILK", qty="1", unit_price="2.00", line_total="2.00"),
         ],
     )
-    # r4 is FAILED and must be excluded from every query.
+    # r4 is FAILED: excluded from dashboard/analytics queries but included in export queries.
     r4 = make_receipt(
         safeway,
         date(2026, 3, 20),

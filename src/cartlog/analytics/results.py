@@ -187,6 +187,29 @@ class MonthComparison(BaseModel):
     items_prev: int
 
 
+class LineItemExportRow(BaseModel):
+    """One line item flattened across its receipt, store, product, and category for export."""
+
+    purchase_date: date
+    store_chain: str
+    store_location: str | None
+    receipt_id: int
+    receipt_status: str
+    currency: str
+    raw_description: str
+    canonical_name: str
+    category: str | None
+    quantity: Decimal
+    unit: str | None
+    unit_size: str | None
+    unit_price: Decimal
+    line_total: Decimal
+    measure_quantity: Decimal | None
+    measure_dimension: str | None
+    normalized_unit_price: Decimal | None
+    measure_status: str
+
+
 class DashboardData(BaseModel):
     """Everything the dashboard renders for a chosen time range (excluding recent table)."""
 
