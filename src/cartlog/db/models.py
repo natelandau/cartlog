@@ -10,6 +10,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -285,3 +286,22 @@ class ParseCostEvent(Base):
     parse_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     classify_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     estimated_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
+
+
+class FolderIngestConfig(Base):
+    """Singleton configuration for the watch-folder ingestion channel (one row, id=1)."""
+
+    __tablename__ = "folder_ingest_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    watch_dir: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    processed_subdir: Mapped[str] = mapped_column(String(255), default="processed")
+    failed_subdir: Mapped[str] = mapped_column(String(255), default="failed")
+    poll_interval: Mapped[float] = mapped_column(Float, default=10.0)
+    settle_seconds: Mapped[float] = mapped_column(Float, default=5.0)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
