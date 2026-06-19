@@ -20,10 +20,10 @@ from cartlog.web.routers import (
     analytics,
     categories,
     dashboard,
+    integrations,
     jobs,
     preferences,
     receipts,
-    settings,
 )
 from cartlog.web.templating import templates
 
@@ -63,7 +63,7 @@ def create_app(*, dev: bool = False) -> FastAPI:
     app.include_router(categories.router)
     app.include_router(admin.router)
     app.include_router(preferences.router)
-    app.include_router(settings.router)
+    app.include_router(integrations.router)
     return app
 
 

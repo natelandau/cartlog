@@ -18,14 +18,14 @@ def test_upload_labels_job_with_submitted_source(app_client):
     response = app_client.post(
         "/receipts",
         files=[("files", ("receipt.png", _png_bytes(), "image/png"))],
-        data={"source": "ios"},
+        data={"source": "shortcut"},
     )
 
     # Then the enqueued job carries that source
     assert response.status_code == 202
     with app_client.app.state.session_factory() as session:
         sources = [job.source for job in session.query(IngestionJob).all()]
-    assert sources == ["ios"]
+    assert sources == ["shortcut"]
 
 
 def test_upload_defaults_source_to_web(app_client):

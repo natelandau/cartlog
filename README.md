@@ -110,23 +110,13 @@ For development, or to run cartlog without Docker, install it with uv.
 
     The web UI is at [http://localhost:8000](http://localhost:8000). Pass `--host`, `--port`, or `--workers` to change how it runs.
 
-## Send receipts from iOS
+## Send receipts with Apple Shortcuts
 
-You can send receipt photos directly from the iOS share sheet to cartlog without installing any app. The built-in Shortcuts app handles the upload. cartlog just needs to be reachable from your phone.
+You can send receipt images or PDFs directly from the share sheet on iPhone, iPad, or Mac to cartlog without installing any app. The built-in Shortcuts app handles the upload.
 
-The upload endpoint is shown on the **Settings** page in the web UI (open **Admin -> Settings**, at `/admin/settings`, once cartlog is running).
+Open **Admin -> Integrations** (at `/admin/integrations`) in the web UI and tap **Install the Shortcut**. When you add it, the Shortcut asks once for your cartlog URL; use the upload endpoint shown on that page. cartlog just needs to be reachable from the device.
 
-To set up the Shortcut by hand:
-
-1. Open the Shortcuts app and create a new shortcut that *Receives images from the share sheet*.
-2. Add a **Get Contents of URL** action with the URL shown on the Settings page.
-3. Set Method to **POST** and Request Body to **Form**.
-4. Add a **File** field named `files` set to the Shortcut Input.
-5. Add a **Text** field named `source` set to `ios`.
-
-Once the Shortcut is saved, open any photo in the Photos app, tap the share button, and run the Shortcut. The receipt appears in cartlog within a few seconds.
-
-If you host a prebuilt iCloud Shortcut, set `CARTLOG_IOS_SHORTCUT_URL` to its share link. The Settings page then shows an **Add to iOS** button linking to it, and the button is hidden when the variable is unset.
+Once the Shortcut is installed, open a receipt in Photos or Files, tap the share button, and run the Shortcut. The receipt appears in cartlog within a few seconds.
 
 ## Command-line usage
 

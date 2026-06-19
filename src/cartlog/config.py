@@ -45,9 +45,6 @@ class Settings(BaseSettings):
     parsing_stale_timeout_seconds: float = 300.0
     # Reject web uploads larger than this many bytes (default 10 MiB).
     max_upload_bytes: int = 10 * 1024 * 1024
-    # Optional iCloud share link to a prebuilt iOS Shortcut. When set, the settings page shows an
-    # "Add to iOS" button linking to it; left unset, only the manual setup steps are shown.
-    ios_shortcut_url: str | None = None
 
     @field_validator("database_url", mode="after")
     @classmethod
