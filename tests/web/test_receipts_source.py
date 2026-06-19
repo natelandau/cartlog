@@ -13,6 +13,7 @@ def _png_bytes() -> bytes:
 
 def test_upload_labels_job_with_submitted_source(app_client):
     """Verify a submitted source form field becomes the job's source."""
+    # Given a running app with the upload route
     # When uploading with an explicit source
     response = app_client.post(
         "/receipts",
@@ -29,6 +30,7 @@ def test_upload_labels_job_with_submitted_source(app_client):
 
 def test_upload_defaults_source_to_web(app_client):
     """Verify omitting the source form field defaults the job source to web."""
+    # Given a running app with the upload route
     # When uploading without a source field
     response = app_client.post(
         "/receipts",
@@ -40,3 +42,19 @@ def test_upload_defaults_source_to_web(app_client):
     with app_client.app.state.session_factory() as session:
         sources = [job.source for job in session.query(IngestionJob).all()]
     assert sources == ["web"]
+
+
+def test_upload_rejects_oversize_source(app_client):
+    """Verify a source longer than the column width is rejected rather than stored."""
+    # Given a running app with the upload route
+    # When uploading with a source label that exceeds the 50-char column width
+    response = app_client.post(
+        "/receipts",
+        files=[("files", ("receipt.png", _png_bytes(), "image/png"))],
+        data={"source": "x" * 51},
+    )
+
+    # Then the request is rejected and no job is enqueued
+    assert response.status_code == 422
+    with app_client.app.state.session_factory() as session:
+        assert session.query(IngestionJob).count() == 0

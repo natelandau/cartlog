@@ -13,7 +13,7 @@ router = APIRouter()
 @router.get("/settings", response_class=HTMLResponse)
 def settings_index(request: Request) -> HTMLResponse:
     """Render the settings page, the entry point for configuring how receipts reach cartlog."""
-    # The Shortcut posts here; deriving it from the request keeps the shown URL correct
-    # behind any host/port/reverse-proxy the user runs cartlog on.
-    upload_url = str(request.base_url).rstrip("/") + "/receipts"
+    # Resolve by route name so the shown URL tracks the upload route's actual path and any
+    # root_path prefix, and stays correct behind whatever host/port the user runs cartlog on.
+    upload_url = str(request.url_for("upload_receipts"))
     return templates.TemplateResponse(request, "settings.html", {"upload_url": upload_url})

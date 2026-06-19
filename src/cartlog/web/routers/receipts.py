@@ -145,7 +145,9 @@ async def upload_receipts(
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     response: Response,
-    source: Annotated[str, Form()] = "web",
+    # Cap matches the IngestionJob.source column width; SQLite does not enforce String(50),
+    # so without this an over-long label would be stored verbatim instead of rejected.
+    source: Annotated[str, Form(max_length=50)] = "web",
 ) -> dict[str, object]:
     """Accept one or more receipt uploads, enqueuing the valid ones and reporting the rest.
 
