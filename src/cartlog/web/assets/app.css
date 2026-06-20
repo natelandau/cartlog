@@ -56,30 +56,32 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* Light theme: warm paper base, pine-green primary, amber accent. */
+/* Light theme: warm paper base, pine-green primary, amber accent.
+   Surface stack: base-100 (card, brightest) > base-200 (page) > base-300 (borders/inset/hover).
+   Semantic colors darkened so each -content pair passes AA (4.5:1) on warm paper surfaces. */
 @plugin "daisyui/theme" {
   name: "cartlog-light";
   default: true;
   color-scheme: light;
-  --color-base-100: oklch(98% 0.008 95);
-  --color-base-200: oklch(95% 0.012 95);
-  --color-base-300: oklch(90% 0.016 95);
-  --color-base-content: oklch(26% 0.02 160);
-  --color-primary: oklch(48% 0.09 165);
+  --color-base-100: oklch(99% 0.006 95);   /* card surface, brightest */
+  --color-base-200: oklch(94.5% 0.012 95);  /* page background, clearly deeper */
+  --color-base-300: oklch(88% 0.018 95);    /* borders / inset / hover */
+  --color-base-content: oklch(28% 0.02 160);
+  --color-primary: oklch(45% 0.10 165);
   --color-primary-content: oklch(98% 0.01 165);
   --color-secondary: oklch(45% 0.03 160);
   --color-secondary-content: oklch(98% 0.01 160);
-  --color-accent: oklch(62% 0.13 65);
-  --color-accent-content: oklch(98% 0.02 65);
+  --color-accent: oklch(56% 0.13 65);          /* darkened amber for 4.5:1 on paper */
+  --color-accent-content: oklch(99% 0.02 65);
   --color-neutral: oklch(32% 0.02 160);
   --color-neutral-content: oklch(96% 0.01 160);
-  --color-info: oklch(60% 0.1 230);
+  --color-info: oklch(54% 0.10 230);
   --color-info-content: oklch(98% 0.01 230);
-  --color-success: oklch(58% 0.12 150);
+  --color-success: oklch(52% 0.12 150);
   --color-success-content: oklch(98% 0.01 150);
-  --color-warning: oklch(68% 0.13 75);
-  --color-warning-content: oklch(26% 0.03 75);
-  --color-error: oklch(55% 0.18 27);
+  --color-warning: oklch(62% 0.13 75);         /* darkened so warning text passes */
+  --color-warning-content: oklch(99% 0.02 75);
+  --color-error: oklch(52% 0.18 27);
   --color-error-content: oklch(98% 0.01 27);
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
@@ -87,14 +89,15 @@
   --border: 1px;
 }
 
-/* Dark theme: slate base, pine lifted for legibility on dark surfaces. */
+/* Dark theme: slate base, pine lifted for legibility on dark surfaces.
+   Surface stack: base-100 (card, lifted) > base-200 (page, deeper) > base-300 (borders/inset/hover). */
 @plugin "daisyui/theme" {
   name: "cartlog-dark";
   color-scheme: dark;
-  --color-base-100: oklch(22% 0.012 165);
-  --color-base-200: oklch(26% 0.014 165);
-  --color-base-300: oklch(31% 0.016 165);
-  --color-base-content: oklch(92% 0.01 160);
+  --color-base-100: oklch(24% 0.012 165);  /* card surface, lifted */
+  --color-base-200: oklch(20% 0.012 165);  /* page background, deeper */
+  --color-base-300: oklch(30% 0.016 165);  /* borders / inset / hover */
+  --color-base-content: oklch(93% 0.01 160);
   --color-primary: oklch(72% 0.12 165);
   --color-primary-content: oklch(20% 0.03 165);
   --color-secondary: oklch(70% 0.04 160);
