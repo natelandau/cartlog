@@ -35,3 +35,15 @@ def test_card_renders_section_title_and_body():
     assert 'class="section-title"' in html
     assert "Stores" in html
     assert "<p>body</p>" in html
+
+
+def test_card_renders_without_call_body():
+    """Verify card renders the surface without error when called without a body."""
+    # Given a card called without a {% call %} body
+    # When rendering the card macro without a call block
+    html = _render("{% import 'macros/ui.html' as ui %}{{ ui.card('Empty') }}")
+
+    # Then the surface and title are present without errors
+    assert "surface-card" in html
+    assert 'class="section-title"' in html
+    assert "Empty" in html

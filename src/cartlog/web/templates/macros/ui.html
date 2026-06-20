@@ -27,7 +27,8 @@
 <section class="surface-card">
   <div class="surface-card__body">
     {% if title %}<h2 class="section-title">{{ title }}</h2>{% endif %}
-    {{ caller() }}
+    {# Body is normally supplied via {% call %}, but guard against missing caller #}
+    {% if caller %}{{ caller() }}{% endif %}
   </div>
 </section>
 {% endmacro %}

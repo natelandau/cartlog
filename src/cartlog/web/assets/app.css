@@ -196,13 +196,11 @@
   .prose-muted { color: color-mix(in oklch, var(--color-base-content) 75%, transparent); line-height: 1.65; }
 }
 
-@layer components {
-  .transition-ui { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
-}
-
 /* Card surface system: replaces the repeated `card border border-base-300 bg-base-100 shadow-sm`
    recipe with a single semantic class driven entirely by CSS variables, so both themes stay in sync. */
 @layer components {
+  .transition-ui { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+
   .surface-card {
     background: var(--color-base-100);
     border: var(--border) solid var(--color-base-300);
