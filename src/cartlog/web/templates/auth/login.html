@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Sign in · cartlog{% endblock %}
 
+{# A signed-out visitor has no use for the app nav, so hide the chrome and center the card. #}
+{% block navbar %}{% endblock %}
+{% block main_class %}min-h-screen{% endblock %}
+
 {% block content %}
 {#
   Receipt-tape login page. The narrow card is styled as a thermal receipt: dashed
@@ -8,7 +12,7 @@
   meta line. Everything inside stays calm so the motif does not fight the form.
   One orchestrated print-in on load (gated behind prefers-reduced-motion).
 #}
-<div class="flex min-h-[calc(100vh-8rem)] items-center justify-center">
+<div class="flex min-h-screen items-center justify-center px-4 py-8">
   <div class="tape-card mx-auto w-full max-w-sm" role="main">
 
     {# Dashed tear edge - top #}
