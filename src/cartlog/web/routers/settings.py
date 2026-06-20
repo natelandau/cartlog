@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session  # noqa: TC002  # runtime import for FastAPI Depends
 
-from cartlog.auth.config import AppConfigService
+from cartlog.auth.app_config import AppConfigService
 from cartlog.ingest.folder_watcher import get_folder_config
 from cartlog.web.auth import require_admin
 from cartlog.web.dependencies import get_session

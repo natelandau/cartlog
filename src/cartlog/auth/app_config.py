@@ -1,4 +1,4 @@
-"""Read and update the singleton app_config row."""
+"""Read and update the singleton app_config row (admin-editable runtime config, not the app Settings in cartlog.config)."""
 
 from __future__ import annotations
 

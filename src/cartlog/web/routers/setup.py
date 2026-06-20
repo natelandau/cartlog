@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session  # noqa: TC002
 
-from cartlog.auth.config import AppConfigService
+from cartlog.auth.app_config import AppConfigService
 from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService

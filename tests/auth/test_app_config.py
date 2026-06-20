@@ -1,6 +1,6 @@
 """Tests for AppConfig seeding and persistence."""
 
-from cartlog.auth.config import AppConfigService
+from cartlog.auth.app_config import AppConfigService
 from cartlog.db.models import AppConfig
 from cartlog.db.seed import seed_app_config
 
