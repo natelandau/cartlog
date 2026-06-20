@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from cartlog.db.models import IngestionJob, Receipt
     from cartlog.parsing.category_classifier import CategoryClassifier
-    from cartlog.parsing.parser import ReceiptParser
+    from cartlog.parsing.protocol import ReceiptParser
 
 logger = logging.getLogger(__name__)
 
