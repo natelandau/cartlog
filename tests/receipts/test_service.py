@@ -551,6 +551,30 @@ def test_reparse_receipt_preserves_source(session, tmp_path) -> None:
     assert job.source == "web"
 
 
+def test_reparse_receipt_preserves_uploader(session, tmp_path) -> None:
+    """Verify the reparse job keeps the original receipt's uploader attribution."""
+    # Given a receipt uploaded by a known user with an on-disk image
+    from cartlog.db.models import Role, User  # noqa: PLC0415
+
+    storage = tmp_path / "storage"
+    storage.mkdir()
+    image = storage / "rp-user.png"
+    image.write_bytes(b"img")
+    user = User(username="reparse-user", password_hash="x", role=Role.EDITOR)
+    session.add(user)
+    session.flush()
+    receipt = _make_receipt(session, image_path=image)
+    receipt.user_id = user.id
+    session.commit()
+
+    # When reparsing it
+    job = reparse_receipt(session, receipt.id, storage_dir=storage)
+
+    # Then the new job carries the same uploader so attribution survives the reparse
+    assert job is not None
+    assert job.user_id == user.id
+
+
 def test_reparse_receipt_unknown_id_returns_none(session, tmp_path) -> None:
     """Verify reparsing a nonexistent id returns None and creates no job."""
     # Given an empty storage dir and no matching receipt

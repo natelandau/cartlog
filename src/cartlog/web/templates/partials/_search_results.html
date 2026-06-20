@@ -22,7 +22,8 @@
         {{ sortable_th("Unit price", "unit_price", th_class="text-right") }}
         <th class="text-right">Norm $/unit</th>
         {{ sortable_th("Line total", "line_total", th_class="text-right") }}
-        <th></th>
+        {# Per-row edit action column; editor-only. #}
+        {% if can_edit %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% for r in results %}{% include "partials/_search_row.html" %}{% endfor %}

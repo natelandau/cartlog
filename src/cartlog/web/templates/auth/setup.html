@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Set up cartlog{% endblock %}
+
+{# First-run setup is a focused, full-screen flow: hide the app chrome so only the wizard shows. #}
+{% block navbar %}{% endblock %}
+{% block main_class %}min-h-screen{% endblock %}
+
+{% block content %}
+{#
+  First-run setup wizard. The container is framed as a thermal receipt: dashed
+  tear edges, Fraunces wordmark as the store header, IBM Plex Mono meta line.
+  Steps advance via htmx swaps into #setup-step -- no full-page reloads.
+  One orchestrated print-in on load, gated behind prefers-reduced-motion.
+#}
+<div class="flex min-h-screen items-center justify-center px-4 py-8">
+  <div class="tape-card mx-auto w-full max-w-md" role="main" aria-label="cartlog setup wizard">
+
+    {# Dashed tear edge -- top #}
+    <div class="tape-tear" aria-hidden="true"></div>
+
+    <div class="tape-body bg-base-100 px-8 py-9 shadow-md sm:px-10">
+
+      {# Receipt header: wordmark + meta line #}
+      <div class="tape-header mb-7 text-center">
+        <p class="font-display text-3xl font-semibold tracking-tight text-base-content">
+          cartlog
+        </p>
+        <p class="mt-2 font-mono text-xs tracking-[0.25em] text-base-content/50 uppercase">
+          SETUP &middot; {{ today }}
+        </p>
+      </div>
+
+      {# daisyUI steps indicator: 3 meaningful steps + launchpad #}
+      <div class="mb-8" aria-label="Setup progress">
+        <ul class="steps steps-horizontal w-full text-xs" id="setup-steps-bar">
+          <li class="step step-primary" id="step-indicator-account">Account</li>
+          <li class="step" id="step-indicator-access">Access</li>
+          <li class="step" id="step-indicator-done">Done</li>
+        </ul>
+      </div>
+
+      {# Step panel: htmx swaps into this target #}
+      <div id="setup-step">
+        {# Welcome panel: brief thesis + single action #}
+        <div class="space-y-5 text-center">
+          <h1 class="font-display text-[1.75rem] font-semibold leading-snug text-base-content">
+            Let's set up cartlog
+          </h1>
+          <p class="mx-auto max-w-xs text-sm leading-relaxed text-base-content/70">
+            A few quick steps and your receipts start turning into searchable spending data.
+          </p>
+          <button
+            class="btn btn-primary btn-block mt-7"
+            hx-get="/setup/step/account"
+            hx-target="#setup-step"
+            hx-swap="innerHTML"
+            hx-push-url="false"
+          >
+            Set up cartlog
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    {# Dashed tear edge -- bottom #}
+    <div class="tape-tear" aria-hidden="true"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  /* Receipt-tape card: narrow column with dashed perforation edges */
+  .tape-card {
+    animation: tape-print-in 0.35s ease-out both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tape-card {
+      animation: none;
+    }
+  }
+
+  /* The tear edge reads as a perforation cut line */
+  .tape-tear {
+    height: 0;
+    border-top: 2px dashed color-mix(in oklab, var(--color-base-content) 22%, transparent);
+    margin: 0;
+  }
+
+  /* One orchestrated print-in: the tape slides up and fades in as if feeding from the printer */
+  @keyframes tape-print-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Keep the strength meter label visually quiet so it supports, not distracts */
+  #strength-label {
+    transition: color 0.2s ease;
+  }
+</style>
+
+<script>
+  // Allow htmx to swap 422 re-renders from the account step so validation errors
+  // display inline instead of being dropped (mirrors the pattern in base.html).
+  document.body.addEventListener("htmx:beforeSwap", function (event) {
+    if (
+      event.detail.xhr.status === 422 &&
+      event.detail.target &&
+      event.detail.target.id === "setup-step"
+    ) {
+      event.detail.shouldSwap = true;
+      event.detail.isError = false;
+    }
+  });
+
+  // Advance the visual steps indicator when htmx swaps in a new panel.
+  // The panel template sets data-step on the incoming root element so this
+  // listener can update the indicator without coupling it to markup IDs.
+  document.body.addEventListener("htmx:afterSwap", function (event) {
+    if (event.detail.target && event.detail.target.id !== "setup-step") return;
+    var panel = event.detail.target.firstElementChild;
+    if (!panel) return;
+    var step = panel.dataset.step;
+    if (!step) return;
+
+    var indicators = ["account", "access", "done"];
+    var reached = indicators.indexOf(step);
+    indicators.forEach(function (name, idx) {
+      var el = document.getElementById("step-indicator-" + name);
+      if (!el) return;
+      if (idx <= reached) {
+        el.classList.add("step-primary");
+      } else {
+        el.classList.remove("step-primary");
+      }
+    });
+  });
+</script>
+{% endblock %}

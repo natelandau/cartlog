@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from alembic import command
 from alembic.config import Config
 
-from cartlog.db.seed import seed_categories
+from cartlog.db.seed import seed_app_config, seed_categories
 from cartlog.db.session import create_session_factory
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ def prepare_runtime(settings: Settings) -> None:
     try:
         with session_factory() as session:
             seed_categories(session)
+            seed_app_config(session)
             session.commit()
     finally:
         session_factory.kw["bind"].dispose()

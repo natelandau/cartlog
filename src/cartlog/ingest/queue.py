@@ -97,7 +97,12 @@ def _store_file(storage_dir: Path, src_path: Path) -> Path:
 
 
 def enqueue_job(
-    session: Session, *, src_path: Path, source: str, storage_dir: Path
+    session: Session,
+    *,
+    src_path: Path,
+    source: str,
+    storage_dir: Path,
+    user_id: int | None = None,
 ) -> IngestionJob:
     """Store a receipt file and create a pending job for it. Commits on success.
 
@@ -109,13 +114,19 @@ def enqueue_job(
         src_path: Path to the source file to ingest (image or PDF).
         source: How the receipt was submitted (e.g. 'cli', 'web').
         storage_dir: Directory where the file copy will be stored.
+        user_id: The id of the user submitting this job, or None for system/folder ingest.
 
     Returns:
         The newly created, committed pending IngestionJob.
     """
     stored_path = _store_file(storage_dir, src_path)
     try:
-        job = IngestionJob(source=source, image_path=str(stored_path), status=JobStatus.PENDING)
+        job = IngestionJob(
+            source=source,
+            image_path=str(stored_path),
+            status=JobStatus.PENDING,
+            user_id=user_id,
+        )
         session.add(job)
         session.commit()
     except Exception:

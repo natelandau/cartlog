@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Sign in · cartlog{% endblock %}
+
+{# A signed-out visitor has no use for the app nav, so hide the chrome and center the card. #}
+{% block navbar %}{% endblock %}
+{% block main_class %}min-h-screen{% endblock %}
+
+{% block content %}
+{#
+  Receipt-tape login page. The narrow card is styled as a thermal receipt: dashed
+  tear edges top and bottom, Fraunces wordmark as the store name, IBM Plex Mono
+  meta line. Everything inside stays calm so the motif does not fight the form.
+  One orchestrated print-in on load (gated behind prefers-reduced-motion).
+#}
+<div class="flex min-h-screen items-center justify-center px-4 py-8">
+  <div class="tape-card mx-auto w-full max-w-sm" role="main">
+
+    {# Dashed tear edge - top #}
+    <div class="tape-tear" aria-hidden="true"></div>
+
+    <div class="tape-body bg-base-100 px-8 py-6 shadow-md">
+
+      {# Receipt header: wordmark + meta line #}
+      <div class="tape-header mb-6 text-center">
+        <p class="font-display text-3xl font-semibold tracking-tight text-base-content">
+          cartlog
+        </p>
+        <p class="mt-1 font-mono text-xs tracking-widest text-base-content/50 uppercase">
+          SIGN IN · {{ today }}
+        </p>
+      </div>
+
+      {# Error alert - shown only on bad credentials or rate-limit #}
+      {% if error %}
+      <div class="alert alert-error mb-5 text-sm" role="alert" aria-live="assertive">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/login" class="space-y-4">
+        {# CSRF hidden field #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        {# Preserve the redirect destination across the login round-trip #}
+        <input type="hidden" name="next" value="{{ next | default('/') }}" />
+
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Username</legend>
+          <label class="input w-full">
+            <input
+              type="text"
+              name="username"
+              class="grow"
+              placeholder="your username"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            />
+          </label>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend">Password</legend>
+          <label class="input w-full">
+            <input
+              type="password"
+              name="password"
+              class="grow"
+              placeholder="••••••••••••"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+          <p class="label text-base-content/60">
+            Lost your password? Ask an admin to reset it.
+          </p>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary btn-block mt-2">
+          Sign in
+        </button>
+      </form>
+
+    </div>
+
+    {# Dashed tear edge - bottom #}
+    <div class="tape-tear" aria-hidden="true"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  /* Receipt-tape card: narrow column with dashed perforation edges */
+  .tape-card {
+    animation: tape-print-in 0.35s ease-out both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tape-card {
+      animation: none;
+    }
+  }
+
+  /* The tear edge is a dashed border that reads as a perforation cut line */
+  .tape-tear {
+    height: 0;
+    border-top: 2px dashed color-mix(in oklab, var(--color-base-content) 22%, transparent);
+    margin: 0;
+  }
+
+  /* One orchestrated print-in: the tape slides up and fades in as if feeding from the printer */
+  @keyframes tape-print-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+{% endblock %}

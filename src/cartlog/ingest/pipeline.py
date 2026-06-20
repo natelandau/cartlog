@@ -146,6 +146,8 @@ def process_job(  # noqa: PLR0913
             source=job.source,
             status=ReceiptStatus.PARSED,
             raw_json=parsed.model_dump_json(),
+            # Propagate the uploader from the job so the Receipt knows who submitted it.
+            user_id=job.user_id,
         )
         # Second pass: re-home this receipt's Uncategorized products before deciding review
         # status, so a rescued line no longer trips UNMAPPED_CATEGORY. Recompute the unmapped

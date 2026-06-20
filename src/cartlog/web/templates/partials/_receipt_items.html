@@ -5,10 +5,13 @@
     <span class="num">{{ receipt.purchase_date }}</span>
     <span class="text-base-content/30">·</span>
     <span class="num">{{ receipt.currency }} {{ receipt.total }}</span>
+    {# Workflow status (incl. "needs review") is an editor concern; hide it from read-only visitors. #}
+    {% if can_edit %}
     <span class="text-base-content/30">·</span>
     {% if receipt.status == review_status %}<span class="badge badge-warning badge-sm">{{ receipt.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ receipt.status }}</span>{% endif %}
+    {% endif %}
   </div>
-  {% if receipt.review_reasons %}
+  {% if can_edit and receipt.review_reasons %}
   <div class="alert alert-warning alert-soft items-start text-sm">
     <ul class="list-disc pl-4">
       {% for reason in receipt.review_reasons %}
@@ -18,6 +21,10 @@
   </div>
   {% endif %}
   <div class="flex flex-wrap gap-2">
+    {# Mutating controls are editor-only; the server guards them too (RequireEditor), but they
+       must not even render for viewers/anonymous visitors. The unit toggle is a per-visitor
+       display preference, so it stays available to everyone. #}
+    {% if can_edit %}
     <button type="button" class="btn btn-primary btn-sm" hx-get="/receipts/{{ receipt.id }}/edit"
             hx-target="#items-panel" hx-swap="innerHTML">Edit receipt</button>
     {% if receipt.status == review_status %}
@@ -29,10 +36,13 @@
     <button type="button" class="btn btn-outline btn-sm" hx-post="/receipts/{{ receipt.id }}/reparse"
             hx-confirm="Delete this receipt's parsed data and parse the image again from scratch? This cannot be undone.">Reparse</button>
     {% endif %}
-    {# Destructive action: a redirect on success navigates the whole page, so no hx-target. #}
+    {% endif %}
     <button type="button" class="btn btn-ghost btn-sm" hx-post="/preferences/unit-system" hx-swap="none">Units: {{ "metric" if unit_system == "metric" else "imperial" }}</button>
+    {% if can_edit %}
+    {# Destructive action: a redirect on success navigates the whole page, so no hx-target. #}
     <button type="button" class="btn btn-ghost btn-sm ml-auto text-error" hx-delete="/receipts/{{ receipt.id }}"
             hx-confirm="Delete this receipt and all its items? This cannot be undone.">Delete receipt</button>
+    {% endif %}
   </div>
   {% call table_card() %}
     <table class="table table-zebra table-sm">
@@ -45,7 +55,7 @@
           <td>{{ li.product.category.name if li.product.category else "" }}</td>
           <td class="num text-right">{{ li.quantity }}{% if li.unit %} {{ li.unit }}{% endif %}</td>
           <td class="num text-right">{{ li.unit_price }}</td>
-          <td class="num text-right">{{ li.normalized_unit_price | normalized_price(li.measure_dimension, li.measure_status, unit_system) }}{% if li.measure_status == "needs_review" %} <span class="badge badge-warning badge-xs">review</span>{% endif %}</td>
+          <td class="num text-right">{{ li.normalized_unit_price | normalized_price(li.measure_dimension, li.measure_status, unit_system) }}{% if can_edit and li.measure_status == "needs_review" %} <span class="badge badge-warning badge-xs">review</span>{% endif %}</td>
           <td class="num text-right">{{ li.line_total }}</td>
         </tr>
         {% endfor %}

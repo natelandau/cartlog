@@ -46,6 +46,21 @@ class Settings(BaseSettings):
     # Reject web uploads larger than this many bytes (default 10 MiB).
     max_upload_bytes: int = 10 * 1024 * 1024
 
+    # Signs CSRF tokens and any cookie payloads. No safe default exists, so the
+    # app refuses to start without it. Generate one with `openssl rand -hex 32`.
+    # The empty-string default exists only so pydantic-settings can construct the model
+    # without requiring the field as a positional argument; the validator below rejects
+    # empty or whitespace-only values at startup so production safety is preserved.
+    secret_key: str = ""
+    # Mark auth cookies Secure (and use the __Host- session cookie name) when serving over
+    # HTTPS. The Secure flag is applied only to requests that actually arrive over HTTPS, so
+    # plain-HTTP LAN/dev access keeps working even with this left at the default. Set False to
+    # never mark cookies Secure (e.g. an unusual proxy setup that misreports the scheme).
+    cookie_secure: bool = True
+    # Absolute session lifetime and sliding idle timeout, in days.
+    session_lifetime_days: int = 14
+    session_idle_timeout_days: int = 7
+
     @field_validator("database_url", mode="after")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:
@@ -71,6 +86,25 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return f"sqlite:///{path}"
 
+    @field_validator("secret_key", mode="after")
+    @classmethod
+    def _require_secret_key(cls, value: str) -> str:
+        """Reject startup when CARTLOG_SECRET_KEY is absent or blank.
+
+        The field carries an empty-string default so pydantic-settings can
+        construct Settings without requiring it as a positional argument
+        (which lets all call-sites omit it while reading it from the
+        environment at runtime). The validator re-enforces the invariant:
+        a blank key is never accepted in production.
+
+        Raises:
+            ValueError: If the key is empty or whitespace-only.
+        """
+        if not value or not value.strip():
+            msg = "CARTLOG_SECRET_KEY is required; generate one with: openssl rand -hex 32"
+            raise ValueError(msg)
+        return value
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -82,4 +116,6 @@ def get_settings() -> Settings:
     exported environment variables still win.
     """
     load_dotenv(_ENV_FILE, override=False)
+    # pydantic-settings populates secret_key from CARTLOG_SECRET_KEY at runtime;
+    # the validator in Settings rejects startup if the env var is absent or blank.
     return Settings()

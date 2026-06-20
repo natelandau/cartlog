@@ -10,11 +10,14 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session  # noqa: TC002  # runtime import for FastAPI Depends
 
+from cartlog.auth.config import AppConfigService
 from cartlog.ingest.folder_watcher import get_folder_config
+from cartlog.web.auth import require_admin
 from cartlog.web.dependencies import get_session
 from cartlog.web.templating import templates
 
-router = APIRouter()
+# All settings routes require Admin; declared at router level to keep handlers uncluttered.
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 # A poll_interval below this would let the poller busy-loop, so the form rejects it.
 _MIN_POLL_INTERVAL = 1.0
@@ -43,12 +46,23 @@ def _folder_view(
     return {"folder": config, "values": values, "errors": errors or {}, "saved": saved}
 
 
+def _access_view(session: Session, *, saved: bool = False) -> dict[str, object]:
+    """Build context for the access panel, surfacing the current public-read posture.
+
+    Separating this from the folder view keeps each panel's context scoped to its own
+    concern, so settings_index can compose them without coupling.
+    """
+    allow_anonymous_read = AppConfigService(session).allow_anonymous_read()
+    return {"allow_anonymous_read": allow_anonymous_read, "access_saved": saved}
+
+
 @router.get("/admin/settings", response_class=HTMLResponse)
 def settings_index(
     request: Request, session: Annotated[Session, Depends(get_session)]
 ) -> HTMLResponse:
     """Render the settings page, the home for configuring how cartlog ingests receipts."""
-    return templates.TemplateResponse(request, "settings.html", _folder_view(session))
+    context = {**_folder_view(session), **_access_view(session)}
+    return templates.TemplateResponse(request, "settings.html", context)
 
 
 @router.get("/admin/settings/folder", response_class=HTMLResponse)
@@ -112,4 +126,23 @@ def save_folder_settings(
     session.commit()
     return templates.TemplateResponse(
         request, "partials/_settings_folder.html", _folder_view(session, saved=True)
+    )
+
+
+@router.post("/admin/settings/access", response_class=HTMLResponse)
+def save_access_settings(
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    posture: Annotated[str, Form()] = "open",
+) -> HTMLResponse:
+    """Persist the public-read posture and re-render the access panel with a saved indicator.
+
+    "open" allows unauthenticated visitors to browse, search, and export; anything else
+    restricts all reads to signed-in users. Editing always requires a sign-in regardless.
+    """
+    allow_read = posture == "open"
+    AppConfigService(session).set_allow_anonymous_read(value=allow_read)
+    session.commit()
+    return templates.TemplateResponse(
+        request, "partials/_settings_access.html", _access_view(session, saved=True)
     )

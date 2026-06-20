@@ -11,7 +11,7 @@ from decimal import Decimal
 
 # iCloud link to the maintained "Send Receipt to cartlog" Apple Shortcut, shown as the install
 # button on the integrations page. Update this if the published Shortcut is ever replaced.
-SHORTCUT_URL = "https://www.icloud.com/shortcuts/fd323df0fbdb4782bf1efe546f4e58cb"
+SHORTCUT_URL = "https://www.icloud.com/shortcuts/507525103f3944eab9656d458ca6cb10"
 
 # Image suffixes cartlog ingests, mapped to the media type sent to the vision model. Add a row
 # here to accept another image format (the model must be able to read it).

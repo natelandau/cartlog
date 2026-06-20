@@ -13,13 +13,15 @@ from cartlog.analytics.ranges import RangePreset, resolve_range
 from cartlog.analytics.service import AnalyticsService
 from cartlog.db.models import Receipt, ReceiptStatus
 from cartlog.db.sort import SortDir
+from cartlog.web.auth import require_read
 from cartlog.web.dependencies import get_analytics_service, get_session
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import SORT_KEYS, ReceiptSortKey
 from cartlog.web.templating import templates
 from cartlog.web.viz import build_calendar_heatmap
 
-router = APIRouter()
+# All dashboard routes require at least read access (anonymous allowed when public read is on).
+router = APIRouter(dependencies=[Depends(require_read)])
 
 ServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 

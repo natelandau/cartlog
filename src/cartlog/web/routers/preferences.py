@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
-router = APIRouter()
+from cartlog.web.auth import require_read
+
+# Preferences are user-scoped, so require at least read access (no anonymous preference changes).
+router = APIRouter(dependencies=[Depends(require_read)])
 
 
 @router.post("/preferences/unit-system")
+# require_read (not require_editor) is intentional: this route writes only a client-side
+# display cookie, not server state, so a viewer or anonymous visitor may set their own
+# unit preference without needing editor privileges.
 def toggle_unit_system(request: Request) -> Response:
     """Flip the unit_system cookie and ask htmx to refresh the current page.
 

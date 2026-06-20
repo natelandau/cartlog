@@ -1,14 +1,14 @@
 {% macro nav_links() %}
   <li><a href="/">Dashboard</a></li>
-  <li><a href="/upload">Upload</a></li>
+  {% if can_edit %}<li><a href="/upload">Upload</a></li>{% endif %}
   <li><a href="/receipts">Receipts</a></li>
   <li><a href="/search">Search</a></li>
   <li><a href="/charts">Charts</a></li>
-  <li>
+  {% if is_admin %}<li>
     <a href="/admin">Admin
       <span hx-get="/jobs/badge/partial" hx-trigger="load, every 5s" hx-swap="innerHTML" aria-live="polite"></span>
     </a>
-  </li>
+  </li>{% endif %}
 {% endmacro %}
 <!doctype html>
 <html lang="en" data-theme="cartlog-light">
@@ -27,7 +27,9 @@
     <link rel="stylesheet" href="/static/app.css" />
     <script src="/static/htmx.min.js" defer></script>
   </head>
-  <body class="min-h-screen bg-base-200 text-base-content">
+  <body class="min-h-screen bg-base-200 text-base-content" hx-headers='{"x-csrf-token": "{{ csrf_token }}"}'>
+    {# navbar is a block so focused flows (e.g. the first-run setup wizard) can blank it out. #}
+    {% block navbar %}
     <header class="navbar sticky top-0 z-20 gap-2 border-b border-base-300 bg-base-100/95 px-4 shadow-sm backdrop-blur">
       <div class="navbar-start">
         <div class="dropdown lg:hidden">
@@ -43,20 +45,45 @@
       <nav class="navbar-center hidden lg:flex">
         <ul class="menu menu-horizontal gap-1" data-nav>{{ nav_links() }}</ul>
       </nav>
-      <div class="navbar-end">
+      <div class="navbar-end gap-1">
         <label class="theme-toggle swap btn btn-square btn-ghost swap-rotate" aria-label="Toggle light or dark theme" title="Toggle theme">
           <span class="swap-off text-lg" aria-hidden="true">☾</span>
           <span class="swap-on text-lg" aria-hidden="true">☀</span>
         </label>
+        {% if current_user %}
+        {# daisyUI dropdown menu: a role=button trigger and full-width menu items. Sign-out
+           stays a POST so a prefetch or link crawl cannot trigger it; the menu item is a submit
+           button bound by `form=` to the hidden logout form below, which carries the CSRF token.
+           Keeping the form out of the <ul> lets the entry render as a clean full-width item. #}
+        <div class="dropdown dropdown-end">
+          <div tabindex="0" role="button" class="btn btn-ghost btn-sm gap-1 normal-case" aria-label="Account menu">
+            <span class="max-w-[8rem] truncate font-medium">{{ current_user.username }}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+          </div>
+          <ul tabindex="0" class="dropdown-content menu menu-sm z-30 mt-2 w-56 gap-0.5 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
+            <li class="menu-title px-2 pt-1 pb-2 text-xs font-normal text-base-content/50">
+              Signed in as <span class="font-medium text-base-content/80">{{ current_user.username }}</span>
+            </li>
+            <li><a href="/account">Account settings</a></li>
+            <li><button type="submit" form="logout-form" class="text-error">Sign out</button></li>
+          </ul>
+        </div>
+        <form id="logout-form" method="post" action="/logout" class="hidden">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        </form>
+        {% else %}
+        <a href="/login" class="btn btn-ghost btn-sm">Sign in</a>
+        {% endif %}
       </div>
     </header>
-    <main class="mx-auto w-full max-w-6xl px-4 py-6">{% block content %}{% endblock %}</main>
+    {% endblock %}
+    <main class="{% block main_class %}mx-auto w-full max-w-6xl px-4 py-6{% endblock %}">{% block content %}{% endblock %}</main>
     <script>
       // htmx 2.x does not swap non-2xx responses by default. Opt specific panels into
       // swapping 422 re-renders so validation errors display inline without a full page reload.
       document.body.addEventListener("htmx:beforeSwap", function (event) {
         const target = event.detail.target;
-        const allowed = ["items-panel", "category-panel", "folder-settings"];
+        const allowed = ["items-panel", "category-panel", "folder-settings", "access-settings"];
         // search rows have dynamic ids (search-row-<line_item_id>); match by prefix so the
         // inline editor's 422 re-render displays its error instead of being dropped.
         const isSearchRow = target && target.id && target.id.startsWith("search-row-");

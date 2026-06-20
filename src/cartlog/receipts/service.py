@@ -48,7 +48,8 @@ def reparse_receipt(session: Session, receipt_id: int, *, storage_dir: Path) -> 
     model or prompt changes or to retry a bad parse. A new pending job is created for the
     receipt's existing stored image first, so when the old receipt is deleted the shared
     image file is still referenced and left on disk; the worker pool then parses the new
-    job like any upload. The new job preserves the original receipt's source.
+    job like any upload. The new job preserves the original receipt's source and
+    uploader so the reparsed receipt keeps its attribution.
 
     Args:
         session: SQLAlchemy session; this function commits twice (the new job, then the delete).
@@ -67,6 +68,7 @@ def reparse_receipt(session: Session, receipt_id: int, *, storage_dir: Path) -> 
 
     image_path = receipt.image_path
     source = receipt.source
+    user_id = receipt.user_id
     if not image_file_available(image_path, storage_dir=storage_dir):
         msg = f"Image file for receipt {receipt_id} is missing; cannot reparse."
         raise ReparseImageMissingError(msg)
@@ -75,7 +77,9 @@ def reparse_receipt(session: Session, receipt_id: int, *, storage_dir: Path) -> 
     # delete_receipt's reference check keeps the image on disk. Point the job straight at
     # the existing path rather than calling enqueue_job, which would re-hash and re-copy
     # the already-stored file under a new name.
-    job = IngestionJob(source=source, image_path=image_path, status=JobStatus.PENDING)
+    job = IngestionJob(
+        source=source, image_path=image_path, status=JobStatus.PENDING, user_id=user_id
+    )
     session.add(job)
     session.commit()
 

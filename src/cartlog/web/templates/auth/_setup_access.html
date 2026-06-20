@@ -1,0 +1,55 @@
+{#
+  Access-posture step partial. Rendered after the account step succeeds.
+  data-step drives the steps-indicator JS in setup.html.
+  Surfaces the allow_anonymous_read choice as a plain human decision.
+
+  No "Back" button: the preceding account step is the committed, locked admin-creation
+  step. Once the admin exists the setup lock fires, so navigating back would hit the
+  _locked() guard and dead-end. Forward-only is the correct UX here.
+#}
+<div data-step="access" class="space-y-6">
+  <div class="mb-2 text-center">
+    <h2 class="font-display text-2xl font-semibold text-base-content">Who can see your data?</h2>
+    <p class="mt-1.5 text-sm text-base-content/60">You can change this anytime in Settings.</p>
+  </div>
+
+  <form
+    hx-post="/setup/access"
+    hx-target="#setup-step"
+    hx-swap="innerHTML"
+    class="space-y-3"
+  >
+    {# CSRF token -- belt-and-suspenders alongside the hx-headers on <body> #}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+    {# Open posture (default) #}
+    <label class="card cursor-pointer border-2 border-base-200 bg-base-100 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+      <div class="card-body flex-row items-start gap-4 p-5">
+        <input type="radio" name="posture" value="open" class="radio radio-primary mt-0.5 shrink-0" checked />
+        <div class="space-y-1">
+          <p class="text-base font-semibold text-base-content">Open</p>
+          <p class="text-sm leading-relaxed text-base-content/60">
+            Anyone on your network can browse and search. Editing still requires sign-in.
+          </p>
+        </div>
+      </div>
+    </label>
+
+    {# Private posture #}
+    <label class="card cursor-pointer border-2 border-base-200 bg-base-100 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+      <div class="card-body flex-row items-start gap-4 p-5">
+        <input type="radio" name="posture" value="private" class="radio radio-primary mt-0.5 shrink-0" />
+        <div class="space-y-1">
+          <p class="text-base font-semibold text-base-content">Private</p>
+          <p class="text-sm leading-relaxed text-base-content/60">
+            Require sign-in to view anything.
+          </p>
+        </div>
+      </div>
+    </label>
+
+    <button type="submit" class="btn btn-primary btn-block mt-6">
+      Continue
+    </button>
+  </form>
+</div>

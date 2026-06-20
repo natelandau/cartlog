@@ -1,0 +1,40 @@
+{#
+  Launchpad step partial. Rendered after the access step. data-step drives the
+  steps-indicator JS in setup.html so all three indicators show as complete.
+  Three quiet action cards invite the new admin to act rather than leaving the
+  app feeling empty.
+#}
+<div data-step="done" class="space-y-6">
+  <div class="mb-2 text-center">
+    <p class="mb-2 text-3xl text-success" aria-hidden="true">&#10003;</p>
+    <h2 class="font-display text-2xl font-semibold text-base-content">You're all set</h2>
+    <p class="mt-1.5 text-sm text-base-content/60">cartlog is ready. Here's where to start.</p>
+  </div>
+
+  {# Quiet action cards -- launchpad into the actual app #}
+  <div class="space-y-3">
+    <a href="/admin/users" class="card block border border-base-200 bg-base-100 transition-colors hover:border-base-content/15 hover:bg-base-200/50">
+      <div class="card-body flex-row items-center gap-4 p-4">
+        <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-base-200 text-lg text-base-content/60" aria-hidden="true">&#43;</span>
+        <div class="space-y-0.5">
+          <p class="text-sm font-semibold text-base-content">Add household members</p>
+          <p class="text-sm text-base-content/55">Create accounts for everyone who uses this kitchen.</p>
+        </div>
+      </div>
+    </a>
+
+    <a href="/upload" class="card block border border-base-200 bg-base-100 transition-colors hover:border-base-content/15 hover:bg-base-200/50">
+      <div class="card-body flex-row items-center gap-4 p-4">
+        <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-base-200 text-lg text-base-content/60" aria-hidden="true">&#8679;</span>
+        <div class="space-y-0.5">
+          <p class="text-sm font-semibold text-base-content">Upload your first receipt</p>
+          <p class="text-sm text-base-content/55">Drag in an image and watch it parse into line items.</p>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <a href="/" class="btn btn-primary btn-block mt-6">
+    Go to dashboard
+  </a>
+</div>

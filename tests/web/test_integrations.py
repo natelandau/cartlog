@@ -28,6 +28,20 @@ def test_integrations_page_install_button_points_at_shortcut(app_client):
     assert f'href="{SHORTCUT_URL}"' in response.text
 
 
+def test_integrations_page_links_to_api_token_creation(app_client):
+    """Verify the page tells users how to get an API token without exposing HTTP header details."""
+    # Given a running app with the integrations route registered
+    # When loading the integrations page
+    response = app_client.get("/admin/integrations")
+
+    # Then users are pointed at token creation, but the low-level header mechanics (which the
+    # Shortcut handles for them) are not surfaced.
+    assert response.status_code == 200
+    assert "/account/tokens" in response.text
+    assert "X-Cartlog-Token" not in response.text
+    assert "Bearer" not in response.text
+
+
 def test_admin_index_links_to_integrations(app_client):
     """Verify the admin index exposes the integrations page as a tile."""
     # Given a running app with the admin index rendered

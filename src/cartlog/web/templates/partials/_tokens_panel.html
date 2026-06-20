@@ -1,0 +1,128 @@
+{#
+  API token management panel.
+  Variables:
+    tokens              - list[ApiToken] for the current user, newest first
+    new_token_plaintext - str | None; set only on the response immediately after minting
+    current_user        - the authenticated User
+  Tone matches the integrations page: card with card-body, minimal copy.
+#}
+<section id="tokens-panel" class="card border border-base-300 bg-base-100 shadow-sm">
+  <div class="card-body gap-4">
+
+    <h2 class="card-title text-base">API tokens</h2>
+    <p class="text-sm opacity-70">
+      Tokens let scripts and shortcuts (like the Apple Shortcut on the Integrations page)
+      upload receipts without a password. Each token is tied to your account and
+      can be revoked at any time.
+    </p>
+
+    {# Plaintext revealed once after a successful mint #}
+    {% if new_token_plaintext %}
+    <div class="alert alert-success gap-3" role="status" aria-live="polite">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+      </svg>
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold text-sm">Token created. Copy it now, it will never be shown again.</p>
+        <div class="mt-2 flex items-center gap-2 flex-wrap">
+          <code id="new-token-value" class="block break-all rounded bg-success-content/10 px-3 py-2 font-mono text-sm text-success-content select-all flex-1">{{ new_token_plaintext }}</code>
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost shrink-0"
+            onclick="navigator.clipboard.writeText(document.getElementById('new-token-value').textContent.trim()).then(() => this.textContent = 'Copied!', () => this.textContent = 'Failed')"
+            aria-label="Copy token to clipboard"
+          >Copy</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Token list, metadata only, no stored plaintext #}
+    {% if tokens %}
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Created</th>
+            <th>Last used</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for token in tokens %}
+          <tr class="{% if token.revoked_at %}opacity-40{% endif %}">
+            <td class="font-mono text-sm">{{ token.name }}</td>
+            <td class="font-mono text-xs text-base-content/60">
+              {{ token.created_at.strftime('%Y-%m-%d') }}
+            </td>
+            <td class="font-mono text-xs text-base-content/60">
+              {% if token.last_used_at %}
+                {{ token.last_used_at.strftime('%Y-%m-%d') }}
+              {% else %}
+                <span class="opacity-40">never</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if token.revoked_at %}
+                <span class="badge badge-ghost badge-sm">revoked</span>
+              {% else %}
+                <span class="badge badge-success badge-sm">active</span>
+              {% endif %}
+            </td>
+            <td class="text-right">
+              {% if not token.revoked_at %}
+              <form method="post" action="/account/tokens/{{ token.id }}/revoke"
+                    hx-post="/account/tokens/{{ token.id }}/revoke"
+                    hx-target="#tokens-panel"
+                    hx-swap="outerHTML">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="submit"
+                        class="btn btn-xs btn-ghost text-error"
+                        onclick="return confirm('Revoke token \'{{ token.name }}\'? Any script using it will stop working immediately.')"
+                        aria-label="Revoke token {{ token.name }}">
+                  Revoke
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm opacity-50 italic">No tokens yet.</p>
+    {% endif %}
+
+    {# Mint form #}
+    <div class="divider my-1"></div>
+    <form method="post" action="/account/tokens"
+          hx-post="/account/tokens"
+          hx-target="#tokens-panel"
+          hx-swap="outerHTML"
+          class="flex gap-2 items-end flex-wrap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <fieldset class="fieldset flex-1 min-w-48 mb-0">
+        <legend class="fieldset-legend">Token name</legend>
+        <label class="input w-full">
+          <input
+            type="text"
+            name="name"
+            class="grow"
+            placeholder="e.g. iphone"
+            required
+            maxlength="80"
+            autocomplete="off"
+          />
+        </label>
+        <p class="label text-base-content/50">A label to help you identify this token later.</p>
+      </fieldset>
+      <button type="submit" class="btn btn-primary btn-sm mb-6">
+        Create token
+      </button>
+    </form>
+
+  </div>
+</section>

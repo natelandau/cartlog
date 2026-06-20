@@ -12,8 +12,18 @@
         the device.
       </p>
       <a href="{{ shortcut_url }}" class="btn btn-primary w-fit">Install the Shortcut</a>
-      <p class="text-sm opacity-80">When you add it, the Shortcut asks once for your cartlog URL. Use:</p>
+      <p class="text-sm opacity-80">When you add it, the Shortcut asks for two things:</p>
+
+      <p class="text-sm font-medium">Your cartlog URL</p>
       <code class="block w-full rounded bg-base-200 p-2 text-sm break-all">{{ upload_url }}</code>
+
+      <p class="text-sm font-medium">An API token</p>
+      <p class="text-sm opacity-80">
+        Create one under
+        <a href="/account/tokens" class="link link-primary">Account &rsaquo; API Tokens</a>
+        (you need an Editor or Admin role) and paste it in. The token is shown only once, so copy
+        it before closing.
+      </p>
     </div>
   </section>
 </div>

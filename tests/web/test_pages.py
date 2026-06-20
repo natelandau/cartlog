@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from cartlog.db.models import Receipt, ReceiptStatus, Store
+from cartlog.db.models import Receipt, ReceiptStatus, Store, User
 
 
 def test_dashboard_renders_recent_and_review_count(app_client):
@@ -237,3 +237,133 @@ def test_detail_renders_side_by_side_grid(app_client):
     assert "lg:grid-cols-[" in response.text
     assert f"/receipts/{rid}/image" in response.text
     assert 'id="items-panel"' in response.text
+
+
+# ---------------------------------------------------------------------------
+# Role-aware navigation tests (Task 22)
+# ---------------------------------------------------------------------------
+
+
+def test_nav_shows_sign_out_for_authenticated_admin(admin_client):
+    """Verify the navbar shows a Sign out control when the user is authenticated."""
+    # When loading any page as an admin
+    response = admin_client.get("/")
+
+    # Then a sign-out control is visible
+    assert response.status_code == 200
+    assert "Sign out" in response.text
+
+
+def test_nav_shows_sign_in_for_anonymous_user(anon_client):
+    """Verify the navbar shows a Sign in link when no user is logged in."""
+    # Given anonymous access is enabled (default) and at least one admin exists so
+    # the first-run setup gate does not redirect to /setup
+    from cartlog.db.models import Role  # noqa: PLC0415
+    from tests.factories import seed_user  # noqa: PLC0415
+
+    with anon_client.app.state.session_factory() as s:
+        seed_user(s, username="admin_gate", role=Role.ADMIN)
+
+    # When loading the dashboard anonymously
+    response = anon_client.get("/")
+
+    # Then a sign-in link is shown and no sign-out control appears
+    assert response.status_code == 200
+    assert "Sign in" in response.text
+    assert "Sign out" not in response.text
+
+
+def test_admin_nav_shows_upload_and_admin_links(admin_client):
+    """Verify an admin user sees both the Upload and Admin nav links."""
+    # When loading the dashboard as an admin
+    response = admin_client.get("/")
+
+    # Then both gated nav items are present
+    assert response.status_code == 200
+    assert "/upload" in response.text
+    assert "/admin" in response.text
+
+
+def test_viewer_does_not_see_upload_or_admin_links(viewer_client):
+    """Verify a viewer role cannot see the Upload or Admin nav links."""
+    # When loading the dashboard as a viewer
+    response = viewer_client.get("/")
+
+    # Then neither gated link is present, but read-only links are
+    assert response.status_code == 200
+    assert "/upload" not in response.text
+    assert "/admin" not in response.text
+    assert "/receipts" in response.text
+    assert "Dashboard" in response.text
+
+
+def test_editor_sees_upload_but_not_admin_link(editor_client):
+    """Verify an editor sees the Upload link but not the Admin link."""
+    # When loading the dashboard as an editor
+    response = editor_client.get("/")
+
+    # Then Upload is present but Admin is not
+    assert response.status_code == 200
+    assert "/upload" in response.text
+    assert "/admin" not in response.text
+
+
+def test_receipt_detail_shows_uploader_username(admin_client):
+    """Verify the receipt detail page shows the uploader's username when set."""
+    # Given a receipt whose user_id points to a real user
+    state = admin_client.app.state
+    with state.session_factory() as session:
+        user = session.query(User).first()
+        assert user is not None
+        store = session.query(Store).first()
+        receipt = Receipt(
+            store=store,
+            purchase_date=date(2026, 5, 1),
+            total=Decimal("9.99"),
+            currency="USD",
+            image_path="/tmp/uploader.png",  # noqa: S108
+            raw_parser_json="{}",
+            source="web",
+            status=ReceiptStatus.PARSED,
+            user_id=user.id,
+        )
+        session.add(receipt)
+        session.commit()
+        rid = receipt.id
+        username = user.username
+
+    # When loading its detail page
+    response = admin_client.get(f"/receipts/{rid}")
+
+    # Then the uploader's username is displayed
+    assert response.status_code == 200
+    assert f"Uploaded by {username}" in response.text
+
+
+def test_receipt_detail_omits_uploader_when_none(admin_client):
+    """Verify the receipt detail page omits uploader attribution when user_id is None."""
+    # Given a receipt with no associated user (e.g. folder ingest)
+    state = admin_client.app.state
+    with state.session_factory() as session:
+        store = session.query(Store).first()
+        receipt = Receipt(
+            store=store,
+            purchase_date=date(2026, 5, 2),
+            total=Decimal("5.00"),
+            currency="USD",
+            image_path="/tmp/system.png",  # noqa: S108
+            raw_parser_json="{}",
+            source="folder",
+            status=ReceiptStatus.PARSED,
+            user_id=None,
+        )
+        session.add(receipt)
+        session.commit()
+        rid = receipt.id
+
+    # When loading its detail page
+    response = admin_client.get(f"/receipts/{rid}")
+
+    # Then no uploader line appears
+    assert response.status_code == 200
+    assert "Uploaded by" not in response.text

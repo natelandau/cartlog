@@ -48,6 +48,14 @@ The web UI uses Tailwind CSS v4 and daisyUI v5. `cartlog serve` compiles `web/st
     uv run pytest
     ```
 
+## Python 3.14 syntax notes
+
+- **Parenthesis-free `except` (PEP 758):** Python 3.14 allows `except ValueError, KeyError:`
+  with no parentheses, and ruff's formatter may rewrite `except (A, B):` into that form. This
+  is NOT the old Python 2 `except A, B` (bind-to-name) syntax. It is semantically identical to
+  `except (A, B):` and catches both exception types. Do not "fix" it back to parentheses and do
+  not flag it as a bug in review.
+
 ## Committing during development
 
 The pre-commit hooks (`prek`) type-check and test the **whole project** on every commit

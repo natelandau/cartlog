@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from cartlog.constants import SHORTCUT_URL
+from cartlog.web.auth import require_admin
 from cartlog.web.templating import templates
 
-router = APIRouter()
+# The integrations area is admin-only; guard declared at router level.
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/admin/integrations", response_class=HTMLResponse)

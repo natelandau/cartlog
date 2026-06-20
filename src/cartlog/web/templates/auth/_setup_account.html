@@ -1,0 +1,163 @@
+{#
+  Account-creation step partial. Rendered on first load and re-rendered at 422
+  when validation fails. data-step drives the steps-indicator JS in setup.html.
+  The password strength meter updates client-side as the user types; the server
+  is still the source of truth for the actual policy.
+#}
+<div data-step="account" class="space-y-6">
+  <div class="mb-2 text-center">
+    <h2 class="font-display text-2xl font-semibold text-base-content">Create your account</h2>
+    <p class="mt-1.5 text-sm text-base-content/60">You're the admin. This is how you'll sign in.</p>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-error text-sm" role="alert" aria-live="assertive">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+    </svg>
+    <span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  <form
+    hx-post="/setup/account"
+    hx-target="#setup-step"
+    hx-swap="innerHTML"
+    class="space-y-5"
+  >
+    {# CSRF token -- belt-and-suspenders alongside the hx-headers on <body> #}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Username</legend>
+      <label class="input w-full">
+        <input
+          type="text"
+          name="username"
+          class="grow"
+          placeholder="your_username"
+          value="{{ username | default('') }}"
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
+          required
+        />
+      </label>
+      <p class="label text-base-content/60">This is how you'll sign in.</p>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Password</legend>
+      <label class="input w-full">
+        <input
+          id="setup-password"
+          type="password"
+          name="password"
+          class="grow"
+          placeholder="a short phrase works well"
+          autocomplete="new-password"
+          required
+          aria-describedby="strength-bar-label"
+        />
+      </label>
+      <p class="label text-base-content/60">At least 12 characters. A short phrase works well.</p>
+
+      {# Live password strength meter: purely client-side convenience, server enforces policy #}
+      <div class="mt-1 space-y-1" aria-live="polite" aria-atomic="true">
+        <progress
+          id="strength-bar"
+          class="progress w-full h-1.5"
+          value="0"
+          max="100"
+          aria-label="Password strength"
+        ></progress>
+        <p id="strength-bar-label" class="text-xs text-base-content/50">
+          <span id="strength-label">Enter a password</span>
+        </p>
+      </div>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Confirm password</legend>
+      <label class="input w-full">
+        <input
+          type="password"
+          name="confirm"
+          class="grow"
+          placeholder="same password again"
+          autocomplete="new-password"
+          required
+        />
+      </label>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Display name <span class="font-normal text-base-content/50">(optional)</span></legend>
+      <label class="input w-full">
+        <input
+          type="text"
+          name="name"
+          class="grow"
+          placeholder="Your Name"
+          autocomplete="name"
+        />
+      </label>
+      <p class="label text-base-content/60">Shown around the app. Defaults to your username.</p>
+    </fieldset>
+
+    <button type="submit" class="btn btn-primary btn-block mt-6">
+      Create account
+    </button>
+  </form>
+</div>
+
+<script>
+(function () {
+  var input = document.getElementById("setup-password");
+  var bar = document.getElementById("strength-bar");
+  var label = document.getElementById("strength-label");
+  if (!input || !bar || !label) return;
+
+  // Score a password on length and character variety -- purely cosmetic heuristic.
+  // The server checks actual policy (min 12 chars + blocklist).
+  function scorePassword(pw) {
+    if (!pw) return 0;
+    var score = 0;
+    // Length contribution: each char up to 20 adds points.
+    score += Math.min(pw.length * 4, 60);
+    // Variety bonuses.
+    if (/[a-z]/.test(pw)) score += 5;
+    if (/[A-Z]/.test(pw)) score += 5;
+    if (/[0-9]/.test(pw)) score += 5;
+    if (/[^a-zA-Z0-9]/.test(pw)) score += 10;
+    // Bonus for spaces (passphrase pattern).
+    if (/\s/.test(pw)) score += 10;
+    return Math.min(score, 100);
+  }
+
+  function colorClass(score) {
+    if (score < 30) return "progress-error";
+    if (score < 60) return "progress-warning";
+    return "progress-success";
+  }
+
+  function strengthLabel(score) {
+    if (score < 30) return "Weak";
+    if (score < 60) return "Okay";
+    return "Strong";
+  }
+
+  input.addEventListener("input", function () {
+    var score = scorePassword(input.value);
+    bar.value = score;
+    // Remove previous color classes before setting the new one.
+    bar.classList.remove("progress-error", "progress-warning", "progress-success");
+    if (input.value.length > 0) {
+      bar.classList.add(colorClass(score));
+      label.textContent = strengthLabel(score);
+    } else {
+      label.textContent = "Enter a password";
+    }
+  });
+})();
+</script>

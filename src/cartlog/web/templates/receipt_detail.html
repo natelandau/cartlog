@@ -9,6 +9,10 @@
     <h1 class="text-3xl font-semibold tracking-tight">Receipt #{{ receipt.id }}</h1>
     <p class="mt-1 text-base-content/70">
       <strong>{{ receipt.store.chain_name }}</strong>{% if receipt.store.location %}, {{ receipt.store.location }}{% endif %}
+      {% if receipt.uploaded_by %}
+      <span class="text-base-content/40 mx-1">·</span>
+      <span class="text-sm">Uploaded by {{ receipt.uploaded_by.username }}</span>
+      {% endif %}
     </p>
   </div>
   <div class="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">

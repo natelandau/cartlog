@@ -14,7 +14,8 @@
       {% endfor %}
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      {% if data.needs_review %}
+      {# The needs-review call-out links into the editor workflow, so hide it from read-only visitors. #}
+      {% if can_edit and data.needs_review %}
         <a class="badge badge-warning badge-lg gap-1" href="/receipts?status=needs_review">{{ data.needs_review }} need review</a>
       {% endif %}
       <a class="btn btn-sm btn-outline" href="/export?format=csv{{ date_qs }}">Export CSV</a>
