@@ -1,6 +1,6 @@
 # cartlog
 
-cartlog scans grocery receipts, parses them into structured data via Pydantic AI (provider-agnostic), and stores them for price and spend analysis. Python 3.14, FastAPI web UI, Typer CLI, SQLite.
+cartlog scans grocery receipts, parses them into structured data via Pydantic AI (provider-agnostic), and stores them for price and spend analysis. Python 3.14, FastAPI web UI, SQLite. It is a web-only service; the `cartlog` command exists only to run and host the app.
 
 ## Running the app
 
@@ -15,7 +15,7 @@ The `duty` task runner wraps common workflows. Invoke it as `uv run duty <task>`
 
 ## Architecture
 
-- `src/cartlog/cli.py` — Typer CLI: `ingest`, `serve`, `worker`, plus `query`/`receipts`/`db` sub-apps.
+- `src/cartlog/cli.py` — Typer CLI exposing the single `serve` command (web server + workers + migrations).
 - `src/cartlog/web/` — FastAPI app factory (`app.py`), routers, Jinja templates, Tailwind/daisyUI assets.
 - `src/cartlog/ingest/` — upload queue and worker pipeline; web uploads enqueue jobs that workers parse.
 - `src/cartlog/parsing/` — Pydantic AI vision parser and category classifier.

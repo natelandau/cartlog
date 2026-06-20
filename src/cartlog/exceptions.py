@@ -27,3 +27,7 @@ class StoreMergeError(EntityMergeError):
 # Keeps ValueError in the bases so existing `except ValueError` callers stay correct.
 class CategoryError(CartlogError, ValueError):
     """A taxonomy operation was rejected (e.g. blank name, duplicate, or system-row guard)."""
+
+
+class ModelConfigurationError(CartlogError):
+    """An LLM model cannot be built: missing provider key, unknown provider, or empty taxonomy."""

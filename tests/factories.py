@@ -11,12 +11,8 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
 from cartlog.auth.users import UserService
 from cartlog.db import models  # noqa: F401  # registers tables on Base.metadata
-from cartlog.db.base import Base
 from cartlog.db.models import (
     Category,
     LineItem,
@@ -29,8 +25,7 @@ from cartlog.db.models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
+    from sqlalchemy.orm import Session
 
 
 def make_line(
@@ -191,23 +186,6 @@ def seed_dashboard_dataset(session: Session) -> None:
 
     session.add_all([dairy, produce, hub, depot, d1, d2, d3, d4, d5, d6])
     session.commit()
-
-
-def seed_temp_db(
-    tmp_path: Path, filename: str, seed: Callable[[Session], None] = seed_receipts
-) -> str:
-    """Create a temp-file SQLite DB, seed it, and return its URL.
-
-    Backs the CLI tests that open their own engine against a real file. The engine is disposed
-    before returning so the file handle is released for the code under test to reopen.
-    """
-    url = f"sqlite:///{tmp_path / filename}"
-    engine = create_engine(url)
-    Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        seed(session)
-    engine.dispose()
-    return url
 
 
 def seed_user(
