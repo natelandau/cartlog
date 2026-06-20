@@ -52,7 +52,10 @@ class Settings(BaseSettings):
     # without requiring the field as a positional argument; the validator below rejects
     # empty or whitespace-only values at startup so production safety is preserved.
     secret_key: str = ""
-    # Send the session cookie only over HTTPS. Disable only for plain-HTTP LAN/dev.
+    # Mark auth cookies Secure (and use the __Host- session cookie name) when serving over
+    # HTTPS. The Secure flag is applied only to requests that actually arrive over HTTPS, so
+    # plain-HTTP LAN/dev access keeps working even with this left at the default. Set False to
+    # never mark cookies Secure (e.g. an unusual proxy setup that misreports the scheme).
     cookie_secure: bool = True
     # Absolute session lifetime and sliding idle timeout, in days.
     session_lifetime_days: int = 14

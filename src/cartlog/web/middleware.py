@@ -122,11 +122,12 @@ class CsrfMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Read settings at dispatch time so tests can override via app.state.settings.
-        from cartlog.web.dependencies import resolve_settings  # noqa: PLC0415
+        from cartlog.web.dependencies import cookie_is_secure, resolve_settings  # noqa: PLC0415
 
-        app_settings = resolve_settings(request)
-        secret: str = app_settings.secret_key
-        secure: bool = app_settings.cookie_secure
+        secret: str = resolve_settings(request).secret_key
+        # Only mark the cookie Secure over HTTPS; a Secure cookie over HTTP is dropped by
+        # Safari and never returned by any browser, which would break CSRF on the next POST.
+        secure: bool = cookie_is_secure(request)
 
         # Bootstrap: read existing cookie. Generate a fresh token if absent or invalid so the
         # template always has a usable token (setting the cookie only after call_next would

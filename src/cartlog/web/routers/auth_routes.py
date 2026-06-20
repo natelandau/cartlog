@@ -13,7 +13,7 @@ from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
 from cartlog.config import get_settings
 from cartlog.web.auth import COOKIE_NAME
-from cartlog.web.dependencies import get_session
+from cartlog.web.dependencies import cookie_is_secure, get_session
 from cartlog.web.templating import templates
 
 router = APIRouter()
@@ -136,7 +136,7 @@ def login_submit(
     # Redirect to the forced password-change page when required, else the intended destination.
     target = "/change-password" if user.must_change_password else _safe_next(next_url)
     response = RedirectResponse(target, status_code=303)
-    _set_session_cookie(response, sess.id, secure=settings.cookie_secure)
+    _set_session_cookie(response, sess.id, secure=cookie_is_secure(request))
     return response
 
 

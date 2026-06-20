@@ -34,6 +34,19 @@ def resolve_settings(request: Request) -> Settings:
     return app_settings if app_settings is not None else get_settings()
 
 
+def cookie_is_secure(request: Request) -> bool:
+    """Return whether auth cookies should carry the Secure attribute for this request.
+
+    A Secure cookie is never sent back over a plain-HTTP connection, and Safari (unlike
+    Chrome's localhost exemption) refuses to even store one, which silently breaks login
+    over HTTP. So honor the cookie_secure setting only when the request actually arrived
+    over HTTPS; over HTTP the flag is dropped, which costs nothing because a Secure cookie
+    could not work there anyway. Behind a TLS-terminating proxy this relies on the scheme
+    being corrected from X-Forwarded-Proto (uvicorn's proxy-header handling).
+    """
+    return resolve_settings(request).cookie_secure and request.url.scheme == "https"
+
+
 def get_analytics_service(
     session: Annotated[Session, Depends(get_session)],
 ) -> AnalyticsService:

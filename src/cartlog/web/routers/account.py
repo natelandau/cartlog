@@ -13,7 +13,7 @@ from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
 from cartlog.web.auth import AuthRedirect, load_user
-from cartlog.web.dependencies import get_session, resolve_settings
+from cartlog.web.dependencies import cookie_is_secure, get_session, resolve_settings
 from cartlog.web.routers.auth_routes import _set_session_cookie
 from cartlog.web.templating import templates
 
@@ -77,7 +77,7 @@ def _revoke_and_refresh(
         user_agent=request.headers.get("user-agent"),
         ip=client_host,
     )
-    _set_session_cookie(response, new_sess.id, secure=settings.cookie_secure)
+    _set_session_cookie(response, new_sess.id, secure=cookie_is_secure(request))
 
 
 @router.get("/account", response_class=HTMLResponse)

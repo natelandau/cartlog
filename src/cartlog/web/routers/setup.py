@@ -18,10 +18,9 @@ from cartlog.auth.config import AppConfigService
 from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
-from cartlog.config import get_settings
 from cartlog.db.models import Role
 from cartlog.web.auth import load_user, role_satisfies
-from cartlog.web.dependencies import get_session
+from cartlog.web.dependencies import cookie_is_secure, get_session
 from cartlog.web.routers.auth_routes import _set_session_cookie
 from cartlog.web.templating import templates
 
@@ -151,12 +150,11 @@ def setup_account(
     user = users.create_user(username, password, Role.ADMIN, name=name or None)
     # Flush to assign the user.id before SessionService needs it for the FK.
     session.flush()
-    settings = get_settings()
     sess = SessionService(session).create(user)
     session.commit()
 
     response = templates.TemplateResponse(request, "auth/_setup_access.html", {})
-    _set_session_cookie(response, sess.id, secure=settings.cookie_secure)
+    _set_session_cookie(response, sess.id, secure=cookie_is_secure(request))
     return response
 
 
