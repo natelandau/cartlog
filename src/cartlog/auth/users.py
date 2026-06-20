@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 
-from cartlog.db.models import Role, User
-from cartlog.web.security import (
+from cartlog.auth.security import (
     dummy_verify,
     hash_password,
     needs_rehash,
     verify_password,
 )
+from cartlog.db.models import Role, User
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session

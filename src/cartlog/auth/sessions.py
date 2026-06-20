@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from cartlog.auth.security import generate_session_id
 from cartlog.db.models import Session as SessionRow
 from cartlog.db.models import User
-from cartlog.web.security import generate_session_id
 
 if TYPE_CHECKING:
     from collections.abc import Callable

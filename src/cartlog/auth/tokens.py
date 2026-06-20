@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
+from cartlog.auth.security import generate_api_token, hash_token
 from cartlog.db.models import ApiToken, User
-from cartlog.web.security import generate_api_token, hash_token
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
