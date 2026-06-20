@@ -5,11 +5,11 @@
   ids from this upload so the count denominator matches what the user submitted.
 #}
 <div
-  class="card border border-base-300 bg-base-100 shadow-sm"
+  class="surface-card"
   {% if not all_terminal %}hx-get="/jobs/progress/partial?ids={{ ids_csv }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
-  <div class="card-body gap-3">
+  <div class="surface-card__body gap-3">
     <div class="flex items-center justify-between gap-3">
-      <h2 class="card-title text-lg">
+      <h2 class="section-title">
         {% if all_terminal %}
           {% if failed %}Upload finished{% else %}Upload complete{% endif %}
         {% else %}
