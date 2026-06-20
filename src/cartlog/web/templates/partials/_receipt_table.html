@@ -12,8 +12,9 @@
         {{ sortable_th("Store", "store") }}
         {{ sortable_th("Date", "date") }}
         {{ sortable_th("Total", "total") }}
-        {{ sortable_th("Status", "status") }}
-        {% if show_review %}<th></th>{% endif %}
+        {# Status and the review action are editor workflow; read-only visitors don't see them. #}
+        {% if can_edit %}{{ sortable_th("Status", "status") }}{% endif %}
+        {% if show_review and can_edit %}<th></th>{% endif %}
       </tr></thead>
       <tbody>
         {% for r in receipts %}
@@ -22,8 +23,8 @@
           <td>{{ r.store.chain_name }}{% if r.store.location %}, {{ r.store.location }}{% endif %}</td>
           <td class="num whitespace-nowrap">{{ r.purchase_date }}</td>
           <td class="num whitespace-nowrap">{{ r.currency }} {{ r.total }}</td>
-          <td>{% if r.status == review_status %}<span class="badge badge-warning badge-sm">{{ r.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ r.status }}</span>{% endif %}</td>
-          {% if show_review %}<td>{% if r.status == review_status %}<a class="btn btn-ghost btn-xs" href="/receipts/{{ r.id }}">Review</a>{% endif %}</td>{% endif %}
+          {% if can_edit %}<td>{% if r.status == review_status %}<span class="badge badge-warning badge-sm">{{ r.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ r.status }}</span>{% endif %}</td>{% endif %}
+          {% if show_review and can_edit %}<td>{% if r.status == review_status %}<a class="btn btn-ghost btn-xs" href="/receipts/{{ r.id }}">Review</a>{% endif %}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>

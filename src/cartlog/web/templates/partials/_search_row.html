@@ -9,9 +9,12 @@
   <td class="num text-right">{{ r.unit_price }}</td>
   <td class="num text-right">{{ r.normalized_unit_price | normalized_price(r.measure_dimension, r.measure_status, unit_system) }}</td>
   <td class="num text-right">{{ r.line_total }}</td>
+  {# Edit action is editor-only; the server also guards /search/items/* with RequireEditor. #}
+  {% if can_edit %}
   <td>
     <button type="button" class="btn btn-ghost btn-xs"
             hx-get="/search/items/{{ r.line_item_id }}/edit"
             hx-target="#search-row-{{ r.line_item_id }}" hx-swap="outerHTML">Edit</button>
   </td>
+  {% endif %}
 </tr>
