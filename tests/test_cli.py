@@ -130,3 +130,47 @@ def test_serve_command_handles_keyboard_interrupt(tmp_path, monkeypatch, fake_pa
 
     # Then the command exits cleanly without surfacing the interrupt
     assert result.exit_code == 0, result.output
+
+
+def test_backup_command_writes_archive(tmp_path, monkeypatch):
+    """Verify `backup` writes a tar.gz containing the db and images, and prints its path."""
+    settings = _temp_db_settings(tmp_path)
+    (settings.image_storage_dir).mkdir(parents=True, exist_ok=True)
+    (settings.image_storage_dir / "r.jpg").write_bytes(b"\xff\xd8fake")
+    monkeypatch.setattr(cli_module, "get_settings", lambda: settings)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    result = runner.invoke(cli_module.app, ["backup", "--output", str(out_dir)])
+
+    assert result.exit_code == 0, result.output
+    archives = list(out_dir.glob("cartlog-backup-*.tar.gz"))
+    assert len(archives) == 1
+    assert str(archives[0]) in result.output
+
+
+def test_backup_command_rejects_non_sqlite_url(tmp_path, monkeypatch):
+    """Verify `backup` exits non-zero for an unsupported database backend."""
+    settings = Settings(
+        database_url="postgresql://localhost/cartlog",
+        image_storage_dir=tmp_path / "storage",
+    )
+    monkeypatch.setattr(cli_module, "get_settings", lambda: settings)
+
+    result = runner.invoke(cli_module.app, ["backup", "--output", str(tmp_path / "b.tar.gz")])
+
+    assert result.exit_code == 1
+    assert "SQLite" in result.output
+
+
+def test_backup_command_refuses_to_overwrite(tmp_path, monkeypatch):
+    """Verify `backup` exits non-zero rather than clobbering an existing output file."""
+    settings = _temp_db_settings(tmp_path)
+    monkeypatch.setattr(cli_module, "get_settings", lambda: settings)
+    existing = tmp_path / "b.tar.gz"
+    existing.write_bytes(b"x")
+
+    result = runner.invoke(cli_module.app, ["backup", "--output", str(existing)])
+
+    assert result.exit_code == 1
+    assert "Refusing to overwrite" in result.output
