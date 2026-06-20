@@ -1,13 +1,15 @@
 {# src/cartlog/web/templates/partials/_dashboard_body.html
    The swappable dashboard body. Range chips re-fetch this fragment into #dashboard-body. #}
 {% import "partials/_viz.html" as viz %}
+{% import "macros/ui.html" as ui with context %}
 <div id="dashboard-body" class="flex flex-col gap-4">
 
   {% set date_qs = ('&from=' ~ range_start ~ '&to=' ~ range_end) if range_start and range_end else '' %}
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div role="tablist" class="tabs tabs-box tabs-sm w-fit" aria-label="Time range">
+  <div class="toolbar justify-between">
+    {# Range chip group: join of btn btn-sm so active chip uses btn-active btn-primary #}
+    <div class="join" role="group" aria-label="Time range">
       {% for r in ranges %}
-        <a role="tab" class="tab {{ 'tab-active bg-primary text-primary-content' if r == range else '' }}"
+        <a class="btn btn-sm join-item {{ 'btn-active btn-primary' if r == range else 'btn-ghost' }}"
            href="/?range={{ r.value }}"
            hx-get="/?range={{ r.value }}" hx-target="#dashboard-body"
            hx-swap="outerHTML" hx-push-url="true">{{ range_label(r) }}</a>
@@ -18,8 +20,8 @@
       {% if can_edit and data.needs_review %}
         <a class="badge badge-warning badge-lg gap-1" href="/receipts?status=needs_review">{{ data.needs_review }} need review</a>
       {% endif %}
-      <a class="btn btn-sm btn-outline" href="/export?format=csv{{ date_qs }}">Export CSV</a>
-      <a class="btn btn-sm btn-outline" href="/export?format=json{{ date_qs }}">Export JSON</a>
+      <a class="btn btn-sm btn-outline" href="/export?format=csv{{ date_qs }}">{{ ui.icon('download') }} Export CSV</a>
+      <a class="btn btn-sm btn-outline" href="/export?format=json{{ date_qs }}">{{ ui.icon('download') }} Export JSON</a>
     </div>
   </div>
 
@@ -30,83 +32,56 @@
 
   {# Band 2: Trends #}
   <section class="grid gap-4 md:grid-cols-2">
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Spend over time</h2>
-        {% if data.monthly_spend %}{{ viz.month_bars(data.monthly_spend) }}{% else %}<p class="text-base-content/60">No spend in this range.</p>{% endif %}
-      </div>
-    </article>
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">This month vs last</h2>
-        {% set m = data.month_comparison %}
-        <p class="num flex items-baseline gap-2 text-3xl font-semibold">${{ "%.2f"|format(m.spend_this) }}
-          {{ viz.delta(m.spend_delta_pct) }}
-        </p>
-        <p class="text-base-content/60">{{ m.trips_this }} trips, {{ m.items_this }} items this month ({{ m.trips_prev }} / {{ m.items_prev }} last)</p>
-      </div>
-    </article>
+    {% call ui.card("Spend over time") %}
+      {% if data.monthly_spend %}{{ viz.month_bars(data.monthly_spend) }}{% else %}<p class="text-base-content/60">No spend in this range.</p>{% endif %}
+    {% endcall %}
+    {% call ui.card("This month vs last") %}
+      {% set m = data.month_comparison %}
+      <p class="num flex items-baseline gap-2 text-3xl font-semibold">${{ "%.2f"|format(m.spend_this) }}
+        {{ viz.delta(m.spend_delta_pct) }}
+      </p>
+      <p class="text-base-content/60">{{ m.trips_this }} trips, {{ m.items_this }} items this month ({{ m.trips_prev }} / {{ m.items_prev }} last)</p>
+    {% endcall %}
   </section>
 
   <section>
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Activity</h2>
-        {% if heatmap_grid %}{{ viz.heatmap(heatmap_grid) }}{% else %}<p class="text-base-content/60">No activity in this range.</p>{% endif %}
-      </div>
-    </article>
+    {% call ui.card("Activity") %}
+      {% if heatmap_grid %}{{ viz.heatmap(heatmap_grid) }}{% else %}<p class="text-base-content/60">No activity in this range.</p>{% endif %}
+    {% endcall %}
   </section>
 
   {# Band 3: Breakdowns #}
   <section class="grid gap-4 md:grid-cols-2">
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Category spend</h2>
-        {% if data.categories %}{{ viz.bar_list(data.categories, "category", "total_spend", money=True) }}{% else %}<p class="text-base-content/60">No categorized spend.</p>{% endif %}
-        {% if data.unclassified_spend > 0 %}<p class="text-base-content/60">Unclassified: ${{ "%.2f"|format(data.unclassified_spend) }} (needs review)</p>{% endif %}
-      </div>
-    </article>
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Top products</h2>
-        {% if data.top_by_count %}{{ viz.bar_list(data.top_by_count, "name", "purchase_count") }}{% else %}<p class="text-base-content/60">No purchases yet.</p>{% endif %}
-      </div>
-    </article>
+    {% call ui.card("Category spend") %}
+      {% if data.categories %}{{ viz.bar_list(data.categories, "category", "total_spend", money=True) }}{% else %}<p class="text-base-content/60">No categorized spend.</p>{% endif %}
+      {% if data.unclassified_spend > 0 %}<p class="text-base-content/60">Unclassified: ${{ "%.2f"|format(data.unclassified_spend) }} (needs review)</p>{% endif %}
+    {% endcall %}
+    {% call ui.card("Top products") %}
+      {% if data.top_by_count %}{{ viz.bar_list(data.top_by_count, "name", "purchase_count") }}{% else %}<p class="text-base-content/60">No purchases yet.</p>{% endif %}
+    {% endcall %}
   </section>
 
   <section>
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Stores</h2>
-        {% if data.stores %}{{ viz.store_table(data.stores) }}{% else %}<p class="text-base-content/60">No stores yet.</p>{% endif %}
-      </div>
-    </article>
+    {% call ui.card("Stores") %}
+      {% if data.stores %}{{ viz.store_table(data.stores) }}{% else %}<p class="text-base-content/60">No stores yet.</p>{% endif %}
+    {% endcall %}
   </section>
 
   {# Band 4: Prices #}
   <section class="grid gap-4 md:grid-cols-2">
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Biggest price movers</h2>
-        {% if data.price_movers %}{{ viz.spark_table(data.price_movers) }}{% else %}<p class="text-base-content/60">Not enough repeat purchases yet.</p>{% endif %}
-      </div>
-    </article>
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Price watch</h2>
-        {% if data.price_watch %}{{ viz.spark_table(data.price_watch) }}{% else %}<p class="text-base-content/60">Not enough repeat purchases yet.</p>{% endif %}
-      </div>
-    </article>
+    {% call ui.card("Biggest price movers") %}
+      {% if data.price_movers %}{{ viz.spark_table(data.price_movers) }}{% else %}<p class="text-base-content/60">Not enough repeat purchases yet.</p>{% endif %}
+    {% endcall %}
+    {% call ui.card("Price watch") %}
+      {% if data.price_watch %}{{ viz.spark_table(data.price_watch) }}{% else %}<p class="text-base-content/60">Not enough repeat purchases yet.</p>{% endif %}
+    {% endcall %}
   </section>
 
   {# Band 5: Detail #}
   <section>
-    <article class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-3">
-        <h2 class="card-title text-lg">Recent receipts</h2>
-        {% if receipts %}{% include "partials/_receipt_table.html" %}{% else %}<p class="text-base-content/60">No receipts yet. <a class="link link-primary" href="/upload">Upload one.</a></p>{% endif %}
-      </div>
-    </article>
+    {% call ui.card("Recent receipts") %}
+      {% if receipts %}{% include "partials/_receipt_table.html" %}{% else %}<p class="text-base-content/60">No receipts yet. <a class="link link-primary" href="/upload">Upload one.</a></p>{% endif %}
+    {% endcall %}
   </section>
 
   <p class="text-xs text-base-content/50">Showing {{ data.range_label }}. Figures exclude receipts that failed to parse.</p>

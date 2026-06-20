@@ -27,9 +27,9 @@
 {% endmacro %}
 
 {% macro kpi_card(card) %}
-  <article class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-1 p-4">
-      <span class="text-xs font-medium uppercase tracking-wide text-base-content/60">{{ card.label }}</span>
+  <article class="surface-card">
+    <div class="surface-card__body gap-1 p-4">
+      <span class="eyebrow">{{ card.label }}</span>
       <span class="num text-2xl font-semibold leading-tight">{{ card.value }}</span>
       <div class="mt-1 flex items-center justify-between gap-2">
         {{ sparkline(card.points, label=card.label ~ " trend") }}
