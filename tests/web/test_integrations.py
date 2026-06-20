@@ -28,17 +28,18 @@ def test_integrations_page_install_button_points_at_shortcut(app_client):
     assert f'href="{SHORTCUT_URL}"' in response.text
 
 
-def test_integrations_page_shows_auth_header_names(app_client):
-    """Verify the integrations page documents the API token headers required by the Shortcut."""
+def test_integrations_page_links_to_api_token_creation(app_client):
+    """Verify the page tells users how to get an API token without exposing HTTP header details."""
     # Given a running app with the integrations route registered
     # When loading the integrations page
     response = app_client.get("/admin/integrations")
 
-    # Then both accepted header names appear so users know how to authenticate
+    # Then users are pointed at token creation, but the low-level header mechanics (which the
+    # Shortcut handles for them) are not surfaced.
     assert response.status_code == 200
-    assert "X-Cartlog-Token" in response.text
-    assert "Authorization" in response.text
     assert "/account/tokens" in response.text
+    assert "X-Cartlog-Token" not in response.text
+    assert "Bearer" not in response.text
 
 
 def test_admin_index_links_to_integrations(app_client):
