@@ -47,3 +47,15 @@ def test_card_renders_without_call_body():
     assert "surface-card" in html
     assert 'class="section-title"' in html
     assert "Empty" in html
+
+
+def test_icon_renders_known_lucide_svg():
+    """Verify icon() emits an aria-hidden svg for a known name and nothing for an unknown one."""
+    # When rendering a known and an unknown icon
+    known = _render("{% import 'macros/ui.html' as ui %}{{ ui.icon('search') }}")
+    unknown = _render("{% import 'macros/ui.html' as ui %}{{ ui.icon('definitely-not-an-icon') }}")
+
+    # Then the known icon is an accessible inline svg and the unknown one is empty
+    assert "<svg" in known
+    assert 'aria-hidden="true"' in known
+    assert "<svg" not in unknown
