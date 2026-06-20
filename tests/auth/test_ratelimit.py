@@ -21,3 +21,21 @@ def test_reset_clears_failures():
     rl.record_failure("k")
     rl.reset("k")
     assert rl.check("k") is True
+
+
+def test_sweep_evicts_stale_keys():
+    """Verify aged-out keys are dropped from the table instead of retained forever."""
+    # Given many distinct keys, each with a single recorded failure
+    now = [1000.0]
+    rl = LoginRateLimiter(max_attempts=3, lockout_seconds=60, clock=lambda: now[0])
+    for i in range(100):
+        rl.record_failure(f"user{i}|1.1.1.1")
+    assert len(rl._failures) == 100
+
+    # When the window elapses and a later failure triggers the periodic sweep
+    now[0] += 61
+    rl.record_failure("late|1.1.1.1")
+
+    # Then the aged-out keys are gone, leaving only the fresh one
+    assert len(rl._failures) == 1
+    assert "late|1.1.1.1" in rl._failures
