@@ -2,14 +2,14 @@
 {# Included by _category_panel.html; error banner lives in the panel, not here. #}
 <div class="surface-card overflow-hidden">
   <div class="overflow-x-auto">
-    <table class="table table-zebra" id="category-tree">
+    <table class="table data-table" id="category-tree">
       <thead><tr><th>Category</th><th class="text-right">Products</th><th></th></tr></thead>
       <tbody>
         {% for cat in tree %}
         <tr class="hover">
-          <td class="font-medium">{{ cat.name }}{% if cat.is_system %} <span class="badge badge-ghost badge-sm align-middle">system</span>{% endif %}</td>
-          <td class="num text-right" title="{{ cat.products | length }} products">{{ cat.products | length }}</td>
-          <td class="text-right">
+          <td class="font-medium" data-label="Category">{{ cat.name }}{% if cat.is_system %} <span class="badge badge-ghost badge-sm align-middle">system</span>{% endif %}</td>
+          <td class="num text-right" data-label="Products" title="{{ cat.products | length }} products">{{ cat.products | length }}</td>
+          <td class="text-right" data-label="">
             {% if not cat.is_system %}
             <span class="inline-flex gap-1">
               <button class="btn btn-ghost btn-xs" hx-get="/categories/{{ cat.id }}/rename"
