@@ -6,7 +6,7 @@
 <div id="{{ table_id }}">
   {% if receipts %}
   <div class="overflow-x-auto">
-    <table class="table table-zebra">
+    <table class="table data-table">
       <thead><tr>
         {{ sortable_th("ID", "id") }}
         {{ sortable_th("Store", "store") }}
@@ -19,12 +19,12 @@
       <tbody>
         {% for r in receipts %}
         <tr class="hover">
-          <td><a class="link link-primary font-medium" href="/receipts/{{ r.id }}">#{{ r.id }}</a></td>
-          <td>{{ r.store.chain_name }}{% if r.store.location %}, {{ r.store.location }}{% endif %}</td>
-          <td class="num whitespace-nowrap">{{ r.purchase_date }}</td>
-          <td class="num whitespace-nowrap">{{ r.currency }} {{ r.total }}</td>
-          {% if can_edit %}<td>{% if r.status == review_status %}<span class="badge badge-warning badge-sm">{{ r.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ r.status }}</span>{% endif %}</td>{% endif %}
-          {% if show_review and can_edit %}<td>{% if r.status == review_status %}<a class="btn btn-ghost btn-xs" href="/receipts/{{ r.id }}">Review</a>{% endif %}</td>{% endif %}
+          <td data-label="ID"><a class="link link-primary font-medium" href="/receipts/{{ r.id }}">#{{ r.id }}</a></td>
+          <td data-label="Store">{{ r.store.chain_name }}{% if r.store.location %}, {{ r.store.location }}{% endif %}</td>
+          <td data-label="Date" class="num whitespace-nowrap">{{ r.purchase_date }}</td>
+          <td data-label="Total" class="num whitespace-nowrap">{{ r.currency }} {{ r.total }}</td>
+          {% if can_edit %}<td data-label="Status">{% if r.status == review_status %}<span class="badge badge-warning badge-sm">{{ r.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ r.status }}</span>{% endif %}</td>{% endif %}
+          {% if show_review and can_edit %}<td data-label="">{% if r.status == review_status %}<a class="btn btn-ghost btn-xs" href="/receipts/{{ r.id }}">Review</a>{% endif %}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>

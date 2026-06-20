@@ -6,10 +6,10 @@
 
   {% set date_qs = ('&from=' ~ range_start ~ '&to=' ~ range_end) if range_start and range_end else '' %}
   <div class="toolbar justify-between">
-    {# Range chip group: join of btn btn-sm so active chip uses btn-active btn-primary #}
-    <div class="join" role="group" aria-label="Time range">
+    <div class="segmented" role="group" aria-label="Time range">
       {% for r in ranges %}
-        <a class="btn btn-sm join-item {{ 'btn-active btn-primary' if r == range else 'btn-ghost' }}"
+        <a class="segmented__item{{ ' is-active' if r == range else '' }}"
+           {% if r == range %}aria-current="page"{% endif %}
            href="/?range={{ r.value }}"
            hx-get="/?range={{ r.value }}" hx-target="#dashboard-body"
            hx-swap="outerHTML" hx-push-url="true">{{ range_label(r) }}</a>
