@@ -216,6 +216,50 @@ cartlog is provider-agnostic. For how to point it at Anthropic, OpenAI, Gemini, 
 
 For `CARTLOG_DATABASE_URL`, give a plain path to where you want the data file, such as `cartlog.db` or `/app/data.db`. cartlog checks the folder exists when it starts and handles the rest, so most people never need to change the default.
 
+## Backups
+
+`cartlog backup` saves your whole dataset to one compressed archive: the SQLite database and every receipt image. You can run it while the app is serving. cartlog snapshots the database with SQLite's `VACUUM INTO`, so the copy stays consistent even while receipts are being ingested.
+
+Create a backup:
+
+```bash
+uv run cartlog backup
+```
+
+This writes a timestamped file such as `cartlog-backup-20260620-143000.tar.gz` to the current directory and prints its path. Pass `--output` (or `-o`) to choose a directory or an exact filename:
+
+```bash
+uv run cartlog backup --output /backups
+```
+
+The archive uses the same layout no matter where your database and images live:
+
+```text
+cartlog-backup-20260620-143000.tar.gz
+├── cartlog.db
+└── receipt_images/
+```
+
+### Back up a Docker deployment
+
+Run the command inside the running container, then copy the archive out. The command prints the archive path, so use that exact name in the copy step:
+
+```bash
+docker compose exec cartlog cartlog backup --output /data
+docker compose cp cartlog:/data/cartlog-backup-20260620-143000.tar.gz ./
+```
+
+### Restore from a backup
+
+The archive layout matches the container's `/data` directory, so a restore is an extract into a fresh data directory. With the app stopped, run:
+
+```bash
+mkdir -p /data
+tar -xzf cartlog-backup-20260620-143000.tar.gz -C /data
+```
+
+Start cartlog with `CARTLOG_DATABASE_URL=/data/cartlog.db` and `CARTLOG_IMAGE_STORAGE_DIR=/data/receipt_images` (the Docker image's defaults), and it continues from where the backup was taken.
+
 ## Choosing an LLM provider
 
 cartlog reads receipts through [Pydantic AI](https://ai.pydantic.dev/), so you can switch providers without touching code. It ships with support for Anthropic, OpenAI, and Google Gemini, plus any OpenAI-compatible endpoint, which covers API routers like [OpenRouter](https://openrouter.ai/) and local servers like [Ollama](https://ollama.com/). Switching takes two steps: set the model with `CARTLOG_PARSE_MODEL` and `CARTLOG_CLASSIFY_MODEL`, then supply that provider's API key under its own variable name.

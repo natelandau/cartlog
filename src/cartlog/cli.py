@@ -1,10 +1,14 @@
 """Command-line interface for running the cartlog web service."""
 
+from __future__ import annotations
+
 from contextlib import suppress
+from pathlib import Path  # noqa: TC003
 
 import typer
 import uvicorn
 
+from cartlog.backup import BackupError, create_backup
 from cartlog.bootstrap import prepare_runtime
 from cartlog.categories.service import CategoryService
 from cartlog.config import get_settings
@@ -106,3 +110,30 @@ def serve(
             with suppress(Exception):
                 css_watcher.wait(timeout=5)
         session_factory.kw["bind"].dispose()
+
+
+@app.command()
+def backup(
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Destination file or directory for the .tar.gz (default: a timestamped file in the current directory).",
+    ),
+) -> None:
+    """Write a single .tar.gz of the database and receipt images.
+
+    The archive holds a consistent, compacted `cartlog.db` (safe to run while the server is
+    live) and the full `receipt_images/` directory, laid out so a restore can extract it
+    into a fresh data directory and run the app unchanged.
+    """
+    settings = get_settings()
+    try:
+        result = create_backup(settings, output)
+    except BackupError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(
+        f"Backup written to {result.path} "
+        f"({result.database_bytes} bytes database, {result.image_count} image(s))."
+    )
