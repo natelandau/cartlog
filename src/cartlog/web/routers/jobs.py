@@ -12,11 +12,13 @@ from sqlalchemy.orm import Session  # noqa: TC002
 
 from cartlog.clock import naive_utcnow
 from cartlog.db.models import IngestionJob, JobStatus
+from cartlog.web.auth import require_read
 from cartlog.web.dependencies import get_session
 from cartlog.web.jobs_view import JobView
 from cartlog.web.templating import templates
 
-router = APIRouter()
+# All job routes require at least read access (anonymous allowed when public read is on).
+router = APIRouter(dependencies=[Depends(require_read)])
 
 # Statuses considered "in flight" for the active list and the nav badge.
 _ACTIVE_STATUSES = (JobStatus.PENDING, JobStatus.PARSING)

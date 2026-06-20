@@ -29,6 +29,10 @@ from cartlog.receipts.service import (
     image_file_available,
     reparse_receipt,
 )
+from cartlog.web.auth import (  # noqa: TC001  # runtime imports: FastAPI Depends resolves Annotated aliases at startup
+    RequireEditor,
+    RequireRead,
+)
 from cartlog.web.dependencies import get_session
 from cartlog.web.forms import parse_review_form
 from cartlog.web.htmx import wants_partial
@@ -97,7 +101,12 @@ def _table_template(request: Request, full_page: str) -> str:
 
 
 async def _store_and_enqueue(
-    file: UploadFile, *, session: Session, settings: Settings, source: str = "web"
+    file: UploadFile,
+    *,
+    session: Session,
+    settings: Settings,
+    source: str = "web",
+    user_id: int | None = None,
 ) -> dict[str, object]:
     """Validate, store, and enqueue one uploaded receipt file, returning its accepted record.
 
@@ -109,6 +118,7 @@ async def _store_and_enqueue(
         session: SQLAlchemy session; enqueue commits on success.
         settings: Runtime settings supplying the size cap and storage directory.
         source: Ingestion source label stored on the job (e.g. 'web', 'shortcut').
+        user_id: The id of the authenticated user submitting the file, for uploader attribution.
     """
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
@@ -130,7 +140,11 @@ async def _store_and_enqueue(
             tmp_path = Path(tmp.name)
             tmp.write(data)
         job = enqueue_job(
-            session, src_path=tmp_path, source=source, storage_dir=settings.image_storage_dir
+            session,
+            src_path=tmp_path,
+            source=source,
+            storage_dir=settings.image_storage_dir,
+            user_id=user_id,
         )
         return {"filename": file.filename, "job_id": job.id, "status": job.status}
     finally:
@@ -145,6 +159,7 @@ async def upload_receipts(
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     response: Response,
+    editor: RequireEditor,
     # Cap matches the IngestionJob.source column width; SQLite does not enforce String(50),
     # so without this an over-long label would be stored verbatim instead of rejected.
     source: Annotated[str, Form(max_length=50)] = "web",
@@ -161,7 +176,14 @@ async def upload_receipts(
     for file in files:
         try:
             accepted.append(
-                await _store_and_enqueue(file, session=session, settings=settings, source=source)
+                await _store_and_enqueue(
+                    file,
+                    session=session,
+                    settings=settings,
+                    source=source,
+                    # Record which user uploaded this receipt for attribution on the Receipt row.
+                    user_id=editor.id,
+                )
             )
         except ValueError as exc:
             rejected.append({"filename": file.filename or "(unnamed)", "reason": str(exc)})
@@ -170,7 +192,7 @@ async def upload_receipts(
 
 
 @router.get("/upload", response_class=HTMLResponse)
-def upload_page(request: Request) -> HTMLResponse:
+def upload_page(request: Request, _editor: RequireEditor) -> HTMLResponse:
     """Render the receipt upload form, the entry point for adding receipts via the web UI."""
     return templates.TemplateResponse(request, "upload.html", {})
 
@@ -179,6 +201,7 @@ def upload_page(request: Request) -> HTMLResponse:
 def receipt_list(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    _user: RequireRead,
     status: ReceiptStatus | None = None,
     sort: ReceiptSortKey = ReceiptSortKey.DATE,
     direction: SortDir = SortDir.DESC,
@@ -221,6 +244,7 @@ def receipt_detail(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _user: RequireRead,
 ) -> HTMLResponse:
     """Render a single receipt with its line items beside the source image or PDF."""
     receipt = _load_receipt(session, receipt_id, with_category=True)
@@ -238,6 +262,7 @@ def receipt_image(
     receipt_id: int,
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _user: RequireRead,
 ) -> FileResponse:
     """Stream a receipt's stored image, refusing any path outside the storage dir."""
     receipt = session.get(Receipt, receipt_id)
@@ -255,6 +280,7 @@ def receipt_items(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _user: RequireRead,
 ) -> HTMLResponse:
     """Render the read-only items panel fragment (used by Cancel to restore the view)."""
     receipt = _load_receipt(session, receipt_id, with_category=True)
@@ -268,6 +294,7 @@ def edit_items(
     receipt_id: int,
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
 ) -> HTMLResponse:
     """Render the editable items panel fragment for any receipt, regardless of status."""
     receipt = _load_receipt(session, receipt_id, with_category=True)
@@ -277,7 +304,7 @@ def edit_items(
 
 
 @router.get("/receipts/{receipt_id}/review")
-def review_redirect(receipt_id: int) -> RedirectResponse:
+def review_redirect(receipt_id: int, _user: RequireRead) -> RedirectResponse:
     """Redirect the retired review URL to the unified detail page."""
     return RedirectResponse(url=f"/receipts/{receipt_id}", status_code=307)
 
@@ -288,6 +315,7 @@ async def review_save(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _editor: RequireEditor,
 ) -> HTMLResponse:
     """Apply the full edited line set + header in one transaction, then return the read panel.
 
@@ -327,6 +355,7 @@ def delete_receipt_route(
     receipt_id: int,
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _editor: RequireEditor,
 ) -> Response:
     """Delete a receipt and its entries, then send htmx to the receipt list."""
     deleted = delete_receipt(session, receipt_id, storage_dir=settings.image_storage_dir)
@@ -341,6 +370,7 @@ def reparse_receipt_route(
     receipt_id: int,
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _editor: RequireEditor,
 ) -> Response:
     """Discard a receipt's parsed data, requeue its image, and send htmx to the list."""
     try:
@@ -359,6 +389,7 @@ def mark_reviewed(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _editor: RequireEditor,
 ) -> HTMLResponse:
     """Flip a needs_review receipt to parsed without editing any fields."""
     receipt = _load_receipt(session, receipt_id, with_category=True)

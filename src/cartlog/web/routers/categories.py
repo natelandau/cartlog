@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session  # noqa: TC002
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import Category
 from cartlog.exceptions import CategoryError
+from cartlog.web.auth import (  # noqa: TC001  # runtime imports: FastAPI Depends resolves Annotated aliases at startup
+    RequireEditor,
+    RequireRead,
+)
 from cartlog.web.dependencies import get_session
 from cartlog.web.templating import templates
 
@@ -42,7 +46,9 @@ def _panel_response(
 
 @router.get("/categories", response_class=HTMLResponse)
 def categories_page(
-    request: Request, session: Annotated[Session, Depends(get_session)]
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    _user: RequireRead,
 ) -> HTMLResponse:
     """Render the taxonomy management page (flat category list with product counts)."""
     tree = CategoryService(session).tree()
@@ -53,6 +59,7 @@ def categories_page(
 def create_category(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
     name: Annotated[str, Form()],
 ) -> HTMLResponse:
     """Create a category; return the refreshed panel."""
@@ -67,7 +74,7 @@ def create_category(
 
 
 @router.get("/categories/new-inline", response_class=HTMLResponse)
-def inline_create_form(request: Request) -> HTMLResponse:
+def inline_create_form(request: Request, _user: RequireRead) -> HTMLResponse:
     """Return a small inline form (name only) for creating a category mid-edit."""
     return templates.TemplateResponse(request, "partials/_category_inline_form.html", {})
 
@@ -76,6 +83,7 @@ def inline_create_form(request: Request) -> HTMLResponse:
 def inline_create(
     request: Request,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
     name: Annotated[str, Form()],
 ) -> HTMLResponse:
     """Create a category and return a category picker with the new category pre-selected."""
@@ -98,6 +106,7 @@ def rename_form(
     request: Request,
     category_id: int,
     session: Annotated[Session, Depends(get_session)],
+    _user: RequireRead,
 ) -> HTMLResponse:
     """Render the rename form partial for the given category."""
     category = session.get(Category, category_id)
@@ -115,6 +124,7 @@ def rename_category(
     request: Request,
     category_id: int,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
     new_name: Annotated[str, Form()],
 ) -> HTMLResponse:
     """Rename a category; return the refreshed panel."""
@@ -133,6 +143,7 @@ def merge_form(
     request: Request,
     category_id: int,
     session: Annotated[Session, Depends(get_session)],
+    _user: RequireRead,
 ) -> HTMLResponse:
     """Render the merge form partial with a list of candidate target categories."""
     svc = CategoryService(session)
@@ -152,6 +163,7 @@ def merge_category(
     request: Request,
     category_id: int,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
     target_id: Annotated[int, Form()],
 ) -> HTMLResponse:
     """Merge a category into the target; return the refreshed panel."""
@@ -170,6 +182,7 @@ def delete_form(
     request: Request,
     category_id: int,
     session: Annotated[Session, Depends(get_session)],
+    _user: RequireRead,
 ) -> HTMLResponse:
     """Render the delete form partial with optional reassignment target candidates."""
     svc = CategoryService(session)
@@ -189,6 +202,7 @@ def delete_category(
     request: Request,
     category_id: int,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
     reassign_to_id: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     """Delete a category (reassigning dependents when a target is given); return the panel."""

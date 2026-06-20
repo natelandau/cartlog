@@ -26,11 +26,13 @@ from cartlog.clock import naive_utcnow
 from cartlog.db.models import LineItem
 from cartlog.db.sort import SortDir
 from cartlog.receipts.service import apply_line_item_edit
+from cartlog.web.auth import RequireEditor, require_read
 from cartlog.web.dependencies import get_analytics_service, get_session
 from cartlog.web.templating import templates
 from cartlog.web.units_display import read_unit_system
 
-router = APIRouter()
+# All analytics routes require at least read access (anonymous allowed when public read is on).
+router = APIRouter(dependencies=[Depends(require_read)])
 
 ServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 
@@ -163,6 +165,7 @@ def search_item_edit(
     request: Request,
     service: ServiceDep,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
 ) -> HTMLResponse:
     """Render the editable row for one line: product datalist input + category picker."""
     row = service.line_item_row(line_item_id)
@@ -182,6 +185,7 @@ def search_item_save(
     request: Request,
     service: ServiceDep,
     session: Annotated[Session, Depends(get_session)],
+    _editor: RequireEditor,
     canonical_name: Annotated[str, Form()],
     category_id: Annotated[str, Form()] = "",
 ) -> HTMLResponse:

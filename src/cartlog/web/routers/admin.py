@@ -18,6 +18,7 @@ from cartlog.db.sort import SortDir, apply_sort
 from cartlog.exceptions import ProductMergeError, StoreMergeError
 from cartlog.products.service import merge_products
 from cartlog.stores.service import merge_stores
+from cartlog.web.auth import require_admin
 from cartlog.web.dependencies import get_analytics_service, get_session
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import (
@@ -39,7 +40,9 @@ if TYPE_CHECKING:
 
     from cartlog.db.base import Base
 
-router = APIRouter()
+# All admin routes require an Admin user; the dependency is declared once at the router level
+# so individual handlers stay focused on business logic rather than auth boilerplate.
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @dataclass(frozen=True)

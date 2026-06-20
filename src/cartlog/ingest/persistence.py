@@ -52,7 +52,7 @@ def _get_or_create[ModelT: Base](
     return instance
 
 
-def persist_receipt(
+def persist_receipt(  # noqa: PLR0913 - each param is a distinct concern with no natural grouping
     session: Session,
     parsed: ParsedReceipt,
     *,
@@ -60,6 +60,7 @@ def persist_receipt(
     source: str,
     status: str,
     raw_json: str,
+    user_id: int | None = None,
 ) -> tuple[Receipt, list[str]]:
     """Persist a ParsedReceipt and its line items, deduplicating stores and products.
 
@@ -76,6 +77,7 @@ def persist_receipt(
         source: How the receipt was submitted (e.g. 'cli', 'api').
         status: Processing status (a ReceiptStatus value, e.g. 'parsed', 'needs_review').
         raw_json: Verbatim JSON string from the parser, retained for audit and re-processing.
+        user_id: The id of the user who uploaded this receipt, or None for system/folder ingest.
 
     Returns:
         (receipt, unmapped) where unmapped is the de-duplicated list of category strings
@@ -97,6 +99,7 @@ def persist_receipt(
         raw_parser_json=raw_json,
         source=source,
         status=status,
+        user_id=user_id,
     )
     # Add to session before querying so autoflush during get-or-create lookups sees it as tracked.
     session.add(receipt)
