@@ -36,6 +36,21 @@ def _active_admin_count(session: Session) -> int:
     )
 
 
+def _users_table_context(session: Session, *, error: str | None = None) -> dict[str, object]:
+    """Build the shared template context for the users table fragment.
+
+    Carries active_admin_count so the template can hide the deactivate and demote
+    controls for the last active admin instead of rendering buttons that only
+    return an error when used; the route guards still enforce the rule server-side.
+    """
+    return {
+        "users": UserService(session).list_users(),
+        "roles": list(Role),
+        "active_admin_count": _active_admin_count(session),
+        "error": error,
+    }
+
+
 @router.get("/admin/users", response_class=HTMLResponse)
 def admin_users(
     request: Request,
@@ -43,11 +58,10 @@ def admin_users(
     _admin: RequireAdmin,
 ) -> HTMLResponse:
     """Render the user management page listing all users with controls for each."""
-    users = UserService(session).list_users()
     return templates.TemplateResponse(
         request,
         "admin/users.html",
-        {"users": users, "roles": list(Role)},
+        _users_table_context(session),
     )
 
 
@@ -68,47 +82,39 @@ def admin_create_user(
     svc = UserService(session)
 
     if svc.get_by_username(username) is not None:
-        users = svc.list_users()
         return templates.TemplateResponse(
             request,
             "partials/_users_table.html",
-            {
-                "users": users,
-                "roles": list(Role),
-                "error": f'Username "{username}" is already taken.',
-            },
+            _users_table_context(session, error=f'Username "{username}" is already taken.'),
             status_code=422,
         )
 
     policy_error = validate_password(password)
     if policy_error:
-        users = svc.list_users()
         return templates.TemplateResponse(
             request,
             "partials/_users_table.html",
-            {"users": users, "roles": list(Role), "error": policy_error},
+            _users_table_context(session, error=policy_error),
             status_code=422,
         )
 
     try:
         parsed_role = Role(role.lower())
     except ValueError:
-        users = svc.list_users()
         return templates.TemplateResponse(
             request,
             "partials/_users_table.html",
-            {"users": users, "roles": list(Role), "error": f'Unknown role "{role}".'},
+            _users_table_context(session, error=f'Unknown role "{role}".'),
             status_code=422,
         )
 
     svc.create_user(username, password, parsed_role)
     session.commit()
 
-    users = svc.list_users()
     return templates.TemplateResponse(
         request,
         "partials/_users_table.html",
-        {"users": users, "roles": list(Role), "error": None},
+        _users_table_context(session),
     )
 
 
@@ -132,26 +138,23 @@ def admin_set_role(
 
     # Guard: do not allow demoting the last active admin.
     if user.role == Role.ADMIN and new_role != Role.ADMIN and _active_admin_count(session) <= 1:
-        users = UserService(session).list_users()
         return templates.TemplateResponse(
             request,
             "partials/_users_table.html",
-            {
-                "users": users,
-                "roles": list(Role),
-                "error": "Cannot demote the last active admin. Promote another user to Admin first.",
-            },
+            _users_table_context(
+                session,
+                error="Cannot demote the last active admin. Promote another user to Admin first.",
+            ),
             status_code=422,
         )
 
     UserService(session).set_role(user, new_role)
     session.commit()
 
-    users = UserService(session).list_users()
     return templates.TemplateResponse(
         request,
         "partials/_users_table.html",
-        {"users": users, "roles": list(Role), "error": None},
+        _users_table_context(session),
     )
 
 
@@ -172,15 +175,13 @@ def admin_set_active(
 
     # Guard: do not allow deactivating the last active admin.
     if user.role == Role.ADMIN and not is_active and _active_admin_count(session) <= 1:
-        users = UserService(session).list_users()
         return templates.TemplateResponse(
             request,
             "partials/_users_table.html",
-            {
-                "users": users,
-                "roles": list(Role),
-                "error": "Cannot deactivate the last active admin. Promote another user to Admin first.",
-            },
+            _users_table_context(
+                session,
+                error="Cannot deactivate the last active admin. Promote another user to Admin first.",
+            ),
             status_code=422,
         )
 
@@ -191,11 +192,10 @@ def admin_set_active(
         SessionService(session).revoke_all_for_user(user_id)
     session.commit()
 
-    users = svc.list_users()
     return templates.TemplateResponse(
         request,
         "partials/_users_table.html",
-        {"users": users, "roles": list(Role), "error": None},
+        _users_table_context(session),
     )
 
 

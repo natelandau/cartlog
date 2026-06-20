@@ -121,6 +121,61 @@ def test_last_admin_role_demote_blocked(admin_client):
     assert resp.status_code == 422
 
 
+def test_last_admin_deactivate_button_hidden(admin_client):
+    """Verify the sole active admin's row hides the Deactivate button it cannot use."""
+    # Given the admin_client authenticated as the only admin ("admin")
+    # When loading the user management page
+    resp = admin_client.get("/admin/users")
+
+    # Then no Deactivate control is rendered for that admin
+    assert resp.status_code == 200
+    assert 'aria-label="Deactivate admin"' not in resp.text
+
+
+def test_last_admin_demote_options_hidden(admin_client):
+    """Verify the sole active admin's role menu omits the demote options it cannot use."""
+    # Given the admin_client authenticated as the only admin ("admin")
+    # When loading the user management page
+    resp = admin_client.get("/admin/users")
+
+    # Then the role menu offers no form to demote that admin to a lower role
+    assert resp.status_code == 200
+    assert 'name="role" value="editor"' not in resp.text
+    assert 'name="role" value="viewer"' not in resp.text
+
+
+def test_deactivate_button_shown_when_second_admin_exists(admin_client):
+    """Verify the Deactivate button reappears once a second admin makes it safe to use."""
+    # Given a second active admin so neither admin is the last
+    with admin_client.app.state.session_factory() as s:
+        seed_user(s, username="second_admin", role=Role.ADMIN)
+        s.commit()
+
+    # When loading the user management page
+    resp = admin_client.get("/admin/users")
+
+    # Then both admins expose a Deactivate button and demote options
+    assert resp.status_code == 200
+    assert 'aria-label="Deactivate admin"' in resp.text
+    assert 'aria-label="Deactivate second_admin"' in resp.text
+    assert 'name="role" value="editor"' in resp.text
+
+
+def test_deactivate_button_shown_for_non_admin(admin_client):
+    """Verify a non-admin user always exposes a Deactivate button."""
+    # Given an editor user alongside the sole admin
+    with admin_client.app.state.session_factory() as s:
+        seed_user(s, username="editor_user", role=Role.EDITOR)
+        s.commit()
+
+    # When loading the user management page
+    resp = admin_client.get("/admin/users")
+
+    # Then the editor exposes a Deactivate button
+    assert resp.status_code == 200
+    assert 'aria-label="Deactivate editor_user"' in resp.text
+
+
 def test_create_user_duplicate_username_rejected(admin_client):
     """Verify that creating a user with an existing username returns 422."""
     # Given an existing user
