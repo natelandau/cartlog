@@ -152,6 +152,53 @@ def test_secret_key_required(monkeypatch):
         Settings(secret_key="   ")
 
 
+def test_settings_backup_dir_defaults_to_none(monkeypatch):
+    """Verify backup_dir is unset by default so backups fall back to the working directory."""
+    # Given no backup directory configured
+    monkeypatch.delenv("CARTLOG_BACKUP_DIR", raising=False)
+
+    # When loading settings
+    settings = Settings()
+
+    # Then no default destination is imposed
+    assert settings.backup_dir is None
+
+
+def test_settings_backup_dir_accepts_existing_directory(tmp_path, monkeypatch):
+    """Verify an existing directory is accepted and expanded into a Path."""
+    # Given a path to an existing directory
+    monkeypatch.setenv("CARTLOG_BACKUP_DIR", str(tmp_path))
+
+    # When loading settings
+    settings = Settings()
+
+    # Then it is stored as the resolved backup destination
+    assert settings.backup_dir == tmp_path
+
+
+def test_settings_backup_dir_missing_directory_raises(tmp_path, monkeypatch):
+    """Verify a backup_dir that does not exist fails fast with a clear error."""
+    # Given a path to a directory that does not exist
+    missing = tmp_path / "nope"
+    monkeypatch.setenv("CARTLOG_BACKUP_DIR", str(missing))
+
+    # When loading settings, then validation rejects the unavailable directory
+    with pytest.raises(ValidationError, match="does not exist"):
+        Settings()
+
+
+def test_settings_backup_dir_rejects_non_directory(tmp_path, monkeypatch):
+    """Verify a backup_dir pointing at a file (not a directory) is rejected."""
+    # Given a path to a regular file
+    a_file = tmp_path / "not-a-dir"
+    a_file.write_text("x")
+    monkeypatch.setenv("CARTLOG_BACKUP_DIR", str(a_file))
+
+    # When loading settings, then validation rejects the non-directory path
+    with pytest.raises(ValidationError, match="not a directory"):
+        Settings()
+
+
 def test_session_defaults():
     """Verify session and cookie settings carry secure defaults."""
     # Given a minimal Settings with only the required secret_key

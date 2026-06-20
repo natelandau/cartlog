@@ -130,6 +130,52 @@ def test_create_backup_produces_fixed_layout_archive(tmp_path):
     assert not any(n.endswith(("-wal", "-shm")) for n in names)
 
 
+def test_create_backup_falls_back_to_configured_backup_dir(tmp_path):
+    """Write into settings.backup_dir when no explicit output is given."""
+    settings = _settings_for(tmp_path)
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    settings.backup_dir = backup_dir
+
+    result = create_backup(settings)
+
+    assert result.path.parent == backup_dir
+    assert _NAME_RE.match(result.path.name)
+
+
+def test_create_backup_explicit_output_overrides_backup_dir(tmp_path):
+    """Prefer an explicit output over the configured backup_dir."""
+    settings = _settings_for(tmp_path)
+    settings.backup_dir = tmp_path / "backups"
+    settings.backup_dir.mkdir()
+    explicit = tmp_path / "explicit"
+    explicit.mkdir()
+
+    result = create_backup(settings, output=explicit)
+
+    assert result.path.parent == explicit
+
+
+def test_create_backup_translates_operational_failure_to_backup_error(tmp_path, mocker):
+    """Wrap operational failures (e.g. a failed VACUUM INTO) into BackupError, not a raw error."""
+    # Given a valid config but a snapshot step that fails operationally
+    settings = _settings_for(tmp_path)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    mocker.patch(
+        "cartlog.backup._snapshot_database",
+        autospec=True,
+        side_effect=sqlite3.OperationalError("database is locked"),
+    )
+
+    # When creating a backup, then the failure surfaces as a BackupError callers can handle
+    with pytest.raises(BackupError, match="Could not create the backup"):
+        create_backup(settings, output=out_dir)
+
+    # And no partial archive is left behind
+    assert list(out_dir.glob("*.tar.gz")) == []
+
+
 def test_create_backup_handles_missing_image_dir(tmp_path):
     """Handle missing image directory by creating empty receipt_images entry."""
     settings = _settings_for(tmp_path, with_images=False)

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     database_url: str = "cartlog.db"
     # Where ingested receipt images are copied and retained.
     image_storage_dir: Path = Path("receipt_images")
+    # Default destination directory for `cartlog backup` when no --output is given. Unset means
+    # the CLI writes into the current working directory. The web download is always streamed and
+    # never written here. An explicit --output always overrides this.
+    backup_dir: Path | None = None
     # Parses with confidence below this are flagged needs_review instead of parsed.
     review_confidence_threshold: float = 0.7
     # Line-item totals may differ from the grand total by at most this before flagging review.
@@ -85,6 +89,33 @@ class Settings(BaseSettings):
             )
             raise ValueError(msg)
         return f"sqlite:///{path}"
+
+    @field_validator("backup_dir", mode="after")
+    @classmethod
+    def _require_existing_backup_dir(cls, value: Path | None) -> Path | None:
+        """Reject startup when CARTLOG_BACKUP_DIR points at a missing or non-directory path.
+
+        Failing fast at config load (as database_url does) keeps a scheduled backup from
+        silently landing in the wrong place, or failing only at the moment a backup is run.
+        An unset value is left as None so the CLI falls back to the working directory.
+
+        Raises:
+            ValueError: If the configured path does not exist or is not a directory.
+        """
+        if value is None:
+            return None
+        path = value.expanduser()
+        # Anchor a relative path to the current working directory now, so the validated
+        # destination cannot drift if the process's cwd changes before a backup runs.
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        if not path.exists():
+            msg = f"CARTLOG_BACKUP_DIR is '{value}', but that directory does not exist."
+            raise ValueError(msg)
+        if not path.is_dir():
+            msg = f"CARTLOG_BACKUP_DIR is '{value}', but that path is not a directory."
+            raise ValueError(msg)
+        return path
 
     @field_validator("secret_key", mode="after")
     @classmethod

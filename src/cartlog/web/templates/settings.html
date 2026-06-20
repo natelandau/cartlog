@@ -20,5 +20,27 @@
   </p>
   {% include "partials/_settings_access.html" %}
   {% endcall %}
+
+  {% call ui.card("Backup") %}
+  <p class="mb-3 text-sm text-base-content/60">
+    Download a single <code>.tar.gz</code> of your database and receipt images. Safe to run
+    while cartlog is live; use it to extract and restore into a fresh data directory.
+  </p>
+  {% if backup_error %}
+  <div role="alert" class="alert alert-error alert-soft mb-3 py-2 text-sm">
+    {{ ui.icon('alert-triangle', 16) }}
+    <span>Couldn't create the backup: {{ backup_error }}</span>
+  </div>
+  {% endif %}
+  {# Plain form POST (not htmx): building a backup is CSRF-protected work, and the browser
+     handles the streamed binary response as a file download. #}
+  <form method="post" action="/admin/settings/backup">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <button type="submit" class="btn btn-primary">
+      {{ ui.icon('download', 16) }}
+      Download backup
+    </button>
+  </form>
+  {% endcall %}
 </div>
 {% endblock %}

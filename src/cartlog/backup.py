@@ -108,22 +108,31 @@ def create_backup(settings: Settings, output: Path | None = None) -> BackupResul
     Validates configuration, snapshots the database with VACUUM INTO into a temp staging
     dir, then writes a fixed-layout archive (`cartlog.db` + `receipt_images/`). The staging
     dir is always removed; a partially written archive is removed on failure.
+
+    Destination precedence: an explicit `output` wins; otherwise `settings.backup_dir` is used
+    when configured; otherwise the archive lands in the current working directory.
     """
     source_db = _source_db_path(settings.database_url)
-    target = _resolve_output_path(output)
+    target = _resolve_output_path(output if output is not None else settings.backup_dir)
 
     staging = Path(tempfile.mkdtemp(prefix="cartlog-backup-"))
     try:
         snapshot = staging / _DB_ARCNAME
         _snapshot_database(source_db, snapshot)
         database_bytes = snapshot.stat().st_size
-        try:
-            with tarfile.open(target, "w:gz") as tar:
-                tar.add(snapshot, arcname=_DB_ARCNAME)
-                image_count = _add_images(tar, settings.image_storage_dir)
-        except BaseException:
-            target.unlink(missing_ok=True)
-            raise
+        with tarfile.open(target, "w:gz") as tar:
+            tar.add(snapshot, arcname=_DB_ARCNAME)
+            image_count = _add_images(tar, settings.image_storage_dir)
+    except (OSError, sqlite3.Error) as exc:
+        # Translate operational failures (locked db, disk full, unwritable target) into
+        # BackupError so callers handle them through the same path as configuration errors,
+        # rather than leaking a raw traceback to the CLI or a 500 to the web UI.
+        target.unlink(missing_ok=True)
+        msg = f"Could not create the backup: {exc}"
+        raise BackupError(msg) from exc
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 

@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session  # noqa: TC002  # runtime import for FastAPI Depends
+from starlette.background import BackgroundTask
 
 from cartlog.auth.app_config import AppConfigService
+from cartlog.backup import BackupError, create_backup
 from cartlog.ingest.folder_watcher import get_folder_config
-from cartlog.web.dependencies import get_session
+from cartlog.web.dependencies import get_session, resolve_settings
 from cartlog.web.guards import require_admin
 from cartlog.web.templating import templates
 
@@ -58,11 +63,48 @@ def _access_view(session: Session, *, saved: bool = False) -> dict[str, object]:
 
 @router.get("/admin/settings", response_class=HTMLResponse)
 def settings_index(
-    request: Request, session: Annotated[Session, Depends(get_session)]
+    request: Request,
+    session: Annotated[Session, Depends(get_session)],
+    backup_error: str | None = None,
 ) -> HTMLResponse:
-    """Render the settings page, the home for configuring how cartlog ingests receipts."""
-    context = {**_folder_view(session), **_access_view(session)}
+    """Render the settings page, the home for configuring how cartlog ingests receipts.
+
+    `backup_error` is set when the download route redirects back here after a failed backup,
+    so the page can surface the reason inline instead of stranding the admin on a blank error.
+    """
+    context = {**_folder_view(session), **_access_view(session), "backup_error": backup_error}
     return templates.TemplateResponse(request, "settings.html", context)
+
+
+@router.post("/admin/settings/backup")
+def download_backup(request: Request) -> Response:
+    """Stream a freshly built backup archive as a download to the admin's browser.
+
+    A POST (not a GET): building a backup is expensive work over the whole database, so it must
+    be CSRF-protected rather than triggerable by a cross-site navigation. The archive is built
+    into a private temp directory and streamed from there; a background task removes that
+    directory once the response is fully sent, so nothing accumulates on disk (unlike the CLI,
+    this never writes into CARTLOG_BACKUP_DIR). A failure that makes a backup impossible (bad
+    config, locked database, no disk space) redirects back to the settings page with the reason
+    shown inline; the staging directory is removed on every failure path.
+    """
+    settings = resolve_settings(request)
+    staging = Path(tempfile.mkdtemp(prefix="cartlog-web-backup-"))
+    try:
+        result = create_backup(settings, output=staging)
+    except BackupError as exc:
+        shutil.rmtree(staging, ignore_errors=True)
+        return RedirectResponse(f"/admin/settings?backup_error={quote(str(exc))}", status_code=303)
+    except BaseException:
+        # An unexpected error must not strand the staging dir; clean up, then let it surface.
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return FileResponse(
+        result.path,
+        media_type="application/gzip",
+        filename=result.path.name,
+        background=BackgroundTask(shutil.rmtree, staging, ignore_errors=True),
+    )
 
 
 @router.get("/admin/settings/folder", response_class=HTMLResponse)

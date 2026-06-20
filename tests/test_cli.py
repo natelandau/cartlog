@@ -149,6 +149,23 @@ def test_backup_command_writes_archive(tmp_path, monkeypatch):
     assert str(archives[0]) in result.output
 
 
+def test_backup_command_uses_configured_backup_dir(tmp_path, monkeypatch):
+    """Verify `backup` with no --output writes into the configured CARTLOG_BACKUP_DIR."""
+    # Given a configured backup directory and no --output
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    settings = _temp_db_settings(tmp_path, backup_dir=backup_dir)
+    monkeypatch.setattr(cli_module, "get_settings", lambda: settings)
+
+    # When invoking backup without an explicit output
+    result = runner.invoke(cli_module.app, ["backup"])
+
+    # Then the archive lands in the configured directory
+    assert result.exit_code == 0, result.output
+    archives = list(backup_dir.glob("cartlog-backup-*.tar.gz"))
+    assert len(archives) == 1
+
+
 def test_backup_command_rejects_non_sqlite_url(tmp_path, monkeypatch):
     """Verify `backup` exits non-zero for an unsupported database backend."""
     settings = Settings(

@@ -16,7 +16,7 @@ The `duty` task runner wraps common workflows. Invoke it as `uv run duty <task>`
 ## Architecture
 
 - `src/cartlog/cli.py` — Typer CLI exposing `serve` (web server + workers + migrations) and `backup` (export the database and receipt images to a single tar.gz).
-- `src/cartlog/backup.py` — `create_backup()` snapshots the SQLite database with `VACUUM INTO` and bundles it with the receipt images into one tar.gz (`cartlog.db` + `receipt_images/`).
+- `src/cartlog/backup.py` — `create_backup()` snapshots the SQLite database with `VACUUM INTO` and bundles it with the receipt images into one tar.gz (`cartlog.db` + `receipt_images/`). Destination precedence: explicit `output` > `CARTLOG_BACKUP_DIR` > current directory. The web admin Settings page (`Admin → Settings → Backup`) builds into a temp dir and streams the archive to the browser instead of writing it to disk.
 - `src/cartlog/web/` — FastAPI app factory (`app.py`), routers, Jinja templates, Tailwind/daisyUI assets.
 - `src/cartlog/ingest/` — upload queue and worker pipeline; web uploads enqueue jobs that workers parse.
 - `src/cartlog/parsing/` — Pydantic AI vision parser and category classifier.

@@ -232,6 +232,14 @@ This writes a timestamped file such as `cartlog-backup-20260620-143000.tar.gz` t
 uv run cartlog backup --output /backups
 ```
 
+To make a directory the standing default, set `CARTLOG_BACKUP_DIR`; runs without `--output` land there instead of the current directory. An explicit `--output` always wins.
+
+```bash
+CARTLOG_BACKUP_DIR=/backups uv run cartlog backup
+```
+
+You can also download a backup from the web UI: open **Admin → Settings → Backup** and click **Download backup**. cartlog builds the archive and streams it straight to your browser (it is never written to `CARTLOG_BACKUP_DIR`).
+
 The archive uses the same layout no matter where your database and images live:
 
 ```text

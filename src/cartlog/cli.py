@@ -118,7 +118,10 @@ def backup(
         None,
         "--output",
         "-o",
-        help="Destination file or directory for the .tar.gz (default: a timestamped file in the current directory).",
+        help=(
+            "Destination file or directory for the .tar.gz. Overrides CARTLOG_BACKUP_DIR; "
+            "when neither is set, a timestamped file is written to the current directory."
+        ),
     ),
 ) -> None:
     """Write a single .tar.gz of the database and receipt images.
@@ -126,6 +129,8 @@ def backup(
     The archive holds a consistent, compacted `cartlog.db` (safe to run while the server is
     live) and the full `receipt_images/` directory, laid out so a restore can extract it
     into a fresh data directory and run the app unchanged.
+
+    Destination precedence: --output, then CARTLOG_BACKUP_DIR, then the current directory.
     """
     settings = get_settings()
     try:
