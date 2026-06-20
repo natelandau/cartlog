@@ -28,6 +28,8 @@
     <script src="/static/htmx.min.js" defer></script>
   </head>
   <body class="min-h-screen bg-base-200 text-base-content" hx-headers='{"x-csrf-token": "{{ csrf_token }}"}'>
+    {# navbar is a block so focused flows (e.g. the first-run setup wizard) can blank it out. #}
+    {% block navbar %}
     <header class="navbar sticky top-0 z-20 gap-2 border-b border-base-300 bg-base-100/95 px-4 shadow-sm backdrop-blur">
       <div class="navbar-start">
         <div class="dropdown lg:hidden">
@@ -49,29 +51,33 @@
           <span class="swap-on text-lg" aria-hidden="true">☀</span>
         </label>
         {% if current_user %}
-        {# Dropdown lets the username and sign-out fit compactly without a permanent button bar. #}
+        {# daisyUI dropdown menu: a role=button trigger and full-width menu items. Sign-out
+           stays a POST so a prefetch or link crawl cannot trigger it; the menu item is a submit
+           button bound by `form=` to the hidden logout form below, which carries the CSRF token.
+           Keeping the form out of the <ul> lets the entry render as a clean full-width item. #}
         <div class="dropdown dropdown-end">
-          <button tabindex="0" class="btn btn-ghost btn-sm gap-1 normal-case" aria-label="User menu">
+          <div tabindex="0" role="button" class="btn btn-ghost btn-sm gap-1 normal-case" aria-label="Account menu">
             <span class="max-w-[8rem] truncate font-medium">{{ current_user.username }}</span>
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-          </button>
-          <ul tabindex="0" class="dropdown-content menu z-30 mt-2 w-40 rounded-box bg-base-100 p-1 shadow-lg">
-            <li>
-              {# POST form so sign-out cannot be triggered by a prefetch or link crawl. The
-                 CSRF token is submitted via the hidden csrf_token form field below. #}
-              <form method="post" action="/logout" class="p-0">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <button type="submit" class="btn btn-ghost btn-sm w-full justify-start font-normal">Sign out</button>
-              </form>
+          </div>
+          <ul tabindex="0" class="dropdown-content menu menu-sm z-30 mt-2 w-56 gap-0.5 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
+            <li class="menu-title px-2 pt-1 pb-2 text-xs font-normal text-base-content/50">
+              Signed in as <span class="font-medium text-base-content/80">{{ current_user.username }}</span>
             </li>
+            <li><a href="/account">Account settings</a></li>
+            <li><button type="submit" form="logout-form" class="text-error">Sign out</button></li>
           </ul>
         </div>
+        <form id="logout-form" method="post" action="/logout" class="hidden">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        </form>
         {% else %}
         <a href="/login" class="btn btn-ghost btn-sm">Sign in</a>
         {% endif %}
       </div>
     </header>
-    <main class="mx-auto w-full max-w-6xl px-4 py-6">{% block content %}{% endblock %}</main>
+    {% endblock %}
+    <main class="{% block main_class %}mx-auto w-full max-w-6xl px-4 py-6{% endblock %}">{% block content %}{% endblock %}</main>
     <script>
       // htmx 2.x does not swap non-2xx responses by default. Opt specific panels into
       // swapping 422 re-renders so validation errors display inline without a full page reload.

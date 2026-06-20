@@ -4,47 +4,37 @@
   Three quiet action cards invite the new admin to act rather than leaving the
   app feeling empty.
 #}
-<div data-step="done" class="space-y-4">
-  <div class="text-center mb-1">
-    <p class="text-2xl mb-1" aria-hidden="true">&#10003;</p>
-    <h2 class="font-display text-xl font-semibold text-base-content">You're all set</h2>
-    <p class="text-xs text-base-content/60 mt-1">cartlog is ready. Here's where to start.</p>
+<div data-step="done" class="space-y-6">
+  <div class="mb-2 text-center">
+    <p class="mb-2 text-3xl text-success" aria-hidden="true">&#10003;</p>
+    <h2 class="font-display text-2xl font-semibold text-base-content">You're all set</h2>
+    <p class="mt-1.5 text-sm text-base-content/60">cartlog is ready. Here's where to start.</p>
   </div>
 
-  {# Three quiet action cards -- launchpad into the actual app #}
-  <div class="space-y-2">
-    <a href="/admin/users" class="card bg-base-200 hover:bg-base-300 transition-colors block">
-      <div class="card-body flex-row items-center gap-3 py-3 px-4">
-        <span class="text-base-content/40 text-lg shrink-0" aria-hidden="true">&#43;</span>
-        <div>
-          <p class="text-sm font-medium text-base-content">Add household members</p>
-          <p class="text-xs text-base-content/50">Create accounts for everyone who uses this kitchen.</p>
+  {# Quiet action cards -- launchpad into the actual app #}
+  <div class="space-y-3">
+    <a href="/admin/users" class="card block border border-base-200 bg-base-100 transition-colors hover:border-base-content/15 hover:bg-base-200/50">
+      <div class="card-body flex-row items-center gap-4 p-4">
+        <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-base-200 text-lg text-base-content/60" aria-hidden="true">&#43;</span>
+        <div class="space-y-0.5">
+          <p class="text-sm font-semibold text-base-content">Add household members</p>
+          <p class="text-sm text-base-content/55">Create accounts for everyone who uses this kitchen.</p>
         </div>
       </div>
     </a>
 
-    <a href="/integrations" class="card bg-base-200 hover:bg-base-300 transition-colors block">
-      <div class="card-body flex-row items-center gap-3 py-3 px-4">
-        <span class="text-base-content/40 text-lg shrink-0" aria-hidden="true">&#8680;</span>
-        <div>
-          <p class="text-sm font-medium text-base-content">Set up the iPhone shortcut</p>
-          <p class="text-xs text-base-content/50">Snap a receipt photo and it imports automatically.</p>
-        </div>
-      </div>
-    </a>
-
-    <a href="/upload" class="card bg-base-200 hover:bg-base-300 transition-colors block">
-      <div class="card-body flex-row items-center gap-3 py-3 px-4">
-        <span class="text-base-content/40 text-lg shrink-0" aria-hidden="true">&#8679;</span>
-        <div>
-          <p class="text-sm font-medium text-base-content">Upload your first receipt</p>
-          <p class="text-xs text-base-content/50">Drag in an image and watch it parse into line items.</p>
+    <a href="/upload" class="card block border border-base-200 bg-base-100 transition-colors hover:border-base-content/15 hover:bg-base-200/50">
+      <div class="card-body flex-row items-center gap-4 p-4">
+        <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-base-200 text-lg text-base-content/60" aria-hidden="true">&#8679;</span>
+        <div class="space-y-0.5">
+          <p class="text-sm font-semibold text-base-content">Upload your first receipt</p>
+          <p class="text-sm text-base-content/55">Drag in an image and watch it parse into line items.</p>
         </div>
       </div>
     </a>
   </div>
 
-  <a href="/" class="btn btn-primary btn-block mt-2">
+  <a href="/" class="btn btn-primary btn-block mt-6">
     Go to dashboard
   </a>
 </div>

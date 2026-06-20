@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Set up cartlog{% endblock %}
 
+{# First-run setup is a focused, full-screen flow: hide the app chrome so only the wizard shows. #}
+{% block navbar %}{% endblock %}
+{% block main_class %}min-h-screen{% endblock %}
+
 {% block content %}
 {#
   First-run setup wizard. The container is framed as a thermal receipt: dashed
@@ -8,26 +12,26 @@
   Steps advance via htmx swaps into #setup-step -- no full-page reloads.
   One orchestrated print-in on load, gated behind prefers-reduced-motion.
 #}
-<div class="flex min-h-[calc(100vh-8rem)] items-center justify-center py-8">
+<div class="flex min-h-screen items-center justify-center px-4 py-8">
   <div class="tape-card mx-auto w-full max-w-md" role="main" aria-label="cartlog setup wizard">
 
     {# Dashed tear edge -- top #}
     <div class="tape-tear" aria-hidden="true"></div>
 
-    <div class="tape-body bg-base-100 px-8 py-6 shadow-md">
+    <div class="tape-body bg-base-100 px-8 py-9 shadow-md sm:px-10">
 
       {# Receipt header: wordmark + meta line #}
-      <div class="tape-header mb-5 text-center">
+      <div class="tape-header mb-7 text-center">
         <p class="font-display text-3xl font-semibold tracking-tight text-base-content">
           cartlog
         </p>
-        <p class="mt-1 font-mono text-xs tracking-widest text-base-content/50 uppercase">
-          SETUP &middot; 001 &middot; {{ today }}
+        <p class="mt-2 font-mono text-xs tracking-[0.25em] text-base-content/50 uppercase">
+          SETUP &middot; {{ today }}
         </p>
       </div>
 
       {# daisyUI steps indicator: 3 meaningful steps + launchpad #}
-      <div class="mb-6" aria-label="Setup progress">
+      <div class="mb-8" aria-label="Setup progress">
         <ul class="steps steps-horizontal w-full text-xs" id="setup-steps-bar">
           <li class="step step-primary" id="step-indicator-account">Account</li>
           <li class="step" id="step-indicator-access">Access</li>
@@ -38,15 +42,15 @@
       {# Step panel: htmx swaps into this target #}
       <div id="setup-step">
         {# Welcome panel: brief thesis + single action #}
-        <div class="space-y-4 text-center">
-          <h1 class="font-display text-2xl font-semibold leading-snug text-base-content">
+        <div class="space-y-5 text-center">
+          <h1 class="font-display text-[1.75rem] font-semibold leading-snug text-base-content">
             Let's set up cartlog
           </h1>
-          <p class="text-sm text-base-content/70 leading-relaxed">
+          <p class="mx-auto max-w-xs text-sm leading-relaxed text-base-content/70">
             A few quick steps and your receipts start turning into searchable spending data.
           </p>
           <button
-            class="btn btn-primary btn-block mt-4"
+            class="btn btn-primary btn-block mt-7"
             hx-get="/setup/step/account"
             hx-target="#setup-step"
             hx-swap="innerHTML"
@@ -81,7 +85,7 @@
   /* The tear edge reads as a perforation cut line */
   .tape-tear {
     height: 0;
-    border-top: 2px dashed oklch(var(--bc) / 0.2);
+    border-top: 2px dashed color-mix(in oklab, var(--color-base-content) 22%, transparent);
     margin: 0;
   }
 
