@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cartlog.web.templating import templates
 
 
@@ -59,3 +61,22 @@ def test_icon_renders_known_lucide_svg():
     assert "<svg" in known
     assert 'aria-hidden="true"' in known
     assert "<svg" not in unknown
+
+
+@pytest.mark.parametrize(
+    ("status", "variant"),
+    [
+        ("needs_review", "badge-warning"),
+        ("failed", "badge-error"),
+        ("parsed", "badge-success"),
+        ("queued", "badge-ghost"),
+    ],
+)
+def test_status_badge_maps_status_to_variant(status, variant):
+    """Verify status_badge maps each status to its single canonical badge variant."""
+    # When rendering the badge for a status
+    html = _render("{% import 'macros/ui.html' as ui %}{{ ui.status_badge('" + status + "') }}")
+
+    # Then the mapped variant class is applied
+    assert variant in html
+    assert "badge" in html

@@ -218,6 +218,41 @@
   .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 }
 
+@layer components {
+  /* Table for column comparison/sorting. Numeric columns right-align via .num. */
+  .data-table { width: 100%; }
+  .data-table thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--color-base-100);
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  }
+  .data-table td.num, .data-table th.num { text-align: right; }
+  .data-table tbody tr { transition: background-color .12s ease; }
+  .data-table tbody tr:hover { background: var(--color-base-200); }
+
+  /* List-row for object records (receipts, users, jobs). Strong on mobile. */
+  .list-row {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: var(--border) solid var(--color-base-300);
+    transition: background-color .12s ease;
+  }
+  .list-row:last-child { border-bottom: 0; }
+  .list-row:hover { background: var(--color-base-200); }
+  .list-row__main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.125rem; }
+  .list-row__title { font-weight: 600; }
+  .list-row__meta { font-size: 0.8125rem; color: color-mix(in oklch, var(--color-base-content) 65%, transparent); }
+  .list-row__trailing { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+
+  /* Receipt-tape motif (moved out of auth templates' inline <style>). */
+  .tape-card { animation: tape-print-in 0.35s ease-out both; }
+  .tape-tear { height: 0.75rem; background:
+      repeating-linear-gradient(90deg, var(--color-base-100) 0 8px, transparent 8px 16px); }
+  .tape-body { border-radius: var(--radius-box); }
+  @keyframes tape-print-in { from { opacity: 0; transform: translateY(0.75rem); } to { opacity: 1; transform: none; } }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important;
