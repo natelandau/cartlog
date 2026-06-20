@@ -7,7 +7,7 @@ import sqlite3
 
 import pytest
 
-from cartlog.backup import BackupError, _resolve_output_path, _source_db_path
+from cartlog.backup import BackupError, _resolve_output_path, _snapshot_database, _source_db_path
 
 _NAME_RE = re.compile(r"^cartlog-backup-\d{8}-\d{6}\.tar\.gz$")
 
@@ -65,3 +65,25 @@ def test_resolve_output_path_refuses_existing_file(tmp_path):
     existing.write_bytes(b"x")
     with pytest.raises(BackupError, match="Refusing to overwrite"):
         _resolve_output_path(existing)
+
+
+def test_snapshot_database_copies_rows_without_sidecars(tmp_path):
+    """Copy rows without sidecars using VACUUM INTO."""
+    source = tmp_path / "cartlog.db"
+    _make_sqlite_db(source, rows=5)
+    dest = tmp_path / "snapshot.db"
+
+    _snapshot_database(source, dest)
+
+    # The snapshot is a single file: no -wal / -shm sidecars beside it.
+    assert dest.is_file()
+    assert not dest.with_name(dest.name + "-wal").exists()
+    assert not dest.with_name(dest.name + "-shm").exists()
+
+    # And it holds the same rows as the source.
+    conn = sqlite3.connect(dest)
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM receipts").fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 5

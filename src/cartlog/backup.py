@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,3 +60,18 @@ def _resolve_output_path(output: Path | None) -> Path:
         msg = f"Refusing to overwrite existing file: {target}"
         raise BackupError(msg)
     return target
+
+
+def _snapshot_database(source: Path, dest: Path) -> None:
+    """Write a consistent, compacted snapshot of `source` to `dest` via VACUUM INTO.
+
+    VACUUM INTO runs in a read transaction, so it captures committed data (including the
+    WAL) into a single file with no -wal/-shm sidecars. This is safe to run while the app
+    is serving and writing concurrently.
+    """
+    conn = sqlite3.connect(source)
+    try:
+        # The destination is bound as a parameter; VACUUM INTO evaluates it as an expression.
+        conn.execute("VACUUM INTO ?", (str(dest),))
+    finally:
+        conn.close()
