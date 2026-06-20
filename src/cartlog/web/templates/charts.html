@@ -1,40 +1,32 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Charts · cartlog{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-3xl font-semibold tracking-tight">Charts</h1>
+{{ ui.page_header("Charts") }}
 
 <div class="flex flex-col gap-4">
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-3">
-      <h2 class="card-title text-lg">Price history</h2>
-      <div class="join">
-        <input id="ph-product" class="input input-bordered join-item" placeholder="product (e.g. eggs)" value="eggs" />
-        <button class="btn btn-primary join-item" onclick="renderPriceHistory()">Show</button>
-      </div>
-      <div id="price-history-chart" class="min-h-[420px]"></div>
-    </div>
-  </section>
+  {% call ui.card("Price history") %}
+  <div class="join">
+    <input id="ph-product" class="input join-item" placeholder="product (e.g. eggs)" value="eggs" />
+    <button class="btn btn-primary join-item" onclick="renderPriceHistory()">Show</button>
+  </div>
+  <div id="price-history-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+  {% endcall %}
 
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-3">
-      <h2 class="card-title text-lg">Store comparison</h2>
-      <div class="join">
-        <input id="sc-product" class="input input-bordered join-item" placeholder="product (e.g. eggs)" value="eggs" />
-        <button class="btn btn-primary join-item" onclick="renderStoreComparison()">Show</button>
-      </div>
-      <div id="store-comparison-chart" class="min-h-[420px]"></div>
-    </div>
-  </section>
+  {% call ui.card("Store comparison") %}
+  <div class="join">
+    <input id="sc-product" class="input join-item" placeholder="product (e.g. eggs)" value="eggs" />
+    <button class="btn btn-primary join-item" onclick="renderStoreComparison()">Show</button>
+  </div>
+  <div id="store-comparison-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+  {% endcall %}
 
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-3">
-      <h2 class="card-title text-lg">Category spend</h2>
-      <div>
-        <button class="btn btn-primary" onclick="renderCategorySpend()">Show</button>
-      </div>
-      <div id="category-spend-chart" class="min-h-[420px]"></div>
-    </div>
-  </section>
+  {% call ui.card("Category spend") %}
+  <div>
+    <button class="btn btn-primary" onclick="renderCategorySpend()">Show</button>
+  </div>
+  <div id="category-spend-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+  {% endcall %}
 </div>
 {% endblock %}
 {% block scripts %}
