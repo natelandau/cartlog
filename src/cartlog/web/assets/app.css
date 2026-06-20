@@ -138,6 +138,15 @@
   .htmx-request.htmx-indicator {
     display: inline-flex;
   }
+
+  body { line-height: 1.6; }
+
+  /* One visible focus ring for every interactive element (was browser default). */
+  :where(a, button, input, select, textarea, [tabindex], summary, label.swap):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-field);
+  }
 }
 
 /* Ledger figures: typewriter mono with lining + tabular numerals so columns align.
@@ -158,5 +167,44 @@
   .reconcile-hint.reconcile-off {
     color: var(--color-error);
     font-weight: 600;
+  }
+}
+
+/* One definition per text role. Tune size/leading here, applies everywhere. */
+@layer components {
+  .page-title {
+    font-family: var(--font-serif);
+    font-size: 1.875rem;     /* tune in one place during Phase 2 */
+    line-height: 1.15;
+    font-weight: 560;
+    letter-spacing: -0.01em;
+  }
+  .section-title {
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    line-height: 1.3;
+    font-weight: 520;
+  }
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  }
+  .meta { color: color-mix(in oklch, var(--color-base-content) 65%, transparent); }
+  .prose-muted { color: color-mix(in oklch, var(--color-base-content) 75%, transparent); line-height: 1.65; }
+}
+
+@layer components {
+  .transition-ui { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
   }
 }
