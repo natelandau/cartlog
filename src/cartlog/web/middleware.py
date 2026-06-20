@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import TYPE_CHECKING
 
-from fastapi import Request  # noqa: TC002 — FastAPI resolves dependency annotations at runtime
+from fastapi import Request  # noqa: TC002 - FastAPI resolves dependency annotations at runtime
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse, Response
 
@@ -121,11 +122,9 @@ class CsrfMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Read settings at dispatch time so tests can override via app.state.settings.
-        app_settings = getattr(request.app.state, "settings", None)
-        if app_settings is None:
-            from cartlog.config import get_settings  # noqa: PLC0415
+        from cartlog.web.dependencies import resolve_settings  # noqa: PLC0415
 
-            app_settings = get_settings()
+        app_settings = resolve_settings(request)
         secret: str = app_settings.secret_key
         secure: bool = app_settings.cookie_secure
 
@@ -173,12 +172,9 @@ async def csrf_protect(request: Request) -> None:
         return
 
     # Read settings at call time so tests can override via app.state.settings.
-    app_settings = getattr(request.app.state, "settings", None)
-    if app_settings is None:
-        from cartlog.config import get_settings  # noqa: PLC0415
+    from cartlog.web.dependencies import resolve_settings  # noqa: PLC0415
 
-        app_settings = get_settings()
-    secret: str = app_settings.secret_key
+    secret: str = resolve_settings(request).secret_key
 
     cookie = request.cookies.get(CSRF_COOKIE)
     submitted: str | None = request.headers.get(CSRF_HEADER)
@@ -190,7 +186,12 @@ async def csrf_protect(request: Request) -> None:
             value = form.get("csrf_token")
             submitted = value if isinstance(value, str) else None
 
-    if not cookie or submitted != cookie or not verify_csrf_token(cookie, secret):
+    if (
+        not cookie
+        or submitted is None
+        or not secrets.compare_digest(submitted, cookie)
+        or not verify_csrf_token(cookie, secret)
+    ):
         from cartlog.web.auth import Forbidden  # noqa: PLC0415
 
         raise Forbidden

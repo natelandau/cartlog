@@ -12,9 +12,8 @@ from sqlalchemy.orm import Session  # noqa: TC002 - runtime import for FastAPI D
 from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
-from cartlog.config import get_settings
 from cartlog.web.auth import AuthRedirect, load_user
-from cartlog.web.dependencies import get_session
+from cartlog.web.dependencies import get_session, resolve_settings
 from cartlog.web.routers.auth_routes import _set_session_cookie
 from cartlog.web.templating import templates
 
@@ -60,9 +59,7 @@ def _revoke_and_refresh(
     """
     from cartlog.db.models import User  # noqa: PLC0415
 
-    # Prefer settings already bound to app.state so test overrides take effect;
-    # fall back to the DI-constructed instance only if the attribute is absent.
-    settings = getattr(request.app.state, "settings", None) or get_settings()
+    settings = resolve_settings(request)
     svc = SessionService(
         session,
         lifetime_days=settings.session_lifetime_days,

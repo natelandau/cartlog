@@ -1,9 +1,9 @@
 {#
   API token management panel.
   Variables:
-    tokens            — list[ApiToken] for the current user, newest first
-    new_token_plaintext — str | None; set only on the response immediately after minting
-    current_user      — the authenticated User
+    tokens              - list[ApiToken] for the current user, newest first
+    new_token_plaintext - str | None; set only on the response immediately after minting
+    current_user        - the authenticated User
   Tone matches the integrations page: card with card-body, minimal copy.
 #}
 <section id="tokens-panel" class="card border border-base-300 bg-base-100 shadow-sm">
@@ -23,7 +23,7 @@
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
       </svg>
       <div class="min-w-0 flex-1">
-        <p class="font-semibold text-sm">Token created. Copy it now — it will never be shown again.</p>
+        <p class="font-semibold text-sm">Token created. Copy it now, it will never be shown again.</p>
         <div class="mt-2 flex items-center gap-2 flex-wrap">
           <code id="new-token-value" class="block break-all rounded bg-success-content/10 px-3 py-2 font-mono text-sm text-success-content select-all flex-1">{{ new_token_plaintext }}</code>
           <button
@@ -37,7 +37,7 @@
     </div>
     {% endif %}
 
-    {# Token list — metadata only, no stored plaintext #}
+    {# Token list, metadata only, no stored plaintext #}
     {% if tokens %}
     <div class="overflow-x-auto">
       <table class="table table-sm">
