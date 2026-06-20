@@ -29,7 +29,7 @@
         <div class="list-row__main">
           <span class="list-row__title num">#{{ j.id }} · {{ j.source }}</span>
           <span class="list-row__meta">
-            {% if j.status == "done" and j.receipt_id %}<a class="link link-primary" href="/receipts/{{ j.receipt_id }}">View receipt #{{ j.receipt_id }}</a>{% elif j.status == "failed" %}<span class="text-error">{{ j.last_error or "no details available" }}{% if j.retry_count %} (after {{ j.retry_count }} retries){% endif %}</span>{% endif %}
+            {% if j.status == "done" and j.receipt_id %}<a class="link link-primary" href="/receipts/{{ j.receipt_id }}">View receipt #{{ j.receipt_id }}</a>{% elif j.status == "failed" %}<span class="font-medium text-error">Failed: {{ j.last_error or "no details available" }}{% if j.retry_count %} (after {{ j.retry_count }} retries){% endif %}</span>{% endif %}
           </span>
         </div>
         <div class="list-row__trailing">{{ ui.status_badge(j.status) }}</div>
