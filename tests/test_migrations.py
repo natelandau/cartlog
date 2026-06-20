@@ -1,5 +1,7 @@
 """Tests that Alembic migrations match the ORM models."""
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
 from cartlog.bootstrap import prepare_runtime
@@ -39,3 +41,29 @@ def test_migration_creates_parse_cost_events(tmp_path, monkeypatch):
     columns = {c["name"] for c in inspector.get_columns("parse_cost_events")}
     engine.dispose()
     assert columns >= _EVENT_COLUMNS
+
+
+def test_auth_tables_exist_after_upgrade(tmp_path, monkeypatch):
+    """Verify running migrations to head creates the auth tables and user columns."""
+    # Given settings pointing at a fresh temp database.
+    # We patch get_settings directly because it is lru_cache'd and env-var changes alone
+    # would not bust the cache populated by earlier tests in the same process.
+    db = tmp_path / "m.db"
+    settings = Settings(
+        database_url=f"sqlite:///{db}",
+        image_storage_dir=tmp_path / "imgs",
+        secret_key="x" * 32,
+    )
+    monkeypatch.setattr("cartlog.config.get_settings", lambda: settings)
+
+    # When migrations are run to head
+    command.upgrade(Config("alembic.ini"), "head")
+
+    # Then auth tables and updated user columns exist
+    engine = create_engine(f"sqlite:///{db}")
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    user_cols = {c["name"] for c in inspector.get_columns("users")}
+    engine.dispose()
+    assert {"users", "sessions", "api_tokens", "app_config"} <= tables
+    assert {"username", "role", "is_active", "must_change_password"} <= user_cols

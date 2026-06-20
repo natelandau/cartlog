@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from cartlog.auth.users import UserService
 from cartlog.db import models  # noqa: F401  # registers tables on Base.metadata
 from cartlog.db.base import Base
 from cartlog.db.models import (
@@ -22,7 +23,9 @@ from cartlog.db.models import (
     Product,
     Receipt,
     ReceiptStatus,
+    Role,
     Store,
+    User,
 )
 
 if TYPE_CHECKING:
@@ -205,3 +208,31 @@ def seed_temp_db(
         seed(session)
     engine.dispose()
     return url
+
+
+def seed_user(
+    session: Session,
+    *,
+    username: str,
+    role: Role,
+    password: str = "violet pantry koala",  # noqa: S107
+    active: bool = True,
+) -> User:
+    """Create and commit a user for tests.
+
+    Args:
+        session: The SQLAlchemy session to use.
+        username: The login handle for the user.
+        role: The access tier to grant.
+        password: The plaintext password; defaults to a safe fixture value.
+        active: Whether the account should be enabled for login.
+
+    Returns:
+        The newly created and committed User instance.
+    """
+    svc = UserService(session)
+    user = svc.create_user(username, password, role)
+    if not active:
+        svc.set_active(user, active=False)
+    session.commit()
+    return user

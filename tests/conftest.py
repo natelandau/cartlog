@@ -25,6 +25,12 @@ def _isolate_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _test_secret_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide a deterministic secret key so Settings construction succeeds in tests."""
+    monkeypatch.setenv("CARTLOG_SECRET_KEY", "test-secret-key-0123456789abcdef")
+
+
+@pytest.fixture(autouse=True)
 def _dummy_provider_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide a dummy provider credential so model construction in tests needs no real credentials.
 

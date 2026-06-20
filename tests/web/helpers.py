@@ -7,8 +7,22 @@ seeded row's id, used across the sorting, search, and delete tests.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Any
 
 from cartlog.db.models import LineItem, Product, Receipt
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
+
+
+def get_session_factory(client: TestClient) -> Any:  # noqa: ANN401
+    """Return the session_factory stored on the FastAPI app's state.
+
+    TestClient.app is typed as an ASGI callable, not a FastAPI instance, so
+    `.state` is invisible to ty. One suppression here avoids scattering it
+    across every test that needs a direct DB session.
+    """
+    return client.app.state.session_factory  # ty: ignore[unresolved-attribute]
 
 
 def totals_in_order(html: str) -> list[float]:
@@ -31,17 +45,17 @@ def unit_prices_in_order(html: str) -> list[float]:
     return [float(x) for x in re.findall(pattern, html)]
 
 
-def first_receipt_id(app_client) -> int:
+def first_receipt_id(app_client: TestClient) -> int:
     """Return the id of any one seeded receipt."""
-    with app_client.app.state.session_factory() as session:
+    with get_session_factory(app_client)() as session:
         receipt = session.query(Receipt).first()
         assert receipt is not None
         return receipt.id
 
 
-def first_line_item_id(app_client) -> int:
+def first_line_item_id(app_client: TestClient) -> int:
     """Return the line_item_id of the first 'eggs' search result."""
-    with app_client.app.state.session_factory() as session:
+    with get_session_factory(app_client)() as session:
         line = (
             session.query(LineItem)
             .join(Product, LineItem.product_id == Product.id)

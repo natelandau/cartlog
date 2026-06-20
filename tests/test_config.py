@@ -138,3 +138,26 @@ def test_settings_parse_model_overrides_default_from_env(monkeypatch):
 
     # Then the configured value wins
     assert settings.parse_model == "openai:gpt-5.2"
+
+
+def test_secret_key_required(monkeypatch):
+    """Verify Settings rejects construction when secret_key is empty or unset."""
+    # Empty string passed directly must be rejected
+    monkeypatch.delenv("CARTLOG_SECRET_KEY", raising=False)
+    with pytest.raises(ValidationError, match="CARTLOG_SECRET_KEY is required"):
+        Settings(secret_key="")
+
+    # Whitespace-only value is equally invalid
+    with pytest.raises(ValidationError, match="CARTLOG_SECRET_KEY is required"):
+        Settings(secret_key="   ")
+
+
+def test_session_defaults():
+    """Verify session and cookie settings carry secure defaults."""
+    # Given a minimal Settings with only the required secret_key
+    settings = Settings(secret_key="x" * 32)
+
+    # Then the session/cookie defaults match the documented secure values
+    assert settings.cookie_secure is True
+    assert settings.session_lifetime_days == 14
+    assert settings.session_idle_timeout_days == 7
