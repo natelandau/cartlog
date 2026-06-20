@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from cartlog.clock import naive_utcnow
+
 _DB_ARCNAME = "cartlog.db"
 _IMAGES_ARCNAME = "receipt_images"
 
@@ -38,3 +40,22 @@ def _source_db_path(database_url: str) -> Path:
         msg = f"Database file does not exist: {path}"
         raise BackupError(msg)
     return path
+
+
+def _resolve_output_path(output: Path | None) -> Path:
+    """Resolve the archive's destination, refusing to overwrite an existing file.
+
+    `None` writes a timestamped file into the current directory; an existing directory
+    receives a timestamped file inside it; any other value is taken as the exact target.
+    """
+    name = f"cartlog-backup-{naive_utcnow():%Y%m%d-%H%M%S}.tar.gz"
+    if output is None:
+        target = Path.cwd() / name
+    elif output.is_dir():
+        target = output / name
+    else:
+        target = output
+    if target.exists():
+        msg = f"Refusing to overwrite existing file: {target}"
+        raise BackupError(msg)
+    return target

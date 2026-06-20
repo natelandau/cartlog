@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 
 import pytest
 
-from cartlog.backup import BackupError, _source_db_path
+from cartlog.backup import BackupError, _resolve_output_path, _source_db_path
+
+_NAME_RE = re.compile(r"^cartlog-backup-\d{8}-\d{6}\.tar\.gz$")
 
 
 def _make_sqlite_db(path, rows: int = 3) -> None:
@@ -41,3 +44,24 @@ def test_source_db_path_rejects_missing_file(tmp_path):
     missing = tmp_path / "nope.db"
     with pytest.raises(BackupError, match="does not exist"):
         _source_db_path(f"sqlite:///{missing}")
+
+
+def test_resolve_output_path_generates_timestamped_name_in_directory(tmp_path):
+    """Generate a timestamped filename in the given directory."""
+    target = _resolve_output_path(tmp_path)
+    assert target.parent == tmp_path
+    assert _NAME_RE.match(target.name)
+
+
+def test_resolve_output_path_uses_explicit_file_verbatim(tmp_path):
+    """Use an explicit file path as the target verbatim."""
+    explicit = tmp_path / "my-backup.tar.gz"
+    assert _resolve_output_path(explicit) == explicit
+
+
+def test_resolve_output_path_refuses_existing_file(tmp_path):
+    """Refuse to overwrite an existing file."""
+    existing = tmp_path / "existing.tar.gz"
+    existing.write_bytes(b"x")
+    with pytest.raises(BackupError, match="Refusing to overwrite"):
+        _resolve_output_path(existing)
