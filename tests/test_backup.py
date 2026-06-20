@@ -32,7 +32,7 @@ def test_source_db_path_returns_existing_sqlite_file(tmp_path):
 
 def test_source_db_path_rejects_non_sqlite_url(tmp_path):
     """Reject non-sqlite database URLs."""
-    with pytest.raises(BackupError, match="sqlite"):
+    with pytest.raises(BackupError, match="SQLite"):
         _source_db_path("postgresql://localhost/cartlog")
 
 

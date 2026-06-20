@@ -30,7 +30,7 @@ def _source_db_path(database_url: str) -> Path:
     """
     if not database_url.startswith("sqlite:///"):
         msg = (
-            f"Backups support only sqlite databases, but CARTLOG_DATABASE_URL is '{database_url}'."
+            f"Backups support only SQLite databases, but CARTLOG_DATABASE_URL is '{database_url}'."
         )
         raise BackupError(msg)
     path = Path(database_url.removeprefix("sqlite:///"))
