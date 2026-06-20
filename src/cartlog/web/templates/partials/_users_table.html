@@ -1,16 +1,16 @@
-{% from "macros/ui.html" import table_card %}
+{% import "macros/ui.html" as ui with context %}
 <div id="admin-users">
   {% if error %}
   <div role="alert" class="alert alert-error mb-4">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z"/></svg>
+    {{ ui.icon('alert-triangle', cls='h-5 w-5 shrink-0') }}
     <span>{{ error }}</span>
   </div>
   {% endif %}
 
   {# Create user form #}
-  <div class="card mb-6 border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body p-5">
-      <h2 class="card-title mb-3 text-base">Add user</h2>
+  <div class="surface-card mb-6">
+    <div class="surface-card__body">
+      <h2 class="section-title">Add user</h2>
       <form hx-post="/admin/users" hx-target="#admin-users" hx-swap="outerHTML">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         <div class="flex flex-wrap items-end gap-3">
@@ -41,24 +41,15 @@
   </div>
 
   {% if users %}
-  {% call table_card() %}
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Username</th>
-        <th>Role</th>
-        <th>Status</th>
-        <th class="text-right">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for user in users %}
-      {# The last active admin cannot be demoted or deactivated (route guards reject it),
-         so hide those controls rather than show buttons that only error when used. #}
-      {% set is_last_active_admin = user.role == "admin" and user.is_active and active_admin_count is defined and active_admin_count <= 1 %}
-      <tr>
-        <td class="font-mono text-sm">{{ user.username }}</td>
-        <td>
+  <div class="surface-card overflow-hidden">
+    {% for user in users %}
+    {# The last active admin cannot be demoted or deactivated (route guards reject it),
+       so hide those controls rather than show buttons that only error when used. #}
+    {% set is_last_active_admin = user.role == "admin" and user.is_active and active_admin_count is defined and active_admin_count <= 1 %}
+    <div class="list-row flex-wrap">
+      <div class="list-row__main">
+        <span class="list-row__title font-mono">{{ user.username }}</span>
+        <span class="list-row__meta flex items-center gap-2">
           {# Role badge coloring maps each role to a badge variant for quick scanning #}
           {% if user.role == "admin" %}
           <span class="badge badge-error badge-sm">Admin</span>
@@ -67,62 +58,59 @@
           {% else %}
           <span class="badge badge-ghost badge-sm">Viewer</span>
           {% endif %}
-        </td>
-        <td>
           {% if user.is_active %}
           <span class="badge badge-success badge-outline badge-sm">Active</span>
           {% else %}
           <span class="badge badge-neutral badge-outline badge-sm">Inactive</span>
           {% endif %}
-        </td>
-        <td class="text-right">
-          <div class="join">
-            {# Change role #}
-            <details class="dropdown dropdown-end">
-              <summary class="btn btn-ghost btn-xs join-item" aria-label="Change role for {{ user.username }}">Role</summary>
-              <ul class="menu dropdown-content z-10 mt-1 w-36 rounded-box bg-base-100 p-1 shadow-lg border border-base-300">
-                {% for r in roles %}
-                {# Omit demote options for the last active admin; only their current role remains. #}
-                {% if not (is_last_active_admin and r != user.role) %}
-                <li>
-                  <form hx-post="/admin/users/{{ user.id }}/role" hx-target="#admin-users" hx-swap="outerHTML">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                    <input type="hidden" name="role" value="{{ r.value }}" />
-                    <button type="submit" class="w-full text-left{% if user.role == r %} font-semibold{% endif %}">
-                      {{ r.value | capitalize }}
-                    </button>
-                  </form>
-                </li>
-                {% endif %}
-                {% endfor %}
-              </ul>
-            </details>
-            {# Toggle active/inactive; the last active admin cannot be deactivated, so hide it. #}
-            {% if not is_last_active_admin %}
-            <form hx-post="/admin/users/{{ user.id }}/active" hx-target="#admin-users" hx-swap="outerHTML">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}" />
-              <button type="submit" class="btn btn-ghost btn-xs join-item" aria-label="{{ 'Deactivate' if user.is_active else 'Activate' }} {{ user.username }}">
-                {{ "Deactivate" if user.is_active else "Activate" }}
-              </button>
-            </form>
-            {% endif %}
-            {# Reset password #}
-            <form hx-post="/admin/users/{{ user.id }}/reset-password" hx-target="#admin-users" hx-swap="outerHTML">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-              <button type="submit" class="btn btn-ghost btn-xs join-item text-warning" aria-label="Reset password for {{ user.username }}"
-                onclick="return confirm('Reset password for {{ user.username }}? Their current sessions will be signed out.')">
-                Reset password
-              </button>
-            </form>
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endcall %}
+        </span>
+      </div>
+      <div class="list-row__trailing">
+        <div class="join">
+          {# Change role #}
+          <details class="dropdown dropdown-end">
+            <summary class="btn btn-ghost btn-xs join-item" aria-label="Change role for {{ user.username }}">Role</summary>
+            <ul class="menu dropdown-content z-10 mt-1 w-36 rounded-box bg-base-100 p-1 shadow-lg border border-base-300">
+              {% for r in roles %}
+              {# Omit demote options for the last active admin; only their current role remains. #}
+              {% if not (is_last_active_admin and r != user.role) %}
+              <li>
+                <form hx-post="/admin/users/{{ user.id }}/role" hx-target="#admin-users" hx-swap="outerHTML">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <input type="hidden" name="role" value="{{ r.value }}" />
+                  <button type="submit" class="w-full text-left{% if user.role == r %} font-semibold{% endif %}">
+                    {{ r.value | capitalize }}
+                  </button>
+                </form>
+              </li>
+              {% endif %}
+              {% endfor %}
+            </ul>
+          </details>
+          {# Toggle active/inactive; the last active admin cannot be deactivated, so hide it. #}
+          {% if not is_last_active_admin %}
+          <form hx-post="/admin/users/{{ user.id }}/active" hx-target="#admin-users" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}" />
+            <button type="submit" class="btn btn-ghost btn-xs join-item" aria-label="{{ 'Deactivate' if user.is_active else 'Activate' }} {{ user.username }}">
+              {{ "Deactivate" if user.is_active else "Activate" }}
+            </button>
+          </form>
+          {% endif %}
+          {# Reset password #}
+          <form hx-post="/admin/users/{{ user.id }}/reset-password" hx-target="#admin-users" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="btn btn-ghost btn-xs join-item text-warning" aria-label="Reset password for {{ user.username }}"
+              onclick="return confirm('Reset password for {{ user.username }}? Their current sessions will be signed out.')">
+              Reset password
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
   {% else %}
-  <p class="text-base-content/60">No users found.</p>
+  <p class="meta">No users found.</p>
   {% endif %}
 </div>
