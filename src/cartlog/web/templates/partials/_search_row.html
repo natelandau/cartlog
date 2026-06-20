@@ -1,17 +1,17 @@
 {# One read-only search result row. `r` is a SearchResult. The id lets htmx swap just this
    row in place for inline editing. #}
 <tr id="search-row-{{ r.line_item_id }}">
-  <td>{{ r.raw_description }}</td>
-  <td>{{ r.canonical_name }}</td>
-  <td>{{ r.category or "" }}</td>
-  <td>{{ r.store_chain }}</td>
-  <td><a class="link link-primary num" href="/receipts/{{ r.receipt_id }}">{{ r.purchase_date }}</a></td>
-  <td class="num text-right">{{ r.unit_price }}</td>
-  <td class="num text-right">{{ r.normalized_unit_price | normalized_price(r.measure_dimension, r.measure_status, unit_system) }}</td>
-  <td class="num text-right">{{ r.line_total }}</td>
+  <td data-label="Description">{{ r.raw_description }}</td>
+  <td data-label="Product">{{ r.canonical_name }}</td>
+  <td data-label="Category">{{ r.category or "" }}</td>
+  <td data-label="Store">{{ r.store_chain }}</td>
+  <td data-label="Date"><a class="link link-primary num" href="/receipts/{{ r.receipt_id }}">{{ r.purchase_date }}</a></td>
+  <td data-label="Unit price" class="num text-right">{{ r.unit_price }}</td>
+  <td data-label="Norm $/unit" class="num text-right">{{ r.normalized_unit_price | normalized_price(r.measure_dimension, r.measure_status, unit_system) }}</td>
+  <td data-label="Line total" class="num text-right">{{ r.line_total }}</td>
   {# Edit action is editor-only; the server also guards /search/items/* with RequireEditor. #}
   {% if can_edit %}
-  <td>
+  <td data-label="">
     <button type="button" class="btn btn-ghost btn-xs"
             hx-get="/search/items/{{ r.line_item_id }}/edit"
             hx-target="#search-row-{{ r.line_item_id }}" hx-swap="outerHTML">Edit</button>

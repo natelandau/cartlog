@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Search · cartlog{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-3xl font-semibold tracking-tight">Search</h1>
-<label class="input input-bordered mb-4 flex w-full max-w-lg items-center gap-2">
-  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
+{{ ui.page_header("Search") }}
+<label class="input mb-4 flex w-full max-w-lg items-center gap-2">
+  {{ ui.icon('search', 16, 'opacity-60') }}
   <input
     class="grow"
     type="search" name="q" placeholder="milk, eggs, Safeway…"

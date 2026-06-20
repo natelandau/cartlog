@@ -2,19 +2,19 @@
    (id, name). The product input references the #search-products datalist that lives in the
    results fragment. Save/Cancel swap this single <tr> via outerHTML (option B). #}
 <tr id="search-row-{{ r.line_item_id }}" class="line-row">
-  <td>{{ r.raw_description }}</td>
-  <td><input class="input input-xs w-full min-w-32" name="canonical_name" list="search-products" value="{{ r.canonical_name }}"
+  <td data-label="Description">{{ r.raw_description }}</td>
+  <td data-label="Product"><input class="input input-xs w-full" name="canonical_name" list="search-products" value="{{ r.canonical_name }}"
              aria-label="Product name" /></td>
-  <td>
+  <td data-label="Category">
     {% with options=category_options, current_id=r.category_id %}
       {% include "partials/_category_picker.html" %}
     {% endwith %}
   </td>
-  <td>{{ r.store_chain }}</td>
-  <td><a class="link link-primary num" href="/receipts/{{ r.receipt_id }}">{{ r.purchase_date }}</a></td>
-  <td class="num text-right">{{ r.unit_price }}</td>
-  <td class="num text-right">{{ r.line_total }}</td>
-  <td>
+  <td data-label="Store">{{ r.store_chain }}</td>
+  <td data-label="Date"><a class="link link-primary num" href="/receipts/{{ r.receipt_id }}">{{ r.purchase_date }}</a></td>
+  <td data-label="Unit price" class="num text-right">{{ r.unit_price }}</td>
+  <td data-label="Line total" class="num text-right">{{ r.line_total }}</td>
+  <td data-label="">
     <div class="flex items-center gap-1">
       {% if errors %}<span class="text-xs font-medium text-error" role="alert">{{ errors }}</span>{% endif %}
       <button type="button" class="btn btn-primary btn-xs"
