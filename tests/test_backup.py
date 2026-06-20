@@ -4,10 +4,18 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import tarfile
 
 import pytest
 
-from cartlog.backup import BackupError, _resolve_output_path, _snapshot_database, _source_db_path
+from cartlog.backup import (
+    BackupError,
+    _resolve_output_path,
+    _snapshot_database,
+    _source_db_path,
+    create_backup,
+)
+from cartlog.config import Settings
 
 _NAME_RE = re.compile(r"^cartlog-backup-\d{8}-\d{6}\.tar\.gz$")
 
@@ -87,3 +95,49 @@ def test_snapshot_database_copies_rows_without_sidecars(tmp_path):
     finally:
         conn.close()
     assert count == 5
+
+
+def _settings_for(tmp_path, *, with_images: bool = True) -> Settings:
+    db = tmp_path / "cartlog.db"
+    _make_sqlite_db(db, rows=4)
+    images = tmp_path / "receipt_images"
+    if with_images:
+        images.mkdir()
+        (images / "a.jpg").write_bytes(b"\xff\xd8fake-jpeg")
+        (images / "b.png").write_bytes(b"\x89PNGfake")
+    return Settings(database_url=f"sqlite:///{db}", image_storage_dir=images)
+
+
+def test_create_backup_produces_fixed_layout_archive(tmp_path):
+    """Produce a fixed-layout tar.gz with database and images, excluding sidecars."""
+    settings = _settings_for(tmp_path)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+
+    result = create_backup(settings, out_dir)
+
+    assert result.path.parent == out_dir
+    assert result.path.suffix == ".gz"
+    assert result.image_count == 2
+    assert result.database_bytes > 0
+
+    with tarfile.open(result.path, "r:gz") as tar:
+        names = set(tar.getnames())
+    assert "cartlog.db" in names
+    assert "receipt_images/a.jpg" in names
+    assert "receipt_images/b.png" in names
+    # No WAL/SHM sidecars ride along in the archive.
+    assert not any(n.endswith(("-wal", "-shm")) for n in names)
+
+
+def test_create_backup_handles_missing_image_dir(tmp_path):
+    """Handle missing image directory by creating empty receipt_images entry."""
+    settings = _settings_for(tmp_path, with_images=False)
+
+    result = create_backup(settings, tmp_path / "backup.tar.gz")
+
+    assert result.image_count == 0
+    with tarfile.open(result.path, "r:gz") as tar:
+        members = tar.getmembers()
+    # The receipt_images directory is always present so the restore layout is valid.
+    assert any(m.name.rstrip("/") == "receipt_images" and m.isdir() for m in members)
