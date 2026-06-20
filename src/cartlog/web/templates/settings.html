@@ -1,32 +1,24 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Settings · cartlog{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-2xl space-y-6">
-  <div>
-    <h1 class="font-display text-3xl tracking-tight">Settings</h1>
-    <p class="mt-1 text-base-content/60">Configure how receipts reach cartlog.</p>
-  </div>
+  {{ ui.page_header("Settings", "Configure how receipts reach cartlog.") }}
 
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-1">
-      <h2 class="card-title">Watch folder</h2>
-      <p class="mb-2 text-sm text-base-content/60">
-        Point cartlog at a synced folder (iCloud Drive, Dropbox, a network share) and it
-        imports any receipt image or PDF dropped in, filing each into a <code>processed</code>
-        subfolder when done.
-      </p>
-      {% include "partials/_settings_folder.html" %}
-    </div>
-  </section>
+  {% call ui.card("Watch folder") %}
+  <p class="mb-2 text-sm text-base-content/60">
+    Point cartlog at a synced folder (iCloud Drive, Dropbox, a network share) and it
+    imports any receipt image or PDF dropped in, filing each into a <code>processed</code>
+    subfolder when done.
+  </p>
+  {% include "partials/_settings_folder.html" %}
+  {% endcall %}
 
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-1">
-      <h2 class="card-title">Who can see your data</h2>
-      <p class="mb-2 text-sm text-base-content/60">
-        Control whether visitors on your network need to sign in before they can view receipts.
-      </p>
-      {% include "partials/_settings_access.html" %}
-    </div>
-  </section>
+  {% call ui.card("Who can see your data") %}
+  <p class="mb-2 text-sm text-base-content/60">
+    Control whether visitors on your network need to sign in before they can view receipts.
+  </p>
+  {% include "partials/_settings_access.html" %}
+  {% endcall %}
 </div>
 {% endblock %}
