@@ -1,3 +1,4 @@
+{% import "macros/ui.html" as ui with context %}
 {% macro nav_links() %}
   <li><a href="/">Dashboard</a></li>
   {% if can_edit %}<li><a href="/upload">Upload</a></li>{% endif %}
@@ -34,7 +35,7 @@
       <div class="navbar-start">
         <div class="dropdown lg:hidden">
           <button tabindex="0" class="btn btn-square btn-ghost" aria-label="Open menu">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            {{ ui.icon('menu') }}
           </button>
           <ul tabindex="0" class="menu dropdown-content z-30 mt-2 w-52 gap-1 rounded-box bg-base-100 p-2 shadow-lg" data-nav>
             {{ nav_links() }}
@@ -58,7 +59,7 @@
         <div class="dropdown dropdown-end">
           <div tabindex="0" role="button" class="btn btn-ghost btn-sm gap-1 normal-case" aria-label="Account menu">
             <span class="max-w-[8rem] truncate font-medium">{{ current_user.username }}</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+            {{ ui.icon('chevron-down', 16, 'opacity-60') }}
           </div>
           <ul tabindex="0" class="dropdown-content menu menu-sm z-30 mt-2 w-56 gap-0.5 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
             <li class="menu-title px-2 pt-1 pb-2 text-xs font-normal text-base-content/50">
