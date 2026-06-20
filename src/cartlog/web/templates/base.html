@@ -16,13 +16,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {# Declares native support for both schemes so the browser uses our dark theme instead of
+       auto-tinting the light one when the OS is in dark mode. #}
+    <meta name="color-scheme" content="light dark" />
     <title>{% block title %}cartlog{% endblock %}</title>
-    {# Apply the saved theme before first paint to avoid a flash of the wrong scheme. #}
+    {# Resolve the theme before first paint: an explicit saved choice wins, otherwise follow the
+       OS preference. daisyUI emits no prefers-color-scheme rule, so this is what honors dark mode. #}
     <script>
       (function () {
         var t = localStorage.getItem("cartlog-theme");
-        if (t === "cartlog-light" || t === "cartlog-dark")
-          document.documentElement.setAttribute("data-theme", t);
+        if (t !== "cartlog-light" && t !== "cartlog-dark")
+          t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "cartlog-dark" : "cartlog-light";
+        document.documentElement.setAttribute("data-theme", t);
       })();
     </script>
     <link rel="stylesheet" href="/static/app.css" />
@@ -120,6 +125,13 @@
           document.documentElement.setAttribute("data-theme", next);
           localStorage.setItem("cartlog-theme", next);
           syncToggleIcon(next);
+        });
+        // Follow OS changes live, but only until the visitor makes an explicit choice.
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function (e) {
+          if (localStorage.getItem("cartlog-theme")) return;
+          var osTheme = e.matches ? "cartlog-dark" : "cartlog-light";
+          document.documentElement.setAttribute("data-theme", osTheme);
+          syncToggleIcon(osTheme);
         });
       })();
 
