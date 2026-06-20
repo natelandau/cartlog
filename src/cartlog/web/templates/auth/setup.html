@@ -22,7 +22,7 @@
 
       {# Receipt header: wordmark + meta line #}
       <div class="tape-header mb-7 text-center">
-        <p class="font-display text-3xl font-semibold tracking-tight text-base-content">
+        <p class="font-display text-3xl tracking-tight text-base-content">
           cartlog
         </p>
         <p class="mt-2 font-mono text-xs tracking-[0.25em] text-base-content/50 uppercase">
@@ -43,7 +43,7 @@
       <div id="setup-step">
         {# Welcome panel: brief thesis + single action #}
         <div class="space-y-5 text-center">
-          <h1 class="font-display text-[1.75rem] font-semibold leading-snug text-base-content">
+          <h1 class="font-display text-[1.75rem] leading-snug text-base-content">
             Let's set up cartlog
           </h1>
           <p class="mx-auto max-w-xs text-sm leading-relaxed text-base-content/70">
@@ -70,43 +70,6 @@
 {% endblock %}
 
 {% block scripts %}
-<style>
-  /* Receipt-tape card: narrow column with dashed perforation edges */
-  .tape-card {
-    animation: tape-print-in 0.35s ease-out both;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .tape-card {
-      animation: none;
-    }
-  }
-
-  /* The tear edge reads as a perforation cut line */
-  .tape-tear {
-    height: 0;
-    border-top: 2px dashed color-mix(in oklab, var(--color-base-content) 22%, transparent);
-    margin: 0;
-  }
-
-  /* One orchestrated print-in: the tape slides up and fades in as if feeding from the printer */
-  @keyframes tape-print-in {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  /* Keep the strength meter label visually quiet so it supports, not distracts */
-  #strength-label {
-    transition: color 0.2s ease;
-  }
-</style>
-
 <script>
   // Allow htmx to swap 422 re-renders from the account step so validation errors
   // display inline instead of being dropped (mirrors the pattern in base.html).
