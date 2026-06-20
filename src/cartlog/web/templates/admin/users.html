@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}User management · cartlog{% endblock %}
+{% block content %}
+<h1 class="mb-1 text-3xl font-semibold tracking-tight">User management</h1>
+<p class="mb-5 text-base-content/60">Create accounts, assign roles, and reset passwords.</p>
+
+{% include "partials/_users_table.html" %}
+{% endblock %}

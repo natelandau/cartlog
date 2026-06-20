@@ -1,0 +1,120 @@
+{% from "macros/ui.html" import table_card %}
+<div id="admin-users">
+  {% if error %}
+  <div role="alert" class="alert alert-error mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z"/></svg>
+    <span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  {# Create user form #}
+  <div class="card mb-6 border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body p-5">
+      <h2 class="card-title mb-3 text-base">Add user</h2>
+      <form hx-post="/admin/users" hx-target="#admin-users" hx-swap="outerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="flex flex-wrap items-end gap-3">
+          <fieldset class="fieldset flex-1 min-w-40">
+            <legend class="fieldset-legend">Username</legend>
+            <label class="input w-full">
+              <input type="text" name="username" class="grow" placeholder="username" required autocomplete="off" />
+            </label>
+          </fieldset>
+          <fieldset class="fieldset flex-1 min-w-48">
+            <legend class="fieldset-legend">Password</legend>
+            <label class="input w-full">
+              <input type="text" name="password" class="grow" placeholder="initial password (min 12 chars)" required autocomplete="new-password" />
+            </label>
+          </fieldset>
+          <fieldset class="fieldset min-w-32">
+            <legend class="fieldset-legend">Role</legend>
+            <select name="role" class="select w-full" required>
+              {% for r in roles %}
+              <option value="{{ r.value }}">{{ r.value | capitalize }}</option>
+              {% endfor %}
+            </select>
+          </fieldset>
+          <button type="submit" class="btn btn-primary btn-sm mb-1">Add user</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if users %}
+  {% call table_card() %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th class="text-right">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td class="font-mono text-sm">{{ user.username }}</td>
+        <td>
+          {# Role badge coloring maps each role to a badge variant for quick scanning #}
+          {% if user.role == "admin" %}
+          <span class="badge badge-error badge-sm">Admin</span>
+          {% elif user.role == "editor" %}
+          <span class="badge badge-warning badge-sm">Editor</span>
+          {% else %}
+          <span class="badge badge-ghost badge-sm">Viewer</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if user.is_active %}
+          <span class="badge badge-success badge-outline badge-sm">Active</span>
+          {% else %}
+          <span class="badge badge-neutral badge-outline badge-sm">Inactive</span>
+          {% endif %}
+        </td>
+        <td class="text-right">
+          <div class="join">
+            {# Change role #}
+            <details class="dropdown dropdown-end">
+              <summary class="btn btn-ghost btn-xs join-item" aria-label="Change role for {{ user.username }}">Role</summary>
+              <ul class="menu dropdown-content z-10 mt-1 w-36 rounded-box bg-base-100 p-1 shadow-lg border border-base-300">
+                {% for r in roles %}
+                <li>
+                  <form hx-post="/admin/users/{{ user.id }}/role" hx-target="#admin-users" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <input type="hidden" name="role" value="{{ r.value }}" />
+                    <button type="submit" class="w-full text-left{% if user.role == r %} font-semibold{% endif %}">
+                      {{ r.value | capitalize }}
+                    </button>
+                  </form>
+                </li>
+                {% endfor %}
+              </ul>
+            </details>
+            {# Toggle active/inactive #}
+            <form hx-post="/admin/users/{{ user.id }}/active" hx-target="#admin-users" hx-swap="outerHTML">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <input type="hidden" name="active" value="{{ 'false' if user.is_active else 'true' }}" />
+              <button type="submit" class="btn btn-ghost btn-xs join-item" aria-label="{{ 'Deactivate' if user.is_active else 'Activate' }} {{ user.username }}">
+                {{ "Deactivate" if user.is_active else "Activate" }}
+              </button>
+            </form>
+            {# Reset password #}
+            <form hx-post="/admin/users/{{ user.id }}/reset-password" hx-target="#admin-users" hx-swap="outerHTML">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <button type="submit" class="btn btn-ghost btn-xs join-item text-warning" aria-label="Reset password for {{ user.username }}"
+                onclick="return confirm('Reset password for {{ user.username }}? Their current sessions will be signed out.')">
+                Reset password
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+  {% else %}
+  <p class="text-base-content/60">No users found.</p>
+  {% endif %}
+</div>

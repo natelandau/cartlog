@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Settings · cartlog{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-2xl">
-  <h1 class="font-display text-3xl tracking-tight">Settings</h1>
-  <p class="mt-1 mb-6 text-base-content/60">Configure how receipts reach cartlog.</p>
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <h1 class="font-display text-3xl tracking-tight">Settings</h1>
+    <p class="mt-1 text-base-content/60">Configure how receipts reach cartlog.</p>
+  </div>
 
   <section class="card border border-base-300 bg-base-100 shadow-sm">
     <div class="card-body gap-1">
@@ -14,6 +16,16 @@
         subfolder when done.
       </p>
       {% include "partials/_settings_folder.html" %}
+    </div>
+  </section>
+
+  <section class="card border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body gap-1">
+      <h2 class="card-title">Who can see your data</h2>
+      <p class="mb-2 text-sm text-base-content/60">
+        Control whether visitors on your network need to sign in before they can view receipts.
+      </p>
+      {% include "partials/_settings_access.html" %}
     </div>
   </section>
 </div>

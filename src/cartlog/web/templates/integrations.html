@@ -16,5 +16,42 @@
       <code class="block w-full rounded bg-base-200 p-2 text-sm break-all">{{ upload_url }}</code>
     </div>
   </section>
+
+  <section class="card border border-base-300 bg-base-100 shadow-sm">
+    <div class="card-body gap-3">
+      <h2 class="card-title">Authentication</h2>
+      <p class="text-sm opacity-80">
+        The Shortcut must include an API token with every upload request. cartlog checks for the
+        token in either of these HTTP headers - include exactly one:
+      </p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Header</th>
+              <th>Example value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><kbd class="kbd kbd-sm">X-Cartlog-Token</kbd></td>
+              <td class="opacity-60 text-xs">your-api-token</td>
+            </tr>
+            <tr>
+              <td><kbd class="kbd kbd-sm">Authorization</kbd></td>
+              <td class="opacity-60 text-xs">Bearer your-api-token</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="divider my-0"></div>
+      <p class="text-sm opacity-80">
+        To create a token, go to
+        <a href="/account/tokens" class="link link-primary">Account &rsaquo; API Tokens</a>.
+        You need an Editor or Admin role. The token is shown only once at creation - copy it before
+        closing the dialog.
+      </p>
+    </div>
+  </section>
 </div>
 {% endblock %}

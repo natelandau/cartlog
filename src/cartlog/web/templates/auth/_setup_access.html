@@ -1,0 +1,55 @@
+{#
+  Access-posture step partial. Rendered after the account step succeeds.
+  data-step drives the steps-indicator JS in setup.html.
+  Surfaces the allow_anonymous_read choice as a plain human decision.
+
+  No "Back" button: the preceding account step is the committed, locked admin-creation
+  step. Once the admin exists the setup lock fires, so navigating back would hit the
+  _locked() guard and dead-end. Forward-only is the correct UX here.
+#}
+<div data-step="access" class="space-y-4">
+  <div class="text-center mb-1">
+    <h2 class="font-display text-xl font-semibold text-base-content">Who can see your data?</h2>
+    <p class="text-xs text-base-content/60 mt-1">You can change this anytime in Settings.</p>
+  </div>
+
+  <form
+    hx-post="/setup/access"
+    hx-target="#setup-step"
+    hx-swap="innerHTML"
+    class="space-y-3"
+  >
+    {# CSRF token -- belt-and-suspenders alongside the hx-headers on <body> #}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+    {# Open posture (default) #}
+    <label class="card bg-base-200 cursor-pointer border-2 border-transparent has-[:checked]:border-primary transition-colors">
+      <div class="card-body flex-row items-start gap-3 py-4 px-5">
+        <input type="radio" name="posture" value="open" class="radio radio-primary mt-0.5 shrink-0" checked />
+        <div>
+          <p class="font-medium text-sm text-base-content">Open</p>
+          <p class="text-xs text-base-content/60 mt-0.5 leading-relaxed">
+            Anyone on your network can browse and search. Editing still requires sign-in.
+          </p>
+        </div>
+      </div>
+    </label>
+
+    {# Private posture #}
+    <label class="card bg-base-200 cursor-pointer border-2 border-transparent has-[:checked]:border-primary transition-colors">
+      <div class="card-body flex-row items-start gap-3 py-4 px-5">
+        <input type="radio" name="posture" value="private" class="radio radio-primary mt-0.5 shrink-0" />
+        <div>
+          <p class="font-medium text-sm text-base-content">Private</p>
+          <p class="text-xs text-base-content/60 mt-0.5 leading-relaxed">
+            Require sign-in to view anything.
+          </p>
+        </div>
+      </div>
+    </label>
+
+    <button type="submit" class="btn btn-primary btn-block mt-2">
+      Continue
+    </button>
+  </form>
+</div>
