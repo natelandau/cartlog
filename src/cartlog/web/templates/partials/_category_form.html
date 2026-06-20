@@ -2,10 +2,10 @@
 {# mode: "rename" | "merge" | "delete"  category: Category  candidates: list[(id, name)] #}
 {# POST submits target #category-panel (outerHTML swap) so the whole panel refreshes. #}
 {% if mode == "rename" %}
-<form class="card border border-primary/40 bg-base-100 shadow-sm" hx-post="/categories/{{ category.id }}/rename"
+<form class="surface-card surface-card--accent" hx-post="/categories/{{ category.id }}/rename"
       hx-target="#category-panel"
       hx-swap="outerHTML">
-  <div class="card-body gap-3">
+  <div class="surface-card__body gap-3">
     <fieldset class="fieldset">
       <legend class="fieldset-legend">New name</legend>
       <input class="input w-full max-w-sm" type="text" name="new_name" value="{{ category.name }}" required autofocus />
@@ -17,10 +17,10 @@
   </div>
 </form>
 {% elif mode == "merge" %}
-<form class="card border border-primary/40 bg-base-100 shadow-sm" hx-post="/categories/{{ category.id }}/merge"
+<form class="surface-card surface-card--accent" hx-post="/categories/{{ category.id }}/merge"
       hx-target="#category-panel"
       hx-swap="outerHTML">
-  <div class="card-body gap-3">
+  <div class="surface-card__body gap-3">
     <p>Merge <strong>{{ category.name }}</strong> into:</p>
     <fieldset class="fieldset">
       <legend class="fieldset-legend">Target category</legend>
@@ -37,10 +37,10 @@
   </div>
 </form>
 {% elif mode == "delete" %}
-<form class="card border border-error/40 bg-base-100 shadow-sm" hx-post="/categories/{{ category.id }}/delete"
+<form class="surface-card surface-card--error" hx-post="/categories/{{ category.id }}/delete"
       hx-target="#category-panel"
       hx-swap="outerHTML">
-  <div class="card-body gap-3">
+  <div class="surface-card__body gap-3">
     <p>Delete <strong>{{ category.name }}</strong>. Reassign its products to:</p>
     <fieldset class="fieldset">
       <legend class="fieldset-legend">Reassign to</legend>

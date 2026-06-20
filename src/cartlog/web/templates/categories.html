@@ -1,7 +1,7 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block content %}
-<h1 class="text-3xl font-semibold tracking-tight">Categories</h1>
-<p class="mt-1 mb-4 text-base-content/60">Manage the product taxonomy. The system "Uncategorized" bucket cannot be edited.</p>
+{{ ui.page_header("Categories", "Manage the product taxonomy. The system \"Uncategorized\" bucket cannot be edited.") }}
 
 {% include "partials/_category_panel.html" %}
 {% endblock %}
