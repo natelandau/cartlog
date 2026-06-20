@@ -172,6 +172,13 @@ async def csrf_protect(request: Request) -> None:
     if request.method in _SAFE_METHODS:
         return
 
+    # API-token requests authenticate via a custom header (Authorization / X-Cartlog-Token),
+    # not a cookie, so they are inherently immune to CSRF: a cross-site page cannot set these
+    # headers on a forged request. Exempt them so non-browser clients (the Apple Shortcut,
+    # scripts) can POST with just their token. An invalid token still fails at the auth layer.
+    if request.headers.get("authorization") or request.headers.get("x-cartlog-token"):
+        return
+
     # Read settings at call time so tests can override via app.state.settings.
     from cartlog.web.dependencies import resolve_settings  # noqa: PLC0415
 

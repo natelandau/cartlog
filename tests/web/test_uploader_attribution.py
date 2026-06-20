@@ -57,7 +57,8 @@ def token_client(tmp_path: object, editor_client: TestClient) -> tuple[TestClien
         s.commit()
 
     # Build a plain TestClient (no session cookie) backed by the same app as editor_client.
-    # Use _AuthClient so CSRF headers are injected on POST, matching what the middleware expects.
+    # _AuthClient injects CSRF headers here for convenience; the dedicated raw-client tests below
+    # cover the real no-CSRF token path, since token requests are exempt from CSRF.
     plain_client: TestClient = _AuthClient(editor_client.app)
     return plain_client, plaintext, editor_id
 
@@ -116,6 +117,45 @@ def test_api_token_upload_records_uploader_on_ingestion_job(
         job = s.query(IngestionJob).order_by(IngestionJob.id.desc()).first()
         assert job is not None
         assert job.user_id == editor_id
+
+
+def test_api_token_upload_needs_no_csrf_token(token_client: tuple[TestClient, str, int]) -> None:
+    """Verify a token upload succeeds with no CSRF token, the real Apple Shortcut / script path.
+
+    The token_client fixture injects CSRF on every request, which hides whether the endpoint
+    truly accepts a header-only token. A raw client (no CSRF cookie or header) reproduces what a
+    non-browser client actually sends: a token request is immune to CSRF and must be exempt.
+    """
+    from fastapi.testclient import TestClient as RawTestClient  # noqa: PLC0415
+
+    auth_client, plaintext, _ = token_client
+    raw = RawTestClient(auth_client.app)
+
+    # When a token-authenticated upload arrives with no CSRF cookie or header
+    response = raw.post(
+        "/receipts",
+        files=[("files", ("receipt.png", _png_bytes(), "image/png"))],
+        headers={"Authorization": f"Bearer {plaintext}"},
+    )
+
+    # Then it is accepted rather than blocked by CSRF
+    assert response.status_code == 202
+
+
+def test_anonymous_upload_without_csrf_is_blocked(
+    token_client: tuple[TestClient, str, int],
+) -> None:
+    """Verify the CSRF exemption is token-only: a cookie-less, tokenless POST is still rejected."""
+    from fastapi.testclient import TestClient as RawTestClient  # noqa: PLC0415
+
+    auth_client, _, _ = token_client
+    raw = RawTestClient(auth_client.app)
+
+    # When an unauthenticated request posts with no CSRF token and no API token
+    response = raw.post("/receipts", files=[("files", ("r.png", _png_bytes(), "image/png"))])
+
+    # Then CSRF protection still rejects it (the exemption does not weaken cookie-path requests)
+    assert response.status_code == 403
 
 
 # ---------------------------------------------------------------------------
