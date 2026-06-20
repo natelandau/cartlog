@@ -67,3 +67,11 @@ def seed_categories(session: Session, *, path: Path = _FIXTURE_PATH) -> int:
             added += 1
     session.flush()
     return added
+
+
+def seed_app_config(session: Session) -> None:
+    """Ensure the singleton app_config row exists (open read access by default)."""
+    from cartlog.db.models import AppConfig  # noqa: PLC0415
+
+    if session.get(AppConfig, 1) is None:
+        session.add(AppConfig(id=1))

@@ -17,11 +17,13 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    # render_as_batch=True is required for SQLite, which cannot ALTER columns in place.
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -34,7 +36,13 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        # render_as_batch=True is required for SQLite, which cannot ALTER columns in place;
+        # Alembic emits a table-copy approach instead.
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

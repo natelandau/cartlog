@@ -24,6 +24,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from cartlog.db.base import Base
 
 
+class Role(StrEnum):
+    """Access tier for a user. Higher tiers inherit lower-tier permissions."""
+
+    ADMIN = "admin"
+    EDITOR = "editor"
+    VIEWER = "viewer"
+
+
 class ReceiptStatus(StrEnum):
     """Lifecycle states for a receipt as it moves through ingestion and review."""
 
@@ -60,17 +68,78 @@ class ReviewReasonCode(StrEnum):
 
 
 class User(Base):
-    """A person who owns receipts."""
+    """A person who can sign in to cartlog."""
 
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(255))
-    email: Mapped[str] = mapped_column(String(255), unique=True)
+    username: Mapped[str] = mapped_column(String(255), unique=True)
+    # Optional display fields; login is by username, so neither is required.
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[Role] = mapped_column(String(20))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=func.true())
+    # Forces a password change before any other action (after an admin-issued temp password).
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=func.false()
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    receipts: Mapped[list[Receipt]] = relationship(back_populates="user")
+    receipts: Mapped[list[Receipt]] = relationship(back_populates="uploaded_by")
+    sessions: Mapped[list[Session]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    api_tokens: Mapped[list[ApiToken]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class Session(Base):
+    """A server-side browser session; the id is the opaque cookie value, so it is revocable."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class ApiToken(Base):
+    """A named, hashed API token a user mints for programmatic upload (Apple Shortcut)."""
+
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    token_hash: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="api_tokens")
+
+
+class AppConfig(Base):
+    """Singleton runtime configuration editable from the admin UI (one row, id=1)."""
+
+    __tablename__ = "app_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    allow_anonymous_read: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=func.true()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Store(Base):
@@ -180,7 +249,7 @@ class Receipt(Base):
     status: Mapped[str] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    user: Mapped[User | None] = relationship(back_populates="receipts")
+    uploaded_by: Mapped[User | None] = relationship(back_populates="receipts")
     store: Mapped[Store] = relationship(back_populates="receipts")
     line_items: Mapped[list[LineItem]] = relationship(
         back_populates="receipt", cascade="all, delete-orphan"
@@ -253,6 +322,8 @@ class IngestionJob(Base):
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Set once parsing succeeds and a Receipt exists; null while pending/failed.
     receipt_id: Mapped[int | None] = mapped_column(ForeignKey("receipts.id"), nullable=True)
+    # Who submitted this job; NULL for folder/system ingest (no user involved).
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
