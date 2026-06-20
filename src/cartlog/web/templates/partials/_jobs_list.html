@@ -1,64 +1,43 @@
+{% import "macros/ui.html" as ui with context %}
 <div class="flex flex-col gap-4">
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-3">
-      <h2 class="card-title text-lg">Active <span class="text-base-content/50">({{ active_count }})</span></h2>
-      {% if active %}
-      <div class="overflow-x-auto">
-        <table class="table table-zebra table-sm">
-          <thead>
-            <tr><th>Job</th><th>Source</th><th>State</th><th>Elapsed</th><th>Queue</th><th>Retries</th></tr>
-          </thead>
-          <tbody>
-            {% for j in active %}
-            <tr>
-              <td class="num">#{{ j.id }}</td>
-              <td>{{ j.source }}</td>
-              <td>
-                <span class="inline-flex items-center gap-2">
-                  {% if j.status == "parsing" %}<span class="loading loading-spinner loading-xs text-primary" aria-hidden="true"></span>{% endif %}{{ j.state_label }}
-                </span>
-              </td>
-              <td class="num">{{ j.elapsed }}</td>
-              <td class="num">{% if j.queue_position is not none %}#{{ j.queue_position }}{% else %}—{% endif %}</td>
-              <td class="num">{{ j.retry_count or "" }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <section class="surface-card overflow-hidden">
+    <div class="px-4 pt-4 pb-1"><h2 class="section-title">Active <span class="meta font-normal">({{ active_count }})</span></h2></div>
+    {% if active %}
+    <div>
+      {% for j in active %}
+      <div class="list-row">
+        <div class="list-row__main">
+          <span class="list-row__title num">#{{ j.id }} · {{ j.source }}</span>
+          <span class="list-row__meta">
+            {% if j.status == "parsing" %}<span class="loading loading-spinner loading-xs text-primary" aria-hidden="true"></span> {% endif %}{{ j.state_label }} · {{ j.elapsed }} elapsed{% if j.queue_position is not none %} · queue #{{ j.queue_position }}{% endif %}{% if j.retry_count %} · {{ j.retry_count }} retries{% endif %}
+          </span>
+        </div>
       </div>
-      {% else %}
-      <p class="text-base-content/60">No active jobs.</p>
-      {% endif %}
+      {% endfor %}
     </div>
+    {% else %}
+    <p class="meta px-4 pb-4">No active jobs.</p>
+    {% endif %}
   </section>
 
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-3">
-      <h2 class="card-title text-lg">Recent</h2>
-      {% if recent %}
-      <div class="overflow-x-auto">
-        <table class="table table-zebra table-sm">
-          <thead><tr><th>Job</th><th>Source</th><th>Outcome</th></tr></thead>
-          <tbody>
-            {% for j in recent %}
-            <tr>
-              <td class="num">#{{ j.id }}</td>
-              <td>{{ j.source }}</td>
-              <td>
-                {% if j.status == "done" and j.receipt_id %}
-                  <a class="link link-primary" href="/receipts/{{ j.receipt_id }}">View receipt #{{ j.receipt_id }}</a>
-                {% elif j.status == "failed" %}
-                  <span class="font-medium text-error">Failed: {{ j.last_error or "no details available" }}</span>{% if j.retry_count %} (after {{ j.retry_count }} retries){% endif %}
-                {% else %}{{ j.status }}{% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <section class="surface-card overflow-hidden">
+    <div class="px-4 pt-4 pb-1"><h2 class="section-title">Recent</h2></div>
+    {% if recent %}
+    <div>
+      {% for j in recent %}
+      <div class="list-row">
+        <div class="list-row__main">
+          <span class="list-row__title num">#{{ j.id }} · {{ j.source }}</span>
+          <span class="list-row__meta">
+            {% if j.status == "done" and j.receipt_id %}<a class="link link-primary" href="/receipts/{{ j.receipt_id }}">View receipt #{{ j.receipt_id }}</a>{% elif j.status == "failed" %}<span class="text-error">{{ j.last_error or "no details available" }}{% if j.retry_count %} (after {{ j.retry_count }} retries){% endif %}</span>{% endif %}
+          </span>
+        </div>
+        <div class="list-row__trailing">{{ ui.status_badge(j.status) }}</div>
       </div>
-      {% else %}
-      <p class="text-base-content/60">No finished jobs yet.</p>
-      {% endif %}
+      {% endfor %}
     </div>
+    {% else %}
+    <p class="meta px-4 pb-4">No finished jobs yet.</p>
+    {% endif %}
   </section>
 </div>
