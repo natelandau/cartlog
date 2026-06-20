@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session  # noqa: TC002
 
 from cartlog.clock import naive_utcnow
 from cartlog.db.models import IngestionJob, JobStatus
-from cartlog.web.auth import require_read
 from cartlog.web.dependencies import get_session
+from cartlog.web.guards import require_read
 from cartlog.web.jobs_view import JobView
 from cartlog.web.templating import templates
 

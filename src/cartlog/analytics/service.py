@@ -46,7 +46,7 @@ from cartlog.db.models import (
     Store,
 )
 from cartlog.db.query_helpers import escape_like
-from cartlog.units import RESOLVED
+from cartlog.units import MeasureStatus
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Query, Session
@@ -546,7 +546,7 @@ class AnalyticsService:
         for (chain, location), store_points in by_store.items():
             min_price, max_price, avg_price = _price_stats([p.unit_price for p in store_points])
             latest = max(store_points, key=lambda p: (p.purchase_date, p.receipt_id))
-            resolved = [p for p in store_points if p.measure_status == RESOLVED]
+            resolved = [p for p in store_points if p.measure_status == MeasureStatus.RESOLVED]
             dimension = resolved[0].measure_dimension if resolved else None
             # Average only points of the same dimension; mixing $/g and $/each is meaningless.
             same_dim = [p for p in resolved if p.measure_dimension == dimension]
@@ -692,7 +692,7 @@ class AnalyticsService:
             .join(Receipt, LineItem.receipt_id == Receipt.id)
             .join(Store, Receipt.store_id == Store.id)
             .filter(Receipt.status.in_(COUNTED_STATUSES))
-            .filter(LineItem.measure_status == RESOLVED)
+            .filter(LineItem.measure_status == MeasureStatus.RESOLVED)
             # A RESOLVED row should always carry a normalized price; guard so a NULL from a
             # data-integrity violation cannot reach the Decimal sum below and crash it.
             .filter(LineItem.normalized_unit_price.isnot(None))
@@ -917,5 +917,5 @@ class AnalyticsService:
             needs_review=receipt.status == ReceiptStatus.NEEDS_REVIEW,
             normalized_unit_price=line.normalized_unit_price,
             measure_dimension=line.measure_dimension,
-            measure_status=line.measure_status,
+            measure_status=MeasureStatus(line.measure_status),
         )

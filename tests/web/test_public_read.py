@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cartlog.auth.config import AppConfigService
+from cartlog.auth.app_config import AppConfigService
 from cartlog.db.models import Role
 from tests.factories import seed_user
 from tests.web.helpers import get_session_factory

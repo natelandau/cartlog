@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from cartlog.auth.sessions import SessionService
 from cartlog.db.models import Role
-from cartlog.web.auth import COOKIE_NAME, load_user
+from cartlog.web.guards import COOKIE_NAME, load_user
 from tests.factories import seed_user
 
 

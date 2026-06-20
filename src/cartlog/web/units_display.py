@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from cartlog.constants import COUNT, VOLUME, WEIGHT
-from cartlog.units import RESOLVED
+from cartlog.units import MeasureStatus
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -37,7 +37,7 @@ def format_normalized(
     Returns:
         A formatted price string like "$0.109/oz" or "n/a" for unresolved rows.
     """
-    if status != RESOLVED or normalized_unit_price is None or dimension is None:
+    if status != MeasureStatus.RESOLVED or normalized_unit_price is None or dimension is None:
         return "n/a"
     if dimension == COUNT:
         return f"${normalized_unit_price:.2f}/ea"

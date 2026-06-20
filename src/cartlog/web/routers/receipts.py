@@ -29,12 +29,12 @@ from cartlog.receipts.service import (
     image_file_available,
     reparse_receipt,
 )
-from cartlog.web.auth import (  # noqa: TC001  # runtime imports: FastAPI Depends resolves Annotated aliases at startup
+from cartlog.web.dependencies import get_session
+from cartlog.web.forms import parse_review_form
+from cartlog.web.guards import (  # noqa: TC001  # runtime imports: FastAPI Depends resolves Annotated aliases at startup
     RequireEditor,
     RequireRead,
 )
-from cartlog.web.dependencies import get_session
-from cartlog.web.forms import parse_review_form
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import SORT_COLUMNS, ReceiptSortKey
 from cartlog.web.templating import templates

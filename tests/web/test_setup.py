@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cartlog.auth.config import AppConfigService
+from cartlog.auth.app_config import AppConfigService
 from cartlog.auth.users import UserService
 from cartlog.db.models import Role
 from cartlog.web.middleware import CSRF_COOKIE

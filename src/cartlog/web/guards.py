@@ -10,7 +10,7 @@ from sqlalchemy.orm import (
     Session,  # noqa: TC002  # runtime import: Annotated[Session, Depends(...)] needs Session in this module's namespace at runtime
 )
 
-from cartlog.auth.config import AppConfigService
+from cartlog.auth.app_config import AppConfigService
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.tokens import ApiTokenService
 from cartlog.db.models import Role, User

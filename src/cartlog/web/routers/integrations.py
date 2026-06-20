@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from cartlog.constants import SHORTCUT_URL
-from cartlog.web.auth import require_admin
+from cartlog.web.guards import require_admin
 from cartlog.web.templating import templates
 
 # The integrations area is admin-only; guard declared at router level.

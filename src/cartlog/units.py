@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from enum import StrEnum
 
 from cartlog.constants import COUNT, UNIT_ALIASES, UNIT_FACTORS, VOLUME, WEIGHT
 
@@ -46,9 +47,13 @@ def parse_size(text: str | None) -> tuple[Decimal, str] | None:
     return multiplier * magnitude, token
 
 
-RESOLVED = "resolved"
-NOT_APPLICABLE = "not_applicable"
-NEEDS_REVIEW = "needs_review"
+class MeasureStatus(StrEnum):
+    """The closed set of normalization outcomes persisted on LineItem.measure_status."""
+
+    RESOLVED = "resolved"
+    NOT_APPLICABLE = "not_applicable"
+    NEEDS_REVIEW = "needs_review"
+
 
 _MEASURE_PLACES = Decimal("0.0001")  # Numeric(12,4)
 _PRICE_PLACES = Decimal("0.000001")  # Numeric(12,6)
@@ -61,17 +66,17 @@ class NormalizationResult:
     measure_quantity: Decimal | None
     measure_dimension: str | None
     normalized_unit_price: Decimal | None
-    measure_status: str
+    measure_status: MeasureStatus
 
 
 def _resolved(total_base: Decimal, dimension: str, line_total: Decimal) -> NormalizationResult:
     """Build a RESOLVED result, guarding against non-positive measure to avoid division by zero."""
     # A non-positive measure means the inputs are nonsense; flag rather than divide.
     if total_base <= 0:
-        return NormalizationResult(None, None, None, NEEDS_REVIEW)
+        return NormalizationResult(None, None, None, MeasureStatus.NEEDS_REVIEW)
     measure = total_base.quantize(_MEASURE_PLACES, rounding=ROUND_HALF_UP)
     price = (line_total / total_base).quantize(_PRICE_PLACES, rounding=ROUND_HALF_UP)
-    return NormalizationResult(measure, dimension, price, RESOLVED)
+    return NormalizationResult(measure, dimension, price, MeasureStatus.RESOLVED)
 
 
 def _has_text(*values: str | None) -> bool:
@@ -138,5 +143,5 @@ def normalize_line_item(
     # Step 5: nothing parseable. Leftover measure-looking text means a bad read; otherwise
     # the line genuinely has no measure (a single apple, a loaf of bread).
     if _has_text(unit, unit_size):
-        return NormalizationResult(None, None, None, NEEDS_REVIEW)
-    return NormalizationResult(None, None, None, NOT_APPLICABLE)
+        return NormalizationResult(None, None, None, MeasureStatus.NEEDS_REVIEW)
+    return NormalizationResult(None, None, None, MeasureStatus.NOT_APPLICABLE)

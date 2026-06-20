@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from cartlog.parsing.schema import ParsedReceipt
 
 if TYPE_CHECKING:
-    from cartlog.parsing.parser import ReceiptParser
+    from cartlog.parsing.protocol import ReceiptParser
 
 
 def test_fake_parser_satisfies_protocol(fake_parser):

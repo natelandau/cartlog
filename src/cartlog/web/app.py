@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from cartlog.config import get_settings
 from cartlog.db.session import create_session_factory
-from cartlog.web.auth import AuthRedirect, Forbidden
+from cartlog.web.guards import AuthRedirect, Forbidden
 from cartlog.web.middleware import (
     CsrfMiddleware,
     ForcePasswordChangeMiddleware,

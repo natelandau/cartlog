@@ -14,13 +14,13 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session  # noqa: TC002
 
-from cartlog.auth.config import AppConfigService
+from cartlog.auth.app_config import AppConfigService
 from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
 from cartlog.db.models import Role
-from cartlog.web.auth import load_user, role_satisfies
 from cartlog.web.dependencies import cookie_is_secure, get_session
+from cartlog.web.guards import load_user, role_satisfies
 from cartlog.web.routers.auth_routes import _set_session_cookie
 from cartlog.web.templating import templates
 

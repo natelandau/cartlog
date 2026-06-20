@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session  # noqa: TC002 - runtime import for FastAPI D
 
 from cartlog.auth.tokens import ApiTokenService
 from cartlog.db.models import User
-from cartlog.web.auth import require_editor
 from cartlog.web.dependencies import get_session
+from cartlog.web.guards import require_editor
 from cartlog.web.templating import templates
 
 router = APIRouter()

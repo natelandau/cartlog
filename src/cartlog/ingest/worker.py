@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from cartlog.config import Settings
     from cartlog.parsing.category_classifier import CategoryClassifier
-    from cartlog.parsing.parser import ReceiptParser
+    from cartlog.parsing.protocol import ReceiptParser
 
 
 def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
