@@ -4,7 +4,7 @@
    background. overflow-hidden clips the table to the card's rounded corners; the inner
    overflow-x-auto only scrolls if a table genuinely cannot fit. #}
 {% macro table_card() %}
-<div class="card overflow-hidden border border-base-300 bg-base-100 shadow-sm">
+<div class="surface-card overflow-hidden">
   <div class="overflow-x-auto">
     {{ caller() }}
   </div>
