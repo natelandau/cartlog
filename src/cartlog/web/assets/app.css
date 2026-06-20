@@ -156,17 +156,63 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* The receipt editor's reconcile hint. receipt_edit.js toggles `.reconcile-off` when the
-   line totals stop matching the receipt total; the two-class selector wins over any
-   utility color so the state always reads green (matched) vs red (off). */
+/* Receipt editor. Each line item is a card sharing the metadata card's surface so the whole
+   edit form reads as one document. Cards auto-number by source order, matching the tape. */
 @layer components {
-  .reconcile-hint {
-    color: var(--color-success);
+  .line-rows {
+    counter-reset: line;
+  }
+  .line-item {
+    counter-increment: line;
+    background: var(--color-base-100);
+    border: var(--border) solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    padding: 0.875rem 1rem;
+  }
+  .line-item__num::before {
+    content: "#" counter(line);
   }
 
-  .reconcile-hint.reconcile-off {
+  /* Action bar pins to the bottom of the scrolling edit column so Save stays reachable. */
+  .form-actionbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-top: var(--border) solid var(--color-base-300);
+    background: color-mix(in oklch, var(--color-base-200) 90%, transparent);
+    backdrop-filter: blur(4px);
+  }
+
+  /* Reconciliation status: success when line totals add up, error when they do not. The
+     state class toggles which paired icon shows. receipt_edit.js sets the text + state. */
+  .reconcile {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  .reconcile .icon-ok,
+  .reconcile .icon-off {
+    display: none;
+    flex-shrink: 0;
+  }
+  .reconcile.is-ok {
+    color: var(--color-success);
+  }
+  .reconcile.is-ok .icon-ok {
+    display: inline-flex;
+  }
+  .reconcile.is-off {
     color: var(--color-error);
-    font-weight: 600;
+  }
+  .reconcile.is-off .icon-off {
+    display: inline-flex;
   }
 }
 

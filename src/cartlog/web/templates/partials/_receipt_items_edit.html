@@ -1,9 +1,69 @@
 {# Editable items panel. Posts the full line set; HTMX swaps #items-panel with the result.
    422 responses are swapped back too (see the htmx:beforeSwap handler in base.html). #}
 {% import "macros/ui.html" as ui with context %}
+
+{# One editable card per line item. Rendered for the initial rows and cloned by addLineRow()
+   from the template below, so the two markups must stay in sync. #}
+{% macro line_card(li=None) %}
+<div class="line-item">
+  <div class="mb-2 flex items-center justify-between gap-2">
+    <span class="line-item__num eyebrow"></span>
+    <button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row"
+            onclick="removeLineRow(this)" aria-label="Remove item">{{ ui.icon('trash', 16) }}</button>
+  </div>
+  <input type="hidden" name="line_id" value="{{ li.id if li else '' }}" />
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend">Receipt text</legend>
+    <input class="input input-sm w-full" name="raw_description" value="{{ li.raw_description if li else '' }}" />
+  </fieldset>
+  <div class="mt-2 grid gap-2 sm:grid-cols-2">
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Product</legend>
+      <input class="input input-sm w-full" name="canonical_name" list="product-names"
+             value="{{ li.product.canonical_name if li else '' }}" />
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Category</legend>
+      <div class="flex items-center gap-1">
+        {% with options=category_options, current_id=(li.product.category_id if li else None) %}
+          {% include "partials/_category_picker.html" %}
+        {% endwith %}
+        {# Appends an inline new-category form inside this fieldset (no <td> in the card layout). #}
+        <button type="button" class="btn btn-ghost btn-xs shrink-0 cat-new-btn" aria-label="Create a new category"
+                hx-get="/categories/new-inline" hx-target="closest fieldset" hx-swap="beforeend">{{ ui.icon('plus', 14) }}New</button>
+      </div>
+    </fieldset>
+  </div>
+  <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Qty</legend>
+      <input class="input input-sm num w-full" name="quantity" type="number" step="0.001" inputmode="decimal" value="{{ li.quantity if li else '1' }}" />
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Unit</legend>
+      <input class="input input-sm w-full" name="unit" value="{{ (li.unit or '') if li else '' }}" />
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Size</legend>
+      <input class="input input-sm w-full" name="unit_size" value="{{ (li.unit_size or '') if li else '' }}" />
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Unit price</legend>
+      <input class="input input-sm num w-full" name="unit_price" type="number" step="0.01" inputmode="decimal" value="{{ li.unit_price if li else '0.00' }}" />
+    </fieldset>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Line total</legend>
+      <input class="input input-sm num w-full" name="line_total" type="number" step="0.01" inputmode="decimal" value="{{ li.line_total if li else '0.00' }}" />
+    </fieldset>
+  </div>
+</div>
+{% endmacro %}
+
 <form hx-post="/receipts/{{ receipt.id }}" hx-target="#items-panel" hx-swap="innerHTML"
       class="receipt-edit flex flex-col gap-4">
-  {% if errors %}<div class="alert alert-error alert-soft text-sm" role="alert">error: {{ errors }}</div>{% endif %}
+  {% if errors %}
+  <div class="alert alert-error alert-soft text-sm" role="alert">{{ ui.icon('alert-triangle', 16) }}<span>{{ errors }}</span></div>
+  {% endif %}
 
   <div class="surface-card">
     <div class="surface-card__body gap-3 p-4">
@@ -23,7 +83,7 @@
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">Total</legend>
-          <input class="input w-full" name="total" type="number" step="0.01" inputmode="decimal" value="{{ receipt.total }}" required />
+          <input class="input num w-full" name="total" type="number" step="0.01" inputmode="decimal" value="{{ receipt.total }}" required />
         </fieldset>
         <fieldset class="fieldset">
           <legend class="fieldset-legend">Currency</legend>
@@ -33,40 +93,13 @@
     </div>
   </div>
 
-  <p class="text-sm text-base-content/60">Editing a category updates the shared product and affects every receipt that uses it.</p>
+  <div>
+    <h2 class="eyebrow">Items</h2>
+    <p class="meta mt-1 text-sm">Editing a category updates the shared product and affects every receipt that uses it.</p>
+  </div>
 
-  <div class="overflow-x-auto">
-    {# Fixed table layout: each cell contains a dense input-xs editor. The grid alignment
-       depends on the table structure, so data-label responsive stacking is not applied here. #}
-    <table class="table table-xs">
-      <thead><tr><th>Raw</th><th>Product</th><th>Category</th><th>Qty</th><th>Unit</th><th>Size</th><th>Unit price</th><th>Line total</th><th></th></tr></thead>
-      <tbody id="line-rows">
-        {% for li in receipt.line_items %}
-        <tr class="line-row">
-          <td>
-            <input type="hidden" name="line_id" value="{{ li.id }}" />
-            <input class="input input-xs w-full min-w-32" name="raw_description" value="{{ li.raw_description }}" />
-          </td>
-          <td><input class="input input-xs w-full min-w-32" name="canonical_name" list="product-names" value="{{ li.product.canonical_name }}" /></td>
-          <td>
-            <div class="flex items-center gap-1">
-              {% with options=category_options, current_id=li.product.category_id %}
-                {% include "partials/_category_picker.html" %}
-              {% endwith %}
-              <button type="button" class="btn btn-ghost btn-xs cat-new-btn" title="Create a new category"
-                      hx-get="/categories/new-inline" hx-target="closest td" hx-swap="beforeend">+ new</button>
-            </div>
-          </td>
-          <td><input class="input input-xs w-16" name="quantity" type="number" step="0.001" inputmode="decimal" value="{{ li.quantity }}" /></td>
-          <td><input class="input input-xs w-16" name="unit" value="{{ li.unit or '' }}" /></td>
-          <td><input class="input input-xs w-16" name="unit_size" value="{{ li.unit_size or '' }}" /></td>
-          <td><input class="input input-xs w-20" name="unit_price" type="number" step="0.01" inputmode="decimal" value="{{ li.unit_price }}" /></td>
-          <td><input class="input input-xs w-20" name="line_total" type="number" step="0.01" inputmode="decimal" value="{{ li.line_total }}" /></td>
-          <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove row">{{ ui.icon('trash', 16) }}</button></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div id="line-rows" class="line-rows flex flex-col gap-3">
+    {% for li in receipt.line_items %}{{ line_card(li) }}{% endfor %}
   </div>
 
   <datalist id="product-names">
@@ -74,37 +107,18 @@
   </datalist>
 
   {# Cloned by addLineRow(); a blank line_id marks the row as new on save. #}
-  <template id="line-row-template">
-    <tr class="line-row">
-      <td>
-        <input type="hidden" name="line_id" value="" />
-        <input class="input input-xs w-full min-w-32" name="raw_description" value="" />
-      </td>
-      <td><input class="input input-xs w-full min-w-32" name="canonical_name" list="product-names" value="" /></td>
-      <td>
-        <div class="flex items-center gap-1">
-          {% with options=category_options, current_id=None %}
-            {% include "partials/_category_picker.html" %}
-          {% endwith %}
-          <button type="button" class="btn btn-ghost btn-xs cat-new-btn" title="Create a new category"
-                  hx-get="/categories/new-inline" hx-target="closest td" hx-swap="beforeend">+ new</button>
-        </div>
-      </td>
-      <td><input class="input input-xs w-16" name="quantity" type="number" step="0.001" inputmode="decimal" value="1" /></td>
-      <td><input class="input input-xs w-16" name="unit" value="" /></td>
-      <td><input class="input input-xs w-16" name="unit_size" value="" /></td>
-      <td><input class="input input-xs w-20" name="unit_price" type="number" step="0.01" inputmode="decimal" value="0.00" /></td>
-      <td><input class="input input-xs w-20" name="line_total" type="number" step="0.01" inputmode="decimal" value="0.00" /></td>
-      <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove row">{{ ui.icon('trash', 16) }}</button></td>
-    </tr>
-  </template>
+  <template id="line-row-template">{{ line_card() }}</template>
 
-  <div class="flex flex-wrap items-center gap-3">
-    <button type="button" class="btn btn-ghost btn-sm" onclick="addLineRow()">+ Add item</button>
-    <span id="reconcile-hint" class="reconcile-hint num text-sm" aria-live="polite"></span>
+  <button type="button" class="btn btn-outline btn-block border-dashed" onclick="addLineRow()">{{ ui.icon('plus', 16) }}Add item</button>
+
+  <div class="form-actionbar">
+    <div id="reconcile" class="reconcile" aria-live="polite" hidden>
+      {{ ui.icon('check', 16, 'icon-ok') }}{{ ui.icon('alert-triangle', 16, 'icon-off') }}
+      <span id="reconcile-text"></span>
+    </div>
     <span class="grow"></span>
-    <button type="button" class="btn btn-ghost btn-sm" hx-get="/receipts/{{ receipt.id }}/items"
+    <button type="button" class="btn btn-ghost" hx-get="/receipts/{{ receipt.id }}/items"
             hx-target="#items-panel" hx-swap="innerHTML">Cancel</button>
-    <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+    <button type="submit" class="btn btn-primary">Save changes</button>
   </div>
 </form>
