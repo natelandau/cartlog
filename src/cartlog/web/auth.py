@@ -52,13 +52,18 @@ class Forbidden(Exception):  # noqa: N818
     """Raised when an authenticated user lacks the required role."""
 
 
-def _cookie_value(request: Request) -> str | None:
-    """Return the session cookie value, checking both the secure and plain cookie names.
+def _session_cookie_values(request: Request) -> list[str]:
+    """Return candidate session ids from both cookie names, secure (__Host-) name first.
 
-    Browsers only send __Host- prefixed cookies over HTTPS, so local dev servers set the
-    plain name instead. Checking both lets the same auth code serve both environments.
+    Browsers only send __Host- prefixed cookies over HTTPS, so plain-HTTP dev servers set the
+    bare name instead. Both can be present at once: a stale __Host- cookie from an earlier HTTPS
+    (or secure-cookie) run lingers in the browser, and Chrome still sends it over http://localhost
+    via its localhost secure-context exemption, alongside a fresh bare cookie. Returning both,
+    rather than just the first present one, keeps a dead cookie from masking a valid session.
     """
-    return request.cookies.get(COOKIE_NAME) or request.cookies.get("cartlog_session")
+    return [
+        value for name in (COOKIE_NAME, "cartlog_session") if (value := request.cookies.get(name))
+    ]
 
 
 def load_user(request: Request, session: Session) -> User | None:
@@ -74,9 +79,11 @@ def load_user(request: Request, session: Session) -> User | None:
     Returns:
         The authenticated User, or None if no valid credential was found.
     """
-    user = SessionService(session).resolve(_cookie_value(request))
-    if user is not None:
-        return user
+    sessions = SessionService(session)
+    for session_id in _session_cookie_values(request):
+        user = sessions.resolve(session_id)
+        if user is not None:
+            return user
     # Fall through to token-based auth for API clients that cannot use cookies.
     header = request.headers.get("authorization", "")
     bearer = header[7:] if header.lower().startswith("bearer ") else None

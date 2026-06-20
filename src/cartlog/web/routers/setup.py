@@ -27,6 +27,18 @@ from cartlog.web.templating import templates
 router = APIRouter()
 
 
+def _redirect_home(request: Request) -> Response:
+    """Send the caller to the dashboard, navigating the whole page even under htmx.
+
+    The wizard's forms hx-post into #setup-step, so a plain 3xx redirect would make htmx swap
+    the dashboard *into* the receipt card. For htmx requests, HX-Redirect drives a full-page
+    navigation instead; ordinary requests get a normal 303.
+    """
+    if request.headers.get("hx-request") == "true":
+        return Response(status_code=204, headers={"HX-Redirect": "/"})
+    return RedirectResponse("/", status_code=303)
+
+
 def _locked(session: Session) -> bool:
     """Return True when at least one user exists, meaning setup is complete.
 
@@ -82,7 +94,7 @@ def setup_step_account(
         session: The database session injected by get_session.
     """
     if _locked(session):
-        return RedirectResponse("/", status_code=303)
+        return _redirect_home(request)
     return templates.TemplateResponse(
         request,
         "auth/_setup_account.html",
@@ -102,7 +114,7 @@ def setup_index(
         session: The database session injected by get_session.
     """
     if _locked(session):
-        return RedirectResponse("/", status_code=303)
+        return _redirect_home(request)
     return templates.TemplateResponse(
         request,
         "auth/setup.html",
@@ -135,7 +147,7 @@ def setup_account(
         name: Optional display name; defaults to username when empty.
     """
     if _locked(session):
-        return RedirectResponse("/", status_code=303)
+        return _redirect_home(request)
 
     error = _account_error(session, username=username, password=password, confirm=confirm)
     if error:
@@ -178,7 +190,7 @@ def setup_access(
     """
     user = load_user(request, session)
     if user is None or not role_satisfies(user.role, Role.ADMIN):
-        return RedirectResponse("/", status_code=303)
+        return _redirect_home(request)
 
     AppConfigService(session).set_allow_anonymous_read(value=(posture == "open"))
     session.commit()
