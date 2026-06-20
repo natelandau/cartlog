@@ -10,3 +10,24 @@
   </div>
 </div>
 {% endmacro %}
+
+{# Page header: one title role + optional subtitle + optional action slot via {% call %}. #}
+{% macro page_header(title, subtitle="") %}
+<header class="page-header">
+  <div>
+    <h1 class="page-title">{{ title }}</h1>
+    {% if subtitle %}<p class="meta">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if caller %}<div class="toolbar">{{ caller() }}</div>{% endif %}
+</header>
+{% endmacro %}
+
+{# Standard card surface. Body provided via {% call %}; optional section title. #}
+{% macro card(title="") %}
+<section class="surface-card">
+  <div class="surface-card__body">
+    {% if title %}<h2 class="section-title">{{ title }}</h2>{% endif %}
+    {{ caller() }}
+  </div>
+</section>
+{% endmacro %}

@@ -200,6 +200,26 @@
   .transition-ui { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
 }
 
+/* Card surface system: replaces the repeated `card border border-base-300 bg-base-100 shadow-sm`
+   recipe with a single semantic class driven entirely by CSS variables, so both themes stay in sync. */
+@layer components {
+  .surface-card {
+    background: var(--color-base-100);
+    border: var(--border) solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--color-base-content) 8%, transparent);
+  }
+  .surface-card__body { padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .surface-card--accent { border-color: color-mix(in oklch, var(--color-primary) 45%, transparent); }
+  .surface-card--error  { border-color: color-mix(in oklch, var(--color-error) 45%, transparent); }
+
+  .page-header {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 0.75rem; margin-bottom: 1.5rem;
+  }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important;
