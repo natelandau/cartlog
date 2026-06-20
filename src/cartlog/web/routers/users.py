@@ -14,8 +14,8 @@ from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
 from cartlog.db.models import Role, User
-from cartlog.web.auth import require_admin
 from cartlog.web.dependencies import get_session
+from cartlog.web.guards import require_admin
 from cartlog.web.templating import templates
 
 router = APIRouter()

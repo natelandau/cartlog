@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
-from cartlog.web.auth import require_read
+from cartlog.web.guards import require_read
 
 # Preferences are user-scoped, so require at least read access (no anonymous preference changes).
 router = APIRouter(dependencies=[Depends(require_read)])

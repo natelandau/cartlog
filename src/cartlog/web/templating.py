@@ -39,7 +39,7 @@ def _auth_context(request: Request) -> dict[str, Any]:
     # Import here to avoid a circular import: auth.py imports dependencies.py which
     # does not import templating.py, so this direction is safe at call time.
     from cartlog.db.models import Role  # noqa: PLC0415
-    from cartlog.web.auth import load_user, role_satisfies  # noqa: PLC0415
+    from cartlog.web.guards import load_user, role_satisfies  # noqa: PLC0415
 
     factory = request.app.state.session_factory
     with factory() as session:

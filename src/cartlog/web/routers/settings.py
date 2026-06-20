@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session  # noqa: TC002  # runtime import for FastAPI 
 
 from cartlog.auth.app_config import AppConfigService
 from cartlog.ingest.folder_watcher import get_folder_config
-from cartlog.web.auth import require_admin
 from cartlog.web.dependencies import get_session
+from cartlog.web.guards import require_admin
 from cartlog.web.templating import templates
 
 # All settings routes require Admin; declared at router level to keep handlers uncluttered.

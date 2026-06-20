@@ -1,9 +1,9 @@
-"""Unit tests for role ordering and auth guard logic in cartlog.web.auth."""
+"""Unit tests for role ordering and auth guard logic in cartlog.web.guards."""
 
 from starlette.requests import Request
 
 from cartlog.db.models import Role
-from cartlog.web.auth import AuthRedirect, _login_redirect, role_satisfies
+from cartlog.web.guards import AuthRedirect, _login_redirect, role_satisfies
 
 
 def test_role_ordering():

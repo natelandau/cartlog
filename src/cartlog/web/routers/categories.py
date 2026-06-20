@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session  # noqa: TC002
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import Category
 from cartlog.exceptions import CategoryError
-from cartlog.web.auth import (  # noqa: TC001  # runtime imports: FastAPI Depends resolves Annotated aliases at startup
+from cartlog.web.dependencies import get_session
+from cartlog.web.guards import (  # noqa: TC001  # runtime imports: FastAPI Depends resolves Annotated aliases at startup
     RequireEditor,
     RequireRead,
 )
-from cartlog.web.dependencies import get_session
 from cartlog.web.templating import templates
 
 router = APIRouter()

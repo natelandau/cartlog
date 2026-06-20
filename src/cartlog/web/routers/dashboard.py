@@ -13,8 +13,8 @@ from cartlog.analytics.ranges import RangePreset, resolve_range
 from cartlog.analytics.service import AnalyticsService
 from cartlog.db.models import Receipt, ReceiptStatus
 from cartlog.db.sort import SortDir
-from cartlog.web.auth import require_read
 from cartlog.web.dependencies import get_analytics_service, get_session
+from cartlog.web.guards import require_read
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import SORT_KEYS, ReceiptSortKey
 from cartlog.web.templating import templates

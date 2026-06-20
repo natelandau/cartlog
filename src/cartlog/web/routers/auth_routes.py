@@ -12,8 +12,8 @@ from cartlog.auth.ratelimit import LoginRateLimiter
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
 from cartlog.config import get_settings
-from cartlog.web.auth import COOKIE_NAME
 from cartlog.web.dependencies import cookie_is_secure, get_session
+from cartlog.web.guards import COOKIE_NAME
 from cartlog.web.templating import templates
 
 router = APIRouter()

@@ -82,7 +82,7 @@ class ForcePasswordChangeMiddleware(BaseHTTPMiddleware):
 
         factory = request.app.state.session_factory
         with factory() as session:
-            from cartlog.web.auth import load_user  # noqa: PLC0415
+            from cartlog.web.guards import load_user  # noqa: PLC0415
 
             user = load_user(request, session)
 
@@ -200,6 +200,6 @@ async def csrf_protect(request: Request) -> None:
         or not secrets.compare_digest(submitted, cookie)
         or not verify_csrf_token(cookie, secret)
     ):
-        from cartlog.web.auth import Forbidden  # noqa: PLC0415
+        from cartlog.web.guards import Forbidden  # noqa: PLC0415
 
         raise Forbidden

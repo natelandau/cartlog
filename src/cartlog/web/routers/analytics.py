@@ -26,8 +26,8 @@ from cartlog.clock import naive_utcnow
 from cartlog.db.models import LineItem
 from cartlog.db.sort import SortDir
 from cartlog.receipts.service import apply_line_item_edit
-from cartlog.web.auth import RequireEditor, require_read
 from cartlog.web.dependencies import get_analytics_service, get_session
+from cartlog.web.guards import RequireEditor, require_read
 from cartlog.web.templating import templates
 from cartlog.web.units_display import read_unit_system
 

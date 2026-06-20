@@ -18,8 +18,8 @@ from cartlog.db.sort import SortDir, apply_sort
 from cartlog.exceptions import ProductMergeError, StoreMergeError
 from cartlog.products.service import merge_products
 from cartlog.stores.service import merge_stores
-from cartlog.web.auth import require_admin
 from cartlog.web.dependencies import get_analytics_service, get_session
+from cartlog.web.guards import require_admin
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import (
     OCCURRENCE_COUNT,

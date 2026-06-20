@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session  # noqa: TC002 - runtime import for FastAPI D
 from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
-from cartlog.web.auth import AuthRedirect, load_user
 from cartlog.web.dependencies import cookie_is_secure, get_session, resolve_settings
+from cartlog.web.guards import AuthRedirect, load_user
 from cartlog.web.routers.auth_routes import _set_session_cookie
 from cartlog.web.templating import templates
 
