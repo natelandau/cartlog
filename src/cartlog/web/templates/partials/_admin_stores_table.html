@@ -15,7 +15,7 @@
       a narrow cell; giving it the full table width keeps long labels from colliding. The
       first row drops its bottom border so the pair reads as one store.
     #}
-    <table class="table">
+    <table class="table data-table">
       <thead><tr>
         {{ sortable_th("Chain", "chain") }}
         {{ sortable_th("Location", "location") }}
@@ -24,18 +24,18 @@
       <tbody>
         {% for store, count in rows %}
         <tr class="[&>td]:border-b-0">
-          <td>{{ store.chain_name }}</td>
-          <td>{{ store.location or "—" }}</td>
-          <td class="num text-right">{{ count }}</td>
+          <td data-label="Chain">{{ store.chain_name }}</td>
+          <td data-label="Location">{{ store.location or "" }}</td>
+          <td data-label="Visits" class="num text-right">{{ count }}</td>
         </tr>
         <tr>
-          <td colspan="3" class="pt-0">
+          <td data-label="" colspan="3" class="pt-0">
             <form class="merge-form join w-full max-w-2xl" hx-get="/admin/stores/{{ store.id }}/merge/confirm"
                   hx-target="#admin-dialog" hx-swap="innerHTML">
               <select class="select select-sm join-item min-w-0 flex-1" name="target_id" aria-label="Merge {{ store.chain_name }} into" required>
-                <option value="" selected disabled>Merge into…</option>
+                <option value="" selected disabled>Merge into...</option>
                 {% for other in stores if other.id != store.id %}
-                <option value="{{ other.id }}">{{ other.chain_name }} — {{ other.location or "—" }}</option>
+                <option value="{{ other.id }}">{{ other.chain_name }} - {{ other.location or "" }}</option>
                 {% endfor %}
               </select>
               <button type="submit" class="btn btn-outline btn-sm join-item shrink-0">Merge</button>

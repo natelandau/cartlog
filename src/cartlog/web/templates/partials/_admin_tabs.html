@@ -1,6 +1,6 @@
 {# Admin sub-navigation for a tabbed section. The including page sets:
-     admin_section  "product" or "store" — which section's tabs to show
-     admin_active   "list" or "merges"   — which sub-tab is current
+     admin_section  "product" or "store" - which section's tabs to show
+     admin_active   "list" or "merges"   - which sub-tab is current
    Categories and Jobs are single views and do not include this partial. #}
 {% set _section_tabs = {
   "product": [("/admin/products", "list", "List"), ("/admin/transformations", "merges", "Merges")],

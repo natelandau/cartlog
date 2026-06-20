@@ -2,7 +2,7 @@
   <div class="modal-box">
     <h3 class="text-lg font-semibold">Delete this store merge?</h3>
     <p class="py-3">
-      Future receipts read as “{{ rule.source_chain_name }} — {{ rule.source_location or "—" }}”
+      Future receipts read as “{{ rule.source_chain_name }} - {{ rule.source_location or '' }}”
       will no longer merge into “{{ target_name }}”. Already-merged receipts are not changed.
     </p>
     <form hx-post="/admin/store-merges/{{ rule.id }}/delete"

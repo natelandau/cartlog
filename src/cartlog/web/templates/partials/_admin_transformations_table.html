@@ -8,7 +8,7 @@
   </span>
   {% if rows %}
   {% call table_card() %}
-    <table class="table table-zebra">
+    <table class="table data-table">
       <thead><tr>
         {{ sortable_th("Old term", "source") }}
         {{ sortable_th("Merges into", "target") }}
@@ -18,10 +18,10 @@
       <tbody>
         {% for rule, target_name in rows %}
         <tr class="hover">
-          <td class="font-medium">{{ rule.source_name }}</td>
-          <td>{{ target_name }}</td>
-          <td class="num whitespace-nowrap">{{ rule.created_at.strftime("%Y-%m-%d") }}</td>
-          <td class="text-right">
+          <td data-label="Old term" class="font-medium">{{ rule.source_name }}</td>
+          <td data-label="Merges into">{{ target_name }}</td>
+          <td data-label="Created" class="num whitespace-nowrap">{{ rule.created_at.strftime("%Y-%m-%d") }}</td>
+          <td data-label="" class="text-right">
             <button type="button" class="btn btn-ghost btn-xs text-error"
                     hx-get="/admin/transformations/{{ rule.id }}/delete/confirm"
                     hx-target="#admin-dialog" hx-swap="innerHTML">Delete</button>

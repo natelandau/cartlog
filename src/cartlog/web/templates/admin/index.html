@@ -1,10 +1,10 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Admin · cartlog{% endblock %}
 {% block content %}
-<h1 class="text-3xl font-semibold tracking-tight">Admin</h1>
-<p class="mt-1 mb-5 text-base-content/60">Manage products, stores, and categories, and review background jobs.</p>
+{{ ui.page_header("Admin", "Manage products, stores, and categories, and review background jobs.") }}
 
-<div class="stats stats-horizontal mb-5 border border-base-300 bg-base-100 shadow-sm">
+<div class="stats stats-horizontal surface-card mb-5">
   <div class="stat">
     <div class="stat-title">Total LLM costs</div>
     <div class="stat-value text-2xl">${{ "%.2f"|format(parsing_cost.total_all_time) }}</div>
@@ -29,16 +29,16 @@
     ("/admin/settings", "Settings", "Configure the watch folder and how receipts are ingested."),
   ] %}
   {% for href, title, desc in tiles %}
-  <a href="{{ href }}" class="card border border-base-300 bg-base-100 shadow-sm transition-colors hover:border-primary hover:bg-base-200">
-    <div class="card-body gap-1 p-5">
-      <h2 class="card-title text-base">{{ title }}</h2>
+  <a href="{{ href }}" class="surface-card transition-colors hover:border-primary hover:bg-base-200">
+    <div class="surface-card__body gap-1 p-5">
+      <h2 class="section-title text-base">{{ title }}</h2>
       <p class="text-sm text-base-content/60">{{ desc }}</p>
     </div>
   </a>
   {% endfor %}
-  <a href="/jobs" class="card border border-base-300 bg-base-100 shadow-sm transition-colors hover:border-primary hover:bg-base-200">
-    <div class="card-body gap-1 p-5">
-      <h2 class="card-title text-base">Jobs
+  <a href="/jobs" class="surface-card transition-colors hover:border-primary hover:bg-base-200">
+    <div class="surface-card__body gap-1 p-5">
+      <h2 class="section-title text-base">Jobs
         <span hx-get="/jobs/badge/partial" hx-trigger="load, every 5s" hx-swap="innerHTML" aria-live="polite"></span>
       </h2>
       <p class="text-sm text-base-content/60">Review background ingestion jobs.</p>

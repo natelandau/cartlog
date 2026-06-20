@@ -24,8 +24,8 @@ def test_admin_stores_filters_by_location(app_client) -> None:
     # (Every row's merge-target <select> lists all stores, so store names appear as options
     # regardless of the filter; assert on the row cells, not the whole fragment.)
     assert response.status_code == 200
-    assert "<td>Costco</td>" in response.text
-    assert "<td>Safeway</td>" not in response.text
+    assert '<td data-label="Chain">Costco</td>' in response.text
+    assert '<td data-label="Chain">Safeway</td>' not in response.text
 
 
 def test_admin_stores_sort_rejects_unknown_key(app_client) -> None:
