@@ -57,15 +57,17 @@
 {% endmacro %}
 
 {% macro spark_table(rows) %}
+  {# data-table so each row collapses to a labeled card on phones; this table has no thead,
+     so the data-label attributes are the only column labels on mobile. #}
   <div class="overflow-x-auto">
-    <table class="table table-sm">
+    <table class="table table-sm data-table">
       <tbody>
         {% for row in rows %}
           <tr>
-            <td class="font-medium">{{ row.product }}</td>
-            <td>{{ sparkline(row.points, label=row.product ~ " price trend") }}</td>
-            <td class="num text-right">${{ "%.2f"|format(row.current_price) }}</td>
-            <td class="text-right">{{ delta(row.change_pct) }}</td>
+            <td class="font-medium" data-label="Product">{{ row.product }}</td>
+            <td data-label="Trend">{{ sparkline(row.points, label=row.product ~ " price trend") }}</td>
+            <td class="num text-right" data-label="Price">${{ "%.2f"|format(row.current_price) }}</td>
+            <td class="text-right" data-label="Change">{{ delta(row.change_pct) }}</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -76,16 +78,16 @@
 {% macro store_table(rows) %}
   {% set widths = bar_percents(rows | map(attribute="total_spend") | list) %}
   <div class="overflow-x-auto">
-    <table class="table table-sm">
+    <table class="table table-sm data-table">
       <thead>
         <tr><th>Store</th><th class="text-right">Visits</th><th>Spend</th><th class="text-right">Avg/trip</th></tr>
       </thead>
       <tbody>
         {% for row in rows %}
           <tr>
-            <td>{{ row.store_chain }}{% if row.store_location %}, {{ row.store_location }}{% endif %}</td>
-            <td class="num text-right">{{ row.visits }}</td>
-            <td>
+            <td data-label="Store">{{ row.store_chain }}{% if row.store_location %}, {{ row.store_location }}{% endif %}</td>
+            <td class="num text-right" data-label="Visits">{{ row.visits }}</td>
+            <td data-label="Spend">
               <span class="flex items-center gap-2">
                 <span class="h-2 w-24 overflow-hidden rounded-full bg-base-300">
                   <span class="block h-full rounded-full bg-primary" style="width: {{ widths[loop.index0] }}%"></span>
@@ -93,7 +95,7 @@
                 <span class="num text-sm">${{ "%.2f"|format(row.total_spend) }}</span>
               </span>
             </td>
-            <td class="num text-right">${{ "%.2f"|format(row.avg_per_trip) }}</td>
+            <td class="num text-right" data-label="Avg/trip">${{ "%.2f"|format(row.avg_per_trip) }}</td>
           </tr>
         {% endfor %}
       </tbody>
