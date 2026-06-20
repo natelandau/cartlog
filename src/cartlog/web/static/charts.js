@@ -7,6 +7,45 @@ async function getJSON(url) {
   return response.json();
 }
 
+// Resolve a CSS custom property (the theme tokens are oklch) to a concrete rgb string so
+// Plotly renders on-brand and adapts to the active light/dark theme. Plotly cannot parse
+// oklch, and modern browsers keep computed colors in oklch form, so paint the value onto a
+// 1x1 canvas and read the pixel back as rgb. An unparseable value keeps the fallback fill.
+const _colorProbe = document.createElement("canvas").getContext("2d");
+function themeColor(varName, fallback) {
+  // Canvas can be unavailable in privacy-hardened browsers; without it we cannot resolve oklch.
+  if (!_colorProbe) return fallback;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  if (!raw) return fallback;
+  _colorProbe.fillStyle = fallback;
+  _colorProbe.fillStyle = raw;
+  _colorProbe.fillRect(0, 0, 1, 1);
+  const [r, g, b] = _colorProbe.getImageData(0, 0, 1, 1).data;
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// Categorical palette for multi-slice charts, drawn from the theme tokens.
+function cartlogPalette() {
+  return ["--color-primary", "--color-accent", "--color-info", "--color-success", "--color-secondary", "--color-warning"].map(
+    (v, i) => themeColor(v, ["#3a7d5d", "#c08a3e", "#4a90c2", "#4f9e6a", "#6b8f86", "#c2952e"][i])
+  );
+}
+
+// Shared layout: transparent background so the card surface shows through, and text colored
+// with the theme ink so titles/ticks stay legible in both light and dark mode.
+function baseLayout(title) {
+  const ink = themeColor("--color-base-content", "#333");
+  return {
+    title: { text: title, font: { size: 16, color: ink } },
+    font: { color: ink },
+    margin: { t: 44, r: 16, b: 44, l: 56 },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+  };
+}
+
+const PLOT_CONFIG = { displayModeBar: false, responsive: true };
+
 const DAY_MS = 86400000;
 
 // Build an x-axis windowed to the data's real span (no empty pre-data years that Plotly
@@ -64,6 +103,7 @@ async function renderPriceHistory() {
   }
 
   const dates = data.points.map((p) => p.purchase_date);
+  const pine = themeColor("--color-primary", "#3a7d5d");
   const trace = {
     x: dates,
     y: data.points.map((p) => Number(p.unit_price)),
@@ -71,14 +111,11 @@ async function renderPriceHistory() {
     hovertemplate: "%{x|%b %-d, %Y}<br>%{text}<br>$%{y:.2f}<extra></extra>",
     mode: "lines+markers",
     type: "scatter",
-    line: { color: "#2563eb", width: 2 },
-    marker: { color: "#2563eb", size: 6 },
+    line: { color: pine, width: 2 },
+    marker: { color: pine, size: 6 },
   };
   const layout = {
-    title: { text: `Unit price · ${data.product}`, font: { size: 16 } },
-    margin: { t: 40, r: 16, b: 44, l: 56 },
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "rgba(0,0,0,0)",
+    ...baseLayout(`Unit price · ${data.product}`),
     xaxis: priceHistoryTimeAxis(dates),
     yaxis: {
       title: "Unit price",
@@ -89,18 +126,20 @@ async function renderPriceHistory() {
     },
     showlegend: false,
   };
-  Plotly.newPlot(el, [trace], layout, { displayModeBar: false, responsive: true });
+  Plotly.newPlot(el, [trace], layout, PLOT_CONFIG);
 }
 
 async function renderStoreComparison() {
   const product = document.getElementById("sc-product").value;
   const data = await getJSON(`/api/analytics/store-comparison?product=${encodeURIComponent(product)}`);
   const trace = {
-    x: data.rows.map((r) => `${r.store_chain}${r.store_location ? " — " + r.store_location : ""}`),
+    x: data.rows.map((r) => `${r.store_chain}${r.store_location ? ", " + r.store_location : ""}`),
     y: data.rows.map((r) => Number(r.avg_unit_price)),
     type: "bar",
+    marker: { color: themeColor("--color-primary", "#3a7d5d") },
   };
-  Plotly.newPlot("store-comparison-chart", [trace], { title: `Avg unit price by store: ${data.product}` });
+  const layout = { ...baseLayout(`Avg unit price by store: ${data.product}`), yaxis: { tickprefix: "$" } };
+  Plotly.newPlot("store-comparison-chart", [trace], layout, PLOT_CONFIG);
 }
 
 async function renderCategorySpend() {
@@ -109,6 +148,7 @@ async function renderCategorySpend() {
     labels: data.rows.map((r) => r.category),
     values: data.rows.map((r) => Number(r.total_spend)),
     type: "pie",
+    marker: { colors: cartlogPalette() },
   };
-  Plotly.newPlot("category-spend-chart", [trace], { title: "Spend by category" });
+  Plotly.newPlot("category-spend-chart", [trace], baseLayout("Spend by category"), PLOT_CONFIG);
 }

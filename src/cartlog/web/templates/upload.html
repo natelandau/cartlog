@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Upload · cartlog{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-3xl font-semibold tracking-tight">Upload receipts</h1>
+{{ ui.page_header("Upload receipts") }}
 
 {#
   POST /receipts returns JSON ({accepted, rejected}), not HTML, so htmx must not swap the
@@ -12,8 +13,8 @@
   (every file rejected) is not "successful" in htmx terms, so we also act on status 400 to
   still render the rejection reasons.
 #}
-<div class="card max-w-xl border border-base-300 bg-base-100 shadow-sm">
-  <div class="card-body gap-4">
+<div class="surface-card max-w-xl">
+  <div class="surface-card__body gap-4">
     <form
       class="flex flex-col gap-4"
       hx-post="/receipts"
@@ -40,11 +41,11 @@
       ">
       <fieldset class="fieldset">
         <legend class="fieldset-legend">Receipt images or PDFs</legend>
-        <input class="file-input file-input-bordered w-full" type="file" name="files" accept="image/*,application/pdf" multiple required />
+        <input class="file-input w-full" type="file" name="files" accept="image/*,application/pdf" multiple required />
         <p class="label">Select one or more files. JPG, PNG, or PDF.</p>
       </fieldset>
       <button class="btn btn-primary self-start" type="submit">
-        Upload
+        {{ ui.icon('upload') }}Upload
         <span class="loading loading-spinner loading-sm htmx-indicator" aria-hidden="true"></span>
       </button>
     </form>

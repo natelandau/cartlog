@@ -8,7 +8,7 @@
   </span>
   {% if rows %}
   {% call table_card() %}
-    <table class="table table-zebra">
+    <table class="table data-table">
       <thead><tr>
         {{ sortable_th("Old store", "source") }}
         {{ sortable_th("Merges into", "target") }}
@@ -18,10 +18,10 @@
       <tbody>
         {% for rule, target_store in rows %}
         <tr class="hover">
-          <td>{{ rule.source_chain_name }} — {{ rule.source_location or "—" }}</td>
-          <td>{{ target_store.chain_name }} — {{ target_store.location or "—" }}</td>
-          <td class="num whitespace-nowrap">{{ rule.created_at.strftime("%Y-%m-%d") }}</td>
-          <td class="text-right">
+          <td data-label="Old store">{{ rule.source_chain_name }} - {{ rule.source_location or "" }}</td>
+          <td data-label="Merges into">{{ target_store.chain_name }} - {{ target_store.location or "" }}</td>
+          <td data-label="Created" class="num whitespace-nowrap">{{ rule.created_at.strftime("%Y-%m-%d") }}</td>
+          <td data-label="" class="text-right">
             <button type="button" class="btn btn-ghost btn-xs text-error"
                     hx-get="/admin/store-merges/{{ rule.id }}/delete/confirm"
                     hx-target="#admin-dialog" hx-swap="innerHTML">Delete</button>

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Dashboard · cartlog{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-3xl font-semibold tracking-tight">Dashboard</h1>
+{{ ui.page_header("Dashboard") }}
 {% include "partials/_dashboard_body.html" %}
 {% endblock %}

@@ -175,7 +175,7 @@ def search_item_edit(
     return templates.TemplateResponse(
         request,
         "partials/_search_row_edit.html",
-        {"r": row, "category_options": category_options},
+        {"r": row, "category_options": category_options, "unit_system": read_unit_system(request)},
     )
 
 
@@ -234,7 +234,12 @@ def search_item_save(
         return templates.TemplateResponse(
             request,
             "partials/_search_row_edit.html",
-            {"r": row, "category_options": category_options, "errors": error},
+            {
+                "r": row,
+                "category_options": category_options,
+                "errors": error,
+                "unit_system": read_unit_system(request),
+            },
             status_code=422,
         )
 

@@ -267,9 +267,10 @@ def test_edit_partial_renders_reconcile_hint(app_client) -> None:
     # When loading the edit partial
     response = app_client.get(f"/receipts/{rid}/edit")
 
-    # Then the reconciliation hint placeholder is present for the client-side script to fill
+    # Then the reconciliation status placeholder is present for the client-side script to fill
     assert response.status_code == 200
-    assert 'id="reconcile-hint"' in response.text
+    assert 'id="reconcile"' in response.text
+    assert 'id="reconcile-text"' in response.text
 
 
 def test_review_save_assigns_category_by_id(app_client) -> None:

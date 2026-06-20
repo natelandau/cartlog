@@ -8,7 +8,7 @@
   </span>
   {% if rows %}
   {% call table_card() %}
-    <table class="table table-zebra">
+    <table class="table data-table">
       <thead><tr>
         {{ sortable_th("Product", "name") }}
         {{ sortable_th("Occurrences", "occurrences", th_class="text-right") }}
@@ -18,10 +18,10 @@
       <tbody>
         {% for product, count, category in rows %}
         <tr class="hover">
-          <td class="font-medium">{{ product.canonical_name }}</td>
-          <td class="num text-right">{{ count }}</td>
-          <td>{{ category or "—" }}</td>
-          <td>
+          <td data-label="Product" class="font-medium">{{ product.canonical_name }}</td>
+          <td data-label="Occurrences" class="num text-right">{{ count }}</td>
+          <td data-label="Category">{{ category or "" }}</td>
+          <td data-label="">
             <form class="merge-form join w-full" hx-get="/admin/products/{{ product.id }}/merge/confirm"
                   hx-target="#admin-dialog" hx-swap="innerHTML">
               <input class="input input-sm join-item min-w-0 flex-1" type="search" name="target" list="admin-product-names"

@@ -1,5 +1,5 @@
 {# Read-only items panel; swapped into #items-panel after save / cancel / mark-reviewed. #}
-{% from "macros/ui.html" import table_card %}
+{% import "macros/ui.html" as ui with context %}
 <div class="flex flex-col gap-4">
   <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-base-content/70">
     <span class="num">{{ receipt.purchase_date }}</span>
@@ -8,7 +8,7 @@
     {# Workflow status (incl. "needs review") is an editor concern; hide it from read-only visitors. #}
     {% if can_edit %}
     <span class="text-base-content/30">·</span>
-    {% if receipt.status == review_status %}<span class="badge badge-warning badge-sm">{{ receipt.status }}</span>{% else %}<span class="badge badge-ghost badge-sm">{{ receipt.status }}</span>{% endif %}
+    {{ ui.status_badge(receipt.status) }}
     {% endif %}
   </div>
   {% if can_edit and receipt.review_reasons %}
@@ -44,19 +44,19 @@
             hx-confirm="Delete this receipt and all its items? This cannot be undone.">Delete receipt</button>
     {% endif %}
   </div>
-  {% call table_card() %}
-    <table class="table table-zebra table-sm">
+  {% call ui.table_card() %}
+    <table class="table table-sm data-table">
       <thead><tr><th>Description</th><th>Product</th><th>Category</th><th class="text-right">Qty</th><th class="text-right">Unit price</th><th class="text-right">Norm $/unit</th><th class="text-right">Line total</th></tr></thead>
       <tbody>
         {% for li in receipt.line_items %}
         <tr>
-          <td>{{ li.raw_description }}</td>
-          <td>{{ li.product.canonical_name }}</td>
-          <td>{{ li.product.category.name if li.product.category else "" }}</td>
-          <td class="num text-right">{{ li.quantity }}{% if li.unit %} {{ li.unit }}{% endif %}</td>
-          <td class="num text-right">{{ li.unit_price }}</td>
-          <td class="num text-right">{{ li.normalized_unit_price | normalized_price(li.measure_dimension, li.measure_status, unit_system) }}{% if can_edit and li.measure_status == "needs_review" %} <span class="badge badge-warning badge-xs">review</span>{% endif %}</td>
-          <td class="num text-right">{{ li.line_total }}</td>
+          <td data-label="Description">{{ li.raw_description }}</td>
+          <td data-label="Product">{{ li.product.canonical_name }}</td>
+          <td data-label="Category">{{ li.product.category.name if li.product.category else "" }}</td>
+          <td class="num text-right" data-label="Qty">{{ li.quantity }}{% if li.unit %} {{ li.unit }}{% endif %}</td>
+          <td class="num text-right" data-label="Unit price">{{ li.unit_price }}</td>
+          <td class="num text-right" data-label="Norm $/unit">{{ li.normalized_unit_price | normalized_price(li.measure_dimension, li.measure_status, unit_system) }}{% if can_edit and li.measure_status == "needs_review" %} <span class="badge badge-warning badge-xs">review</span>{% endif %}</td>
+          <td class="num text-right" data-label="Line total">{{ li.line_total }}</td>
         </tr>
         {% endfor %}
       </tbody>

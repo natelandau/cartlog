@@ -6,10 +6,11 @@
     current_user        - the authenticated User
   Tone matches the integrations page: card with card-body, minimal copy.
 #}
-<section id="tokens-panel" class="card border border-base-300 bg-base-100 shadow-sm">
-  <div class="card-body gap-4">
+{% import "macros/ui.html" as ui with context %}
+<section id="tokens-panel" class="surface-card">
+  <div class="surface-card__body gap-4">
 
-    <h2 class="card-title text-base">API tokens</h2>
+    <h2 class="section-title">API tokens</h2>
     <p class="text-sm opacity-70">
       Tokens let scripts and shortcuts (like the Apple Shortcut on the Integrations page)
       upload receipts without a password. Each token is tied to your account and
@@ -19,9 +20,7 @@
     {# Plaintext revealed once after a successful mint #}
     {% if new_token_plaintext %}
     <div class="alert alert-success gap-3" role="status" aria-live="polite">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-      </svg>
+      {{ ui.icon('check', 20) }}
       <div class="min-w-0 flex-1">
         <p class="font-semibold text-sm">Token created. Copy it now, it will never be shown again.</p>
         <div class="mt-2 flex items-center gap-2 flex-wrap">
@@ -40,7 +39,7 @@
     {# Token list, metadata only, no stored plaintext #}
     {% if tokens %}
     <div class="overflow-x-auto">
-      <table class="table table-sm">
+      <table class="table table-sm data-table">
         <thead>
           <tr>
             <th>Name</th>
@@ -53,25 +52,25 @@
         <tbody>
           {% for token in tokens %}
           <tr class="{% if token.revoked_at %}opacity-40{% endif %}">
-            <td class="font-mono text-sm">{{ token.name }}</td>
-            <td class="font-mono text-xs text-base-content/60">
+            <td data-label="Name" class="font-mono text-sm">{{ token.name }}</td>
+            <td data-label="Created" class="font-mono text-xs text-base-content/60">
               {{ token.created_at.strftime('%Y-%m-%d') }}
             </td>
-            <td class="font-mono text-xs text-base-content/60">
+            <td data-label="Last used" class="font-mono text-xs text-base-content/60">
               {% if token.last_used_at %}
                 {{ token.last_used_at.strftime('%Y-%m-%d') }}
               {% else %}
                 <span class="opacity-40">never</span>
               {% endif %}
             </td>
-            <td>
+            <td data-label="Status">
               {% if token.revoked_at %}
                 <span class="badge badge-ghost badge-sm">revoked</span>
               {% else %}
                 <span class="badge badge-success badge-sm">active</span>
               {% endif %}
             </td>
-            <td class="text-right">
+            <td data-label="" class="text-right">
               {% if not token.revoked_at %}
               <form method="post" action="/account/tokens/{{ token.id }}/revoke"
                     hx-post="/account/tokens/{{ token.id }}/revoke"

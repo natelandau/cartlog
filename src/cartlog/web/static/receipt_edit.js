@@ -6,20 +6,23 @@ function addLineRow() {
   const tbody = document.getElementById("line-rows");
   if (!template || !tbody) return;
   tbody.appendChild(template.content.cloneNode(true));
-  updateReconcileHint();  // a new row changes the line-total sum
+  updateReconcileHint(); // a new item changes the line-total sum
 }
 
 function removeLineRow(button) {
-  const row = button.closest("tr");
-  if (row) row.remove();
-  updateReconcileHint();  // dropping a row changes the line-total sum
+  const card = button.closest(".line-item");
+  if (card) card.remove();
+  updateReconcileHint(); // dropping an item changes the line-total sum
 }
 
-// Compare the sum of line totals against the entered receipt total and flag mismatches.
+// Compare the sum of line totals against the entered receipt total and report it in plain
+// language so the editor knows whether the items they entered reconcile with the receipt.
 function updateReconcileHint() {
-  const hint = document.getElementById("reconcile-hint");
+  const box = document.getElementById("reconcile");
+  const text = document.getElementById("reconcile-text");
   const totalInput = document.querySelector('input[name="total"]');
-  if (!hint || !totalInput) return;
+  if (!box || !text || !totalInput) return;
+
   let sum = 0;
   document.querySelectorAll('input[name="line_total"]').forEach(function (input) {
     const value = parseFloat(input.value);
@@ -27,18 +30,24 @@ function updateReconcileHint() {
   });
   const total = parseFloat(totalInput.value);
   if (Number.isNaN(total)) {
-    hint.textContent = "";
+    box.hidden = true;
     return;
   }
+  box.hidden = false;
+
+  const money = (n) => "$" + n.toFixed(2);
   // Round to cents so float noise (0.1 + 0.2) does not show a spurious mismatch.
   const diff = Math.round((sum - total) * 100) / 100;
   if (diff === 0) {
-    hint.textContent = "lines match total";
-    hint.classList.remove("reconcile-off");
+    box.classList.add("is-ok");
+    box.classList.remove("is-off");
+    text.textContent = "Items add up to " + money(total) + ", matching the receipt total";
   } else {
-    const sign = diff > 0 ? "+" : "";
-    hint.textContent = "lines off by " + sign + diff.toFixed(2);
-    hint.classList.add("reconcile-off");
+    box.classList.add("is-off");
+    box.classList.remove("is-ok");
+    const direction = diff > 0 ? "over" : "under";
+    text.textContent =
+      "Items total " + money(sum) + ", " + money(Math.abs(diff)) + " " + direction + " the " + money(total) + " receipt total";
   }
 }
 

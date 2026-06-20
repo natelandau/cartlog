@@ -56,30 +56,32 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* Light theme: warm paper base, pine-green primary, amber accent. */
+/* Light theme: warm paper base, pine-green primary, amber accent.
+   Surface stack: base-100 (card, brightest) > base-200 (page) > base-300 (borders/inset/hover).
+   Semantic colors darkened so each -content pair passes AA (4.5:1) on warm paper surfaces. */
 @plugin "daisyui/theme" {
   name: "cartlog-light";
   default: true;
   color-scheme: light;
-  --color-base-100: oklch(98% 0.008 95);
-  --color-base-200: oklch(95% 0.012 95);
-  --color-base-300: oklch(90% 0.016 95);
-  --color-base-content: oklch(26% 0.02 160);
-  --color-primary: oklch(48% 0.09 165);
+  --color-base-100: oklch(99% 0.006 95);   /* card surface, brightest */
+  --color-base-200: oklch(94.5% 0.012 95);  /* page background, clearly deeper */
+  --color-base-300: oklch(88% 0.018 95);    /* borders / inset / hover */
+  --color-base-content: oklch(28% 0.02 160);
+  --color-primary: oklch(45% 0.10 165);
   --color-primary-content: oklch(98% 0.01 165);
   --color-secondary: oklch(45% 0.03 160);
   --color-secondary-content: oklch(98% 0.01 160);
-  --color-accent: oklch(62% 0.13 65);
-  --color-accent-content: oklch(98% 0.02 65);
+  --color-accent: oklch(56% 0.13 65);          /* darkened amber for 4.5:1 on paper */
+  --color-accent-content: oklch(99% 0.02 65);
   --color-neutral: oklch(32% 0.02 160);
   --color-neutral-content: oklch(96% 0.01 160);
-  --color-info: oklch(60% 0.1 230);
+  --color-info: oklch(54% 0.10 230);
   --color-info-content: oklch(98% 0.01 230);
-  --color-success: oklch(58% 0.12 150);
+  --color-success: oklch(52% 0.12 150);
   --color-success-content: oklch(98% 0.01 150);
-  --color-warning: oklch(68% 0.13 75);
-  --color-warning-content: oklch(26% 0.03 75);
-  --color-error: oklch(55% 0.18 27);
+  --color-warning: oklch(62% 0.13 75);         /* darkened so warning text passes */
+  --color-warning-content: oklch(99% 0.02 75);
+  --color-error: oklch(52% 0.18 27);
   --color-error-content: oklch(98% 0.01 27);
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
@@ -87,14 +89,15 @@
   --border: 1px;
 }
 
-/* Dark theme: slate base, pine lifted for legibility on dark surfaces. */
+/* Dark theme: slate base, pine lifted for legibility on dark surfaces.
+   Surface stack: base-100 (card, lifted) > base-200 (page, deeper) > base-300 (borders/inset/hover). */
 @plugin "daisyui/theme" {
   name: "cartlog-dark";
   color-scheme: dark;
-  --color-base-100: oklch(22% 0.012 165);
-  --color-base-200: oklch(26% 0.014 165);
-  --color-base-300: oklch(31% 0.016 165);
-  --color-base-content: oklch(92% 0.01 160);
+  --color-base-100: oklch(26% 0.012 165);  /* card surface, lifted */
+  --color-base-200: oklch(18% 0.012 165);  /* page background, deeper for clearer separation */
+  --color-base-300: oklch(32% 0.016 165);  /* borders / inset / hover */
+  --color-base-content: oklch(93% 0.01 160);
   --color-primary: oklch(72% 0.12 165);
   --color-primary-content: oklch(20% 0.03 165);
   --color-secondary: oklch(70% 0.04 160);
@@ -135,6 +138,15 @@
   .htmx-request.htmx-indicator {
     display: inline-flex;
   }
+
+  body { line-height: 1.6; }
+
+  /* One visible focus ring for every interactive element (was browser default). */
+  :where(a, button, input, select, textarea, [tabindex], summary, label.swap):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-field);
+  }
 }
 
 /* Ledger figures: typewriter mono with lining + tabular numerals so columns align.
@@ -144,16 +156,217 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* The receipt editor's reconcile hint. receipt_edit.js toggles `.reconcile-off` when the
-   line totals stop matching the receipt total; the two-class selector wins over any
-   utility color so the state always reads green (matched) vs red (off). */
+/* Receipt editor. Each line item is a card sharing the metadata card's surface so the whole
+   edit form reads as one document. Cards auto-number by source order, matching the tape. */
 @layer components {
-  .reconcile-hint {
-    color: var(--color-success);
+  .line-rows {
+    counter-reset: line;
+  }
+  .line-item {
+    counter-increment: line;
+    background: var(--color-base-100);
+    border: var(--border) solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    padding: 0.875rem 1rem;
+  }
+  .line-item__num::before {
+    content: "#" counter(line);
   }
 
-  .reconcile-hint.reconcile-off {
+  /* Action bar pins to the bottom of the scrolling edit column so Save stays reachable. */
+  .form-actionbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-top: var(--border) solid var(--color-base-300);
+    background: color-mix(in oklch, var(--color-base-200) 90%, transparent);
+    backdrop-filter: blur(4px);
+  }
+
+  /* Reconciliation status: success when line totals add up, error when they do not. The
+     state class toggles which paired icon shows. receipt_edit.js sets the text + state. */
+  .reconcile {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  .reconcile .icon-ok,
+  .reconcile .icon-off {
+    display: none;
+    flex-shrink: 0;
+  }
+  .reconcile.is-ok {
+    color: var(--color-success);
+  }
+  .reconcile.is-ok .icon-ok {
+    display: inline-flex;
+  }
+  .reconcile.is-off {
     color: var(--color-error);
+  }
+  .reconcile.is-off .icon-off {
+    display: inline-flex;
+  }
+}
+
+/* One definition per text role. Tune size/leading here, applies everywhere. */
+@layer components {
+  .page-title {
+    font-family: var(--font-serif);
+    font-size: 1.875rem;     /* tune in one place during Phase 2 */
+    line-height: 1.15;
+    font-weight: 560;
+    letter-spacing: -0.01em;
+  }
+  .section-title {
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    line-height: 1.3;
+    font-weight: 520;
+  }
+  .eyebrow {
+    font-size: 0.75rem;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  }
+  .meta { color: color-mix(in oklch, var(--color-base-content) 65%, transparent); }
+  .prose-muted { color: color-mix(in oklch, var(--color-base-content) 75%, transparent); line-height: 1.65; }
+}
+
+/* Card surface system: replaces the repeated `card border border-base-300 bg-base-100 shadow-sm`
+   recipe with a single semantic class driven entirely by CSS variables, so both themes stay in sync. */
+@layer components {
+  .transition-ui { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+
+  .surface-card {
+    background: var(--color-base-100);
+    border: var(--border) solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--color-base-content) 8%, transparent);
+  }
+  .surface-card__body { padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .surface-card--accent { border-color: color-mix(in oklch, var(--color-primary) 45%, transparent); }
+  .surface-card--error  { border-color: color-mix(in oklch, var(--color-error) 45%, transparent); }
+
+  .page-header {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 0.75rem; margin-bottom: 1.5rem;
+  }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+}
+
+@layer components {
+  /* Table for column comparison/sorting. Numeric columns right-align via .num. */
+  .data-table { width: 100%; }
+  .data-table thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--color-base-100);
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  }
+  .data-table td.num, .data-table th.num { text-align: right; }
+  .data-table tbody tr { transition: background-color .12s ease; }
+  .data-table tbody tr:hover { background: var(--color-base-200); }
+
+  /* List-row for object records (receipts, users, jobs). Strong on mobile. */
+  .list-row {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: var(--border) solid var(--color-base-300);
+    transition: background-color .12s ease;
+  }
+  .list-row:last-child { border-bottom: 0; }
+  .list-row:hover { background: var(--color-base-200); }
+  .list-row__main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.125rem; }
+  .list-row__title { font-weight: 600; }
+  .list-row__meta { font-size: 0.8125rem; color: color-mix(in oklch, var(--color-base-content) 65%, transparent); }
+  .list-row__trailing { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+
+  /* Segmented control: one inset track, active segment is a floating rounded pill.
+     The single pattern for filters and range pickers (replaces ad-hoc join groups). */
+  .segmented {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    background: var(--color-base-300);
+    border-radius: var(--radius-field);
+  }
+  .segmented__item {
+    border-radius: calc(var(--radius-field) - 0.125rem);
+    padding: 0.375rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: color-mix(in oklch, var(--color-base-content) 72%, transparent);
+    transition: background-color .15s ease, color .15s ease;
+  }
+  .segmented__item:hover { color: var(--color-base-content); }
+  .segmented__item.is-active,
+  .segmented__item[aria-current] {
+    background: var(--color-primary);
+    color: var(--color-primary-content);
+    box-shadow: 0 1px 2px color-mix(in oklch, black 14%, transparent);
+  }
+
+  /* Receipt-tape motif (moved out of auth templates' inline <style>). */
+  .tape-card { animation: tape-print-in 0.35s ease-out both; }
+  /* The tear edge is a dashed border that reads as a perforation cut line */
+  .tape-tear { height: 0; border-top: 2px dashed color-mix(in oklab, var(--color-base-content) 22%, transparent); margin: 0; }
+  .tape-body { border-radius: var(--radius-box); }
+  @keyframes tape-print-in { from { opacity: 0; transform: translateY(0.75rem); } to { opacity: 1; transform: none; } }
+}
+
+/* Below the sm breakpoint, .data-table collapses into stacked labeled cards so dense
+   tables never force horizontal scrolling on phones. Each <td> must carry data-label. */
+@media (max-width: 40rem) {
+  .data-table thead {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0);
+    white-space: nowrap; border: 0;
+  }
+  .data-table tbody tr {
+    display: block;
+    margin-bottom: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border: var(--border) solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    background: var(--color-base-100);
+  }
+  .data-table tbody tr:last-child { margin-bottom: 0; }
+  .data-table tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.375rem 0;
+    text-align: right;
+    border: 0;
+  }
+  .data-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
   }
 }

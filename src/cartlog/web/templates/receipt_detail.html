@@ -1,22 +1,16 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Receipt #{{ receipt.id }} · cartlog{% endblock %}
 {% block content %}
+{# Build the subtitle from store chain (+ location) and optional uploader attribution. #}
+{% set subtitle %}{{ receipt.store.chain_name }}{% if receipt.store.location %}, {{ receipt.store.location }}{% endif %}{% if receipt.uploaded_by %} · Uploaded by {{ receipt.uploaded_by.username }}{% endif %}{% endset %}
 {# On desktop the page fills the viewport below the header (navbar 4rem + main padding 3rem)
    so a tall receipt and its items each scroll inside their own column instead of forcing
    the whole page to scroll. On mobile it falls back to natural stacking. #}
 <div class="flex flex-col gap-3 lg:h-[calc(100dvh-7rem)]">
-  <div>
-    <h1 class="text-3xl font-semibold tracking-tight">Receipt #{{ receipt.id }}</h1>
-    <p class="mt-1 text-base-content/70">
-      <strong>{{ receipt.store.chain_name }}</strong>{% if receipt.store.location %}, {{ receipt.store.location }}{% endif %}
-      {% if receipt.uploaded_by %}
-      <span class="text-base-content/40 mx-1">·</span>
-      <span class="text-sm">Uploaded by {{ receipt.uploaded_by.username }}</span>
-      {% endif %}
-    </p>
-  </div>
+  {{ ui.page_header("Receipt #" ~ receipt.id, subtitle) }}
   <div class="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-    <figure class="overflow-auto rounded-box border border-base-300 bg-base-100 shadow-sm lg:h-full">
+    <figure class="surface-card overflow-auto lg:h-full">
       {% if is_pdf %}
       {# A PDF cannot render in <img>; use the browser's native viewer with a link fallback. #}
       <object data="/receipts/{{ receipt.id }}/image" type="application/pdf" class="h-[36rem] w-full lg:h-full">

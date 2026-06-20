@@ -1,17 +1,21 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Receipts · cartlog{% endblock %}
 {% block content %}
-<h1 class="mb-4 text-3xl font-semibold tracking-tight">Receipts{% if can_edit and status %} <span class="text-base-content/50">({{ status }})</span>{% endif %}</h1>
 {# Status filters expose the review workflow, so they are editor-only. #}
 {% if can_edit %}
-<div class="join mb-4" role="group" aria-label="Filter by status">
-  <a class="btn join-item btn-sm{% if not status %} btn-active btn-primary{% endif %}" href="/receipts">All</a>
-  <a class="btn join-item btn-sm{% if status == 'needs_review' %} btn-active btn-primary{% endif %}" href="/receipts?status=needs_review">Needs review</a>
-  <a class="btn join-item btn-sm{% if status == 'parsed' %} btn-active btn-primary{% endif %}" href="/receipts?status=parsed">Parsed</a>
-  <a class="btn join-item btn-sm{% if status == 'failed' %} btn-active btn-primary{% endif %}" href="/receipts?status=failed">Failed</a>
-</div>
+{% call ui.page_header("Receipts") %}
+  <div class="segmented" role="group" aria-label="Filter by status">
+    <a class="segmented__item{{ ' is-active' if not status else '' }}"{% if not status %} aria-current="page"{% endif %} href="/receipts">All</a>
+    <a class="segmented__item{{ ' is-active' if status == 'needs_review' else '' }}"{% if status == 'needs_review' %} aria-current="page"{% endif %} href="/receipts?status=needs_review">Needs review</a>
+    <a class="segmented__item{{ ' is-active' if status == 'parsed' else '' }}"{% if status == 'parsed' %} aria-current="page"{% endif %} href="/receipts?status=parsed">Parsed</a>
+    <a class="segmented__item{{ ' is-active' if status == 'failed' else '' }}"{% if status == 'failed' %} aria-current="page"{% endif %} href="/receipts?status=failed">Failed</a>
+  </div>
+{% endcall %}
+{% else %}
+{{ ui.page_header("Receipts") }}
 {% endif %}
-<div class="card overflow-hidden border border-base-300 bg-base-100 shadow-sm">
+<div class="surface-card overflow-hidden">
   {% include "partials/_receipt_table.html" %}
 </div>
 {% endblock %}

@@ -1,108 +1,92 @@
 {% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
 {% block title %}Account · cartlog{% endblock %}
 
 {% block content %}
 {# Standard logged-in settings layout (matches settings.html / integrations.html): a constrained
    column of cards. No receipt motif here, this is a utility page, not part of the auth flow. #}
 <div class="mx-auto max-w-2xl space-y-6">
-  <div>
-    <h1 class="font-display text-3xl tracking-tight">Account</h1>
-    <p class="mt-1 text-base-content/60">
-      Manage your sign-in and the tokens that upload receipts on your behalf.
-    </p>
-  </div>
+  {{ ui.page_header("Account settings") }}
 
   {% if request.query_params.get('changed') %}
   <div class="alert alert-success" role="status" aria-live="polite">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-    </svg>
+    {{ ui.icon('check', 20) }}
     <span>Password updated. Every other session was signed out.</span>
   </div>
   {% endif %}
 
   {% if error %}
   <div class="alert alert-error" role="alert" aria-live="assertive">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-    </svg>
+    {{ ui.icon('alert-triangle', 20) }}
     <span>{{ error }}</span>
   </div>
   {% endif %}
 
   {# Identity, read-only #}
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-4">
-      <h2 class="card-title">Your account</h2>
-      <dl class="grid gap-4 sm:grid-cols-3">
-        <div>
-          <dt class="text-xs font-medium uppercase tracking-wide text-base-content/50">Username</dt>
-          <dd class="mt-1 font-medium text-base-content">{{ current_user.username }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium uppercase tracking-wide text-base-content/50">Name</dt>
-          <dd class="mt-1 text-base-content">{{ current_user.name or "Not set" }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs font-medium uppercase tracking-wide text-base-content/50">Role</dt>
-          <dd class="mt-1"><span class="badge badge-ghost capitalize">{{ current_user.role }}</span></dd>
-        </div>
-      </dl>
+  {% call ui.card("Your account") %}
+  <dl class="grid gap-4 sm:grid-cols-3">
+    <div>
+      <dt class="text-xs font-medium uppercase tracking-wide text-base-content/50">Username</dt>
+      <dd class="mt-1 font-medium text-base-content">{{ current_user.username }}</dd>
     </div>
-  </section>
+    <div>
+      <dt class="text-xs font-medium uppercase tracking-wide text-base-content/50">Name</dt>
+      <dd class="mt-1 text-base-content">{{ current_user.name or "Not set" }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs font-medium uppercase tracking-wide text-base-content/50">Role</dt>
+      <dd class="mt-1"><span class="badge badge-ghost capitalize">{{ current_user.role }}</span></dd>
+    </div>
+  </dl>
+  {% endcall %}
 
   {# Change password #}
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-4">
-      <div>
-        <h2 class="card-title">Change password</h2>
-        <p class="mt-1 text-sm text-base-content/60">
-          Updating your password signs out every other session.
-        </p>
-      </div>
+  {% call ui.card("Change password") %}
+  <p class="mt-1 text-sm text-base-content/60">
+    Updating your password signs out every other session.
+  </p>
 
-      <form method="post" action="/account/password" class="space-y-4">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+  <form method="post" action="/account/password" class="space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
 
-        <fieldset class="fieldset">
-          <legend class="fieldset-legend">Current password</legend>
-          <label class="input w-full">
-            <input type="password" name="current" class="grow" placeholder="••••••••••••"
-                   autocomplete="current-password" required />
-          </label>
-        </fieldset>
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Current password</legend>
+      <label class="input w-full">
+        <input type="password" name="current" class="grow" placeholder="••••••••••••"
+               autocomplete="current-password" required />
+      </label>
+    </fieldset>
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">New password</legend>
-            <label class="input w-full">
-              <input type="password" name="new" class="grow" placeholder="••••••••••••"
-                     autocomplete="new-password" required minlength="12" />
-            </label>
-            <p class="label text-base-content/60">At least 12 characters.</p>
-          </fieldset>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">New password</legend>
+        <label class="input w-full">
+          <input type="password" name="new" class="grow" placeholder="••••••••••••"
+                 autocomplete="new-password" required minlength="12" />
+        </label>
+        <p class="label text-base-content/60">At least 12 characters.</p>
+      </fieldset>
 
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">Confirm new password</legend>
-            <label class="input w-full">
-              <input type="password" name="confirm" class="grow" placeholder="••••••••••••"
-                     autocomplete="new-password" required />
-            </label>
-          </fieldset>
-        </div>
-
-        <div class="flex justify-end">
-          <button type="submit" class="btn btn-primary">Update password</button>
-        </div>
-      </form>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Confirm new password</legend>
+        <label class="input w-full">
+          <input type="password" name="confirm" class="grow" placeholder="••••••••••••"
+                 autocomplete="new-password" required />
+        </label>
+      </fieldset>
     </div>
-  </section>
+
+    <div class="flex justify-end">
+      <button type="submit" class="btn btn-primary">Update password</button>
+    </div>
+  </form>
+  {% endcall %}
 
   {# API tokens: htmx-loaded once. The partial is itself a card, so this placeholder card is
      replaced outright (outerHTML) to avoid nesting one card inside another. #}
-  <section class="card border border-base-300 bg-base-100 shadow-sm"
+  <section class="surface-card"
            hx-get="/account/tokens" hx-trigger="load" hx-swap="outerHTML">
-    <div class="card-body">
+    <div class="surface-card__body">
       <p class="text-sm text-base-content/50">Loading API tokens…</p>
     </div>
   </section>

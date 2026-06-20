@@ -4,9 +4,9 @@
 <div id="category-panel" class="flex flex-col gap-4">
   {% if error %}<div class="alert alert-error alert-soft text-sm" role="alert">error: {{ error }}</div>{% endif %}
 
-  <section class="card border border-base-300 bg-base-100 shadow-sm">
-    <div class="card-body gap-3">
-      <h2 class="card-title text-lg">Add category</h2>
+  <section class="surface-card">
+    <div class="surface-card__body gap-3">
+      <h2 class="section-title">Add category</h2>
       <form class="flex flex-wrap items-end gap-2" hx-post="/categories"
             hx-target="#category-panel"
             hx-swap="outerHTML">
