@@ -13,6 +13,8 @@ async function getJSON(url) {
 // 1x1 canvas and read the pixel back as rgb. An unparseable value keeps the fallback fill.
 const _colorProbe = document.createElement("canvas").getContext("2d");
 function themeColor(varName, fallback) {
+  // Canvas can be unavailable in privacy-hardened browsers; without it we cannot resolve oklch.
+  if (!_colorProbe) return fallback;
   const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
   if (!raw) return fallback;
   _colorProbe.fillStyle = fallback;

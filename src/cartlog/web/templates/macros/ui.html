@@ -62,7 +62,7 @@
 {# Single source of truth for status -> badge color. Used by receipts, jobs, etc. #}
 {% set _status_variants = {
   "needs_review": "badge-warning", "pending": "badge-warning", "queued": "badge-ghost",
-  "processing": "badge-info", "parsed": "badge-success", "done": "badge-success",
+  "parsing": "badge-info", "processing": "badge-info", "parsed": "badge-success", "done": "badge-success",
   "complete": "badge-success", "completed": "badge-success", "failed": "badge-error", "error": "badge-error"
 } %}
 {% macro status_badge(status) %}

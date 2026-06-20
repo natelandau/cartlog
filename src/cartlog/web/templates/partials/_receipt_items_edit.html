@@ -62,7 +62,7 @@
           <td><input class="input input-xs w-16" name="unit_size" value="{{ li.unit_size or '' }}" /></td>
           <td><input class="input input-xs w-20" name="unit_price" type="number" step="0.01" inputmode="decimal" value="{{ li.unit_price }}" /></td>
           <td><input class="input input-xs w-20" name="line_total" type="number" step="0.01" inputmode="decimal" value="{{ li.line_total }}" /></td>
-          <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove row">{{ ui.icon('trash') }}</button></td>
+          <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove row">{{ ui.icon('trash', 16) }}</button></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -95,7 +95,7 @@
       <td><input class="input input-xs w-16" name="unit_size" value="" /></td>
       <td><input class="input input-xs w-20" name="unit_price" type="number" step="0.01" inputmode="decimal" value="0.00" /></td>
       <td><input class="input input-xs w-20" name="line_total" type="number" step="0.01" inputmode="decimal" value="0.00" /></td>
-      <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove row">{{ ui.icon('trash') }}</button></td>
+      <td><button type="button" class="btn btn-ghost btn-xs btn-square text-error remove-row" onclick="removeLineRow(this)" aria-label="Remove row">{{ ui.icon('trash', 16) }}</button></td>
     </tr>
   </template>
 

@@ -6,7 +6,7 @@
 {# Standard logged-in settings layout (matches settings.html / integrations.html): a constrained
    column of cards. No receipt motif here, this is a utility page, not part of the auth flow. #}
 <div class="mx-auto max-w-2xl space-y-6">
-  {% call ui.page_header("Account settings") %}{% endcall %}
+  {{ ui.page_header("Account settings") }}
 
   {% if request.query_params.get('changed') %}
   <div class="alert alert-success" role="status" aria-live="polite">
