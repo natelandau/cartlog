@@ -7,6 +7,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
+from cartlog.units import MeasureStatus
+
 
 class PricePoint(BaseModel):
     """One purchase of a product on a specific receipt."""
@@ -21,7 +23,7 @@ class PricePoint(BaseModel):
     needs_review: bool
     normalized_unit_price: Decimal | None = None
     measure_dimension: str | None = None
-    measure_status: str = "not_applicable"
+    measure_status: MeasureStatus = MeasureStatus.NOT_APPLICABLE
 
 
 class PriceHistory(BaseModel):
@@ -88,7 +90,7 @@ class SearchResult(BaseModel):
     needs_review: bool
     normalized_unit_price: Decimal | None = None
     measure_dimension: str | None = None
-    measure_status: str = "not_applicable"
+    measure_status: MeasureStatus = MeasureStatus.NOT_APPLICABLE
 
 
 class ParsingCostSummary(BaseModel):

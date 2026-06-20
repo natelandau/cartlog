@@ -1,14 +1,13 @@
 """Tests for the unit factor table and free-text size parser in cartlog.units."""
 
 from decimal import Decimal
+from enum import StrEnum
 
 import pytest
 
 from cartlog.constants import COUNT, UNIT_FACTORS, VOLUME, WEIGHT
 from cartlog.units import (
-    NEEDS_REVIEW,
-    NOT_APPLICABLE,
-    RESOLVED,
+    MeasureStatus,
     normalize_line_item,
     normalize_unit_token,
     parse_size,
@@ -67,7 +66,7 @@ def test_loose_weight_quantity_is_the_measure():
     r = normalize_line_item(
         quantity=Decimal(2), unit="lb", unit_size=None, line_total=Decimal("3.48")
     )
-    assert r.measure_status == RESOLVED
+    assert r.measure_status == MeasureStatus.RESOLVED
     assert r.measure_dimension == "weight"
     assert r.measure_quantity == Decimal("907.1840")
     assert r.normalized_unit_price == Decimal("0.003836")  # 3.48 / 907.184
@@ -79,7 +78,7 @@ def test_packaged_volume_from_unit_size():
     r = normalize_line_item(
         quantity=Decimal(1), unit="ea", unit_size="1.5L", line_total=Decimal("4.50")
     )
-    assert r.measure_status == RESOLVED
+    assert r.measure_status == MeasureStatus.RESOLVED
     assert r.measure_dimension == "volume"
     assert r.measure_quantity == Decimal("1500.0000")
     assert r.normalized_unit_price == Decimal("0.003000")
@@ -104,7 +103,7 @@ def test_count_in_unit_size_is_count_dimension():
     r = normalize_line_item(
         quantity=Decimal(1), unit=None, unit_size="12CT", line_total=Decimal("3.48")
     )
-    assert r.measure_status == RESOLVED
+    assert r.measure_status == MeasureStatus.RESOLVED
     assert r.measure_dimension == "count"
     assert r.measure_quantity == Decimal("12.0000")
     assert r.normalized_unit_price == Decimal("0.290000")
@@ -125,7 +124,7 @@ def test_no_measure_no_text_is_not_applicable():
     r = normalize_line_item(
         quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal("0.99")
     )
-    assert r.measure_status == NOT_APPLICABLE
+    assert r.measure_status == MeasureStatus.NOT_APPLICABLE
     assert r.normalized_unit_price is None
     assert r.measure_dimension is None
 
@@ -135,7 +134,7 @@ def test_unparsable_measure_text_is_needs_review():
     r = normalize_line_item(
         quantity=Decimal(1), unit="family pack", unit_size=None, line_total=Decimal("8.00")
     )
-    assert r.measure_status == NEEDS_REVIEW
+    assert r.measure_status == MeasureStatus.NEEDS_REVIEW
     assert r.normalized_unit_price is None
 
 
@@ -144,7 +143,7 @@ def test_zero_measure_is_needs_review():
     r = normalize_line_item(
         quantity=Decimal(0), unit="lb", unit_size=None, line_total=Decimal("3.00")
     )
-    assert r.measure_status == NEEDS_REVIEW
+    assert r.measure_status == MeasureStatus.NEEDS_REVIEW
 
 
 def test_measurable_unit_wins_over_llm_measure():
@@ -160,3 +159,14 @@ def test_measurable_unit_wins_over_llm_measure():
     )
     assert r.measure_dimension == "weight"
     assert r.measure_quantity == Decimal("907.1840")  # 2 lb, not 400 g
+
+
+def test_measure_status_is_a_str_enum_with_three_members():
+    """Verify MeasureStatus owns the closed measure_status vocabulary as a StrEnum."""
+    # Given the MeasureStatus enum
+    # Then it is a StrEnum whose members equal their persisted string values
+    assert issubclass(MeasureStatus, StrEnum)
+    assert MeasureStatus.RESOLVED == "resolved"
+    assert MeasureStatus.NOT_APPLICABLE == "not_applicable"
+    assert MeasureStatus.NEEDS_REVIEW == "needs_review"
+    assert {m.value for m in MeasureStatus} == {"resolved", "not_applicable", "needs_review"}

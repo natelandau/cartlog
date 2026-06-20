@@ -22,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cartlog.db.base import Base
+from cartlog.units import MeasureStatus
 
 
 class Role(StrEnum):
@@ -284,7 +285,9 @@ class LineItem(Base):
     # resolved | not_applicable | needs_review. Default covers rows inserted before
     # normalization runs (e.g. a bare LineItem in a test or a pending backfill).
     measure_status: Mapped[str] = mapped_column(
-        String(16), default="not_applicable", server_default="not_applicable"
+        String(16),
+        default=MeasureStatus.NOT_APPLICABLE,
+        server_default=MeasureStatus.NOT_APPLICABLE.value,
     )
 
     receipt: Mapped[Receipt] = relationship(back_populates="line_items")
