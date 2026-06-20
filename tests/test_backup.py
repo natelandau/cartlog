@@ -141,3 +141,16 @@ def test_create_backup_handles_missing_image_dir(tmp_path):
         members = tar.getmembers()
     # The receipt_images directory is always present so the restore layout is valid.
     assert any(m.name.rstrip("/") == "receipt_images" and m.isdir() for m in members)
+
+
+def test_create_backup_handles_empty_image_dir(tmp_path):
+    """An existing-but-empty image dir still yields a valid receipt_images/ entry, count 0."""
+    settings = _settings_for(tmp_path, with_images=False)
+    settings.image_storage_dir.mkdir(parents=True, exist_ok=True)  # exists, but no files
+
+    result = create_backup(settings, tmp_path / "backup.tar.gz")
+
+    assert result.image_count == 0
+    with tarfile.open(result.path, "r:gz") as tar:
+        members = tar.getmembers()
+    assert any(m.name.rstrip("/") == "receipt_images" and m.isdir() for m in members)
