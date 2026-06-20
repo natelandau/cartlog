@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from alembic import command
 from alembic.config import Config
 
+from cartlog.db.backfill import normalize_existing_measures
 from cartlog.db.seed import seed_app_config, seed_categories
 from cartlog.db.session import create_session_factory
 
@@ -39,6 +40,9 @@ def prepare_runtime(settings: Settings) -> None:
         with session_factory() as session:
             seed_categories(session)
             seed_app_config(session)
+            # Recompute normalization for any rows left stale by older logic. Deterministic
+            # and idempotent, so it is safe to run on every startup.
+            normalize_existing_measures(session)
             session.commit()
     finally:
         session_factory.kw["bind"].dispose()

@@ -195,58 +195,6 @@ Open **Admin -> Integrations** (at `/admin/integrations`) in the web UI and tap 
 
 Once the Shortcut is installed, open a receipt in Photos or Files, tap the share button, and run the Shortcut. The receipt appears in cartlog within a few seconds.
 
-## Command-line usage
-
-The web UI covers everyday use, but every action is also available from the `cartlog` command. With Docker, run these inside the container, for example `docker compose exec cartlog cartlog query category-spend`.
-
-Ingest one or more receipts from the command line:
-
-```bash
-uv run cartlog ingest receipt1.jpg receipt2.pdf
-```
-
-By default each receipt is read right away. Pass `--no-wait` to hand them off and have cartlog read them in the background instead.
-
-Query your stored data:
-
-```bash
-# Show a product's price over time
-uv run cartlog query price-history "bananas"
-
-# Compare a product's price across stores, cheapest first
-uv run cartlog query store-comparison "whole milk"
-
-# Rank a category's products by normalized unit price (weight and volume separately)
-uv run cartlog query category-units "dairy"
-
-# Total spend by category
-uv run cartlog query category-spend
-
-# Search line items by text, product, store, or category
-uv run cartlog query search "coffee"
-```
-
-Export your line items to a file, optionally filtered by date, store, or category. The `--output` path is required, and `--format` is `csv` (the default) or `json`:
-
-```bash
-# Everything, as CSV
-uv run cartlog export --output groceries.csv
-
-# One store's dairy purchases from this year, as JSON
-uv run cartlog export --output dairy.json --format json --store "Whole Foods" --category dairy --from 2026-01-01
-```
-
-In the browser, the dashboard has **Export CSV** and **Export JSON** buttons that download the same data for the date range you have selected.
-
-Other commands:
-
-- `cartlog worker` reads any waiting receipts on its own, without starting the web server.
-- `cartlog receipts reparse` re-reads a receipt from its saved image, replacing the earlier parse.
-- `cartlog receipts delete` removes a receipt and everything stored with it, including its image.
-- `cartlog db seed` sets up the categories cartlog uses, adding any that are missing.
-
-Run `uv run cartlog --help` or add `--help` to any command for full options.
-
 ## Configuration
 
 All settings are read from the environment and from `.env.secret`, with environment variables taking precedence. Two settings are required: `CARTLOG_SECRET_KEY` and the API key for your chosen LLM provider. All others are optional. See [.env.sample](.env.sample) for the full list with descriptions.

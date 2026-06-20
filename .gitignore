@@ -26,3 +26,6 @@ receipt_images/
 # Frontend build
 node_modules/
 src/cartlog/web/static/app.css
+
+# git worktrees
+.worktrees/

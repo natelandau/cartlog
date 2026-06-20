@@ -1,23 +1,14 @@
-"""`cartlog db` commands: database seeding and maintenance."""
+"""Idempotent data backfills run at startup to keep stored rows consistent with current logic."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import typer
-from rich.console import Console
-
-from cartlog.bootstrap import prepare_runtime
-from cartlog.config import get_settings
 from cartlog.db.models import LineItem
-from cartlog.db.session import create_session_factory
 from cartlog.units import normalize_line_item
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
-
-db_app = typer.Typer(help="Database maintenance commands.", no_args_is_help=True)
-console = Console()
 
 
 def normalize_existing_measures(session: Session) -> int:
@@ -56,32 +47,3 @@ def normalize_existing_measures(session: Session) -> int:
     # before the caller commits. The caller still owns the final commit.
     session.flush()
     return changed
-
-
-@db_app.command()
-def seed() -> None:
-    """Ensure the schema exists, then add any categories missing from the fixture.
-
-    Runs the same migrate-then-seed path as startup, so it works on a brand-new database as
-    well as an existing one. Both steps are idempotent and seeding never removes rows.
-    """
-    prepare_runtime(get_settings())
-    console.print("Categories seeded from the fixture.")
-
-
-@db_app.command("normalize-measures")
-def normalize_measures() -> None:
-    """Backfill normalized measure columns for all existing line items.
-
-    Deterministic, idempotent backfill that recomputes the four normalization columns
-    from stored unit/unit_size without calling the LLM. Safe to run multiple times.
-    """
-    settings = get_settings()
-    session_factory = create_session_factory(settings.database_url)
-    try:
-        with session_factory() as session:
-            changed = normalize_existing_measures(session)
-            session.commit()
-        console.print(f"Normalized {changed} line item(s).")
-    finally:
-        session_factory.kw["bind"].dispose()

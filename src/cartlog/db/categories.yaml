@@ -1,5 +1,5 @@
 # Default product categories seeded into a new database. Flat, grocery-aisle style.
-# Edit freely, then run `cartlog db seed` to add new entries. Seeding is additive: it
+# Edit freely; new entries are added the next time the app starts. Seeding is additive: it
 # never removes or renames existing categories. Keep names lowercase and slash-free.
 #
 # Each entry is a bare category name.

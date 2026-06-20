@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from cartlog.db.cli import normalize_existing_measures
+from cartlog.db.backfill import normalize_existing_measures
 from cartlog.db.models import Category, LineItem, Product, Receipt, Store
 
 
