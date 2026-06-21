@@ -30,6 +30,7 @@ from cartlog.web.routers import (
     auth_routes,
     categories,
     dashboard,
+    insights,
     integrations,
     jobs,
     preferences,
@@ -81,6 +82,7 @@ def create_app(*, dev: bool = False) -> FastAPI:
     app.include_router(receipts.router)
     app.include_router(jobs.router)
     app.include_router(analytics.router)
+    app.include_router(insights.router)
     app.include_router(categories.router)
     app.include_router(admin.router)
     app.include_router(preferences.router)

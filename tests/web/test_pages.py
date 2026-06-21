@@ -158,15 +158,62 @@ def test_search_results_no_match_message(app_client):
     assert "no matching" in response.text.lower()
 
 
-def test_charts_page_renders_shell(app_client):
-    """Verify GET /charts renders chart containers and loads Plotly + charts.js."""
-    # When loading the charts page
-    response = app_client.get("/charts")
+def test_insights_index_redirects_to_default_view(app_client):
+    """GET /insights lands on the default analysis."""
+    # When loading the bare insights index without following the redirect
+    response = app_client.get("/insights", follow_redirects=False)
 
-    # Then the chart shell and scripts are present
+    # Then it temporarily redirects to the default view
+    assert response.status_code == 307
+    assert response.headers["location"] == "/insights/price-history"
+
+
+def test_insights_view_renders_full_shell(app_client):
+    """A plain GET of an analysis renders the shell: select, panel, and rendering layer."""
+    # When loading an analysis as a full page
+    response = app_client.get("/insights/price-history")
+
+    # Then the shell, all registered options, the panel, and insights.js are present
     assert response.status_code == 200
-    assert "plotly.min.js" in response.text
-    assert 'id="price-history-chart"' in response.text
+    assert "/static/insights.js" in response.text
+    assert 'id="insights-panel"' in response.text
+    assert 'data-insight-view="price-history"' in response.text
+    assert ">Price history</option>" in response.text
+    assert ">Store comparison</option>" in response.text
+    assert ">Category spend</option>" in response.text
+    # Plotly is lazy-loaded by JS, so it must NOT be hard-linked in the server HTML
+    assert "plotly.min.js" not in response.text
+
+
+def test_insights_view_htmx_returns_bare_fragment(app_client):
+    """An htmx request returns only the fragment, without the shell chrome."""
+    # When htmx requests an analysis
+    response = app_client.get("/insights/store-comparison", headers={"HX-Request": "true"})
+
+    # Then the fragment renders without the navbar or the select shell
+    assert response.status_code == 200
+    assert 'data-insight-view="store-comparison"' in response.text
+    assert 'id="insight-select"' not in response.text
+    assert "<nav" not in response.text
+
+
+def test_insights_unknown_view_404s(app_client):
+    """An unregistered analysis key is a 404, not a blank shell."""
+    # When requesting a view that is not registered
+    response = app_client.get("/insights/not-a-view")
+
+    # Then the request 404s
+    assert response.status_code == 404
+
+
+def test_charts_redirects_to_insights(app_client):
+    """The legacy /charts path permanently redirects to /insights."""
+    # When loading the old charts URL without following the redirect
+    response = app_client.get("/charts", follow_redirects=False)
+
+    # Then it permanently redirects to the new page
+    assert response.status_code == 301
+    assert response.headers["location"] == "/insights"
 
 
 def test_detail_offers_edit_for_parsed_receipt(app_client):

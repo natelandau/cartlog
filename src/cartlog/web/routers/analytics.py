@@ -1,4 +1,4 @@
-"""Analytics web routes: read-only JSON endpoints, search page, and charts shell."""
+"""Analytics web routes: read-only JSON endpoints and the search page."""
 
 from __future__ import annotations
 
@@ -246,9 +246,3 @@ def search_item_save(
     return templates.TemplateResponse(
         request, "partials/_search_row.html", {"r": row, "unit_system": read_unit_system(request)}
     )
-
-
-@router.get("/charts", response_class=HTMLResponse)
-def charts_page(request: Request) -> HTMLResponse:
-    """Render the analytics charts shell; Plotly.js fetches the JSON endpoints client-side."""
-    return templates.TemplateResponse(request, "charts.html", {})

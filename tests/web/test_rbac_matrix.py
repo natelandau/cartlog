@@ -22,7 +22,7 @@ READ_ROUTES = [
     "/",
     "/receipts",
     "/search",
-    "/charts",
+    "/insights/price-history",
     "/jobs",
     "/categories",
     "/api/analytics/price-history?product=eggs",
