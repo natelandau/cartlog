@@ -1,0 +1,56 @@
+{# Price history analysis fragment. Self-registers its Plotly renderer with the Insights shell;
+   the inline script runs both on the server-embedded initial load and on htmx swap-in. #}
+<div data-insight-view="price-history" class="flex flex-col gap-3">
+  <div class="join">
+    <input id="ph-product" class="input join-item" placeholder="product (e.g. eggs)" value="eggs" />
+    <button id="ph-show" class="btn btn-primary join-item">Show</button>
+  </div>
+  <div id="price-history-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+</div>
+<script>
+  (function () {
+    // Re-query root on each render so a renderer invoked after an htmx history-restore (which
+    // re-inserts the fragment without re-running this script) acts on the live node, not a stale
+    // closure over the pre-navigation element.
+    function root() {
+      return document.querySelector('[data-insight-view="price-history"]');
+    }
+    async function render() {
+      await Insights.ensurePlotly();
+      const product = root().querySelector("#ph-product").value;
+      const data = await Insights.getJSON(`/api/analytics/price-history?product=${encodeURIComponent(product)}`);
+      const el = root().querySelector("#price-history-chart");
+      if (!data.points.length) {
+        Insights.showEmpty(el, `No purchases recorded for "${data.product}".`);
+        return;
+      }
+      const dates = data.points.map((p) => p.purchase_date);
+      const pine = Insights.themeColor("--color-primary", "#3a7d5d");
+      const trace = {
+        x: dates,
+        y: data.points.map((p) => Number(p.unit_price)),
+        text: data.points.map((p) => p.store_chain),
+        hovertemplate: "%{x|%b %-d, %Y}<br>%{text}<br>$%{y:.2f}<extra></extra>",
+        mode: "lines+markers",
+        type: "scatter",
+        line: { color: pine, width: 2 },
+        marker: { color: pine, size: 6 },
+      };
+      const layout = {
+        ...Insights.baseLayout(`Unit price · ${data.product}`),
+        xaxis: Insights.priceHistoryTimeAxis(dates),
+        yaxis: {
+          title: "Unit price",
+          tickprefix: "$",
+          gridcolor: "rgba(128,128,128,0.15)",
+          zeroline: false,
+          ticks: "outside",
+        },
+        showlegend: false,
+      };
+      Plotly.newPlot(el, [trace], layout, Insights.PLOT_CONFIG);
+    }
+    root().querySelector("#ph-show").addEventListener("click", render);
+    Insights.register("price-history", render);
+  })();
+</script>
