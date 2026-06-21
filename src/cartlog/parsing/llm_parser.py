@@ -42,9 +42,13 @@ _CATEGORY_RULES = (
 _MEASURE_RULES = (
     " For each line also return a structured package measure: 'measure_value' (a number) and "
     "'measure_unit' (exactly one of: {units}). Use the net content of ONE package (e.g. a 1.5L "
-    "milk -> measure_value 1.5, measure_unit 'l'; a 12-count egg carton -> 12, 'ct'). Leave both "
-    "null for items sold loose by weight where the quantity already carries the unit (e.g. "
-    "bananas priced per lb), and for items with no measurable size (a single apple)."
+    "milk -> measure_value 1.5, measure_unit 'l'; a 12-count egg carton -> 12, 'ct'). If a size "
+    "appears ANYWHERE IN THE LINE text (e.g. 'Granola, Maple Sea Salt, 11oz' -> 11, 'oz'), you "
+    "MUST populate these fields from it rather than leaving them null. Leave both null for items "
+    "sold loose by weight where the quantity already carries the unit (e.g. bananas priced per "
+    "lb); for per-each produce printed as 'Per Count' or 'Per Each' (e.g. avocados sold each), "
+    "leave measure_value null and let the quantity stand as the count; and for items with no "
+    "measurable size (a single apple)."
 )
 
 

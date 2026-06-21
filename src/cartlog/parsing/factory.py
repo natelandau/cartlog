@@ -16,6 +16,7 @@ from pydantic_ai.models import infer_model
 from cartlog.exceptions import ModelConfigurationError
 from cartlog.parsing.category_classifier import LLMCategoryClassifier
 from cartlog.parsing.llm_parser import LLMReceiptParser
+from cartlog.parsing.size_extractor import LLMSizeExtractor
 
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
@@ -60,11 +61,21 @@ def build_classifier(settings: Settings, allowed_categories: list[str]) -> LLMCa
     """
     # Validate the provider key before the taxonomy so a missing key reports first, matching
     # the pre-flight order callers rely on (a key error is the root cause, not the taxonomy).
-    model = build_model(settings.classify_model)
+    model = build_model(settings.assist_model)
     if not allowed_categories:
         msg = "No categories in the taxonomy to classify into; seed categories first."
         raise ModelConfigurationError(msg)
     return LLMCategoryClassifier(model=model, allowed_categories=allowed_categories)
+
+
+def build_size_extractor(settings: Settings) -> LLMSizeExtractor:
+    """Construct the focused size extractor from settings (patched out in tests).
+
+    Uses the cheap assist model. Raises ModelConfigurationError on a missing/invalid key,
+    matching build_classifier so callers handle one error type.
+    """
+    model = build_model(settings.assist_model)
+    return LLMSizeExtractor(model=model)
 
 
 def build_ingest_classifier(
