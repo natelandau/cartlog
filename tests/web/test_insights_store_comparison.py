@@ -86,16 +86,16 @@ def test_store_comparison_no_register_script(app_client):
 def test_store_comparison_fragment_renders_comparable_row_without_error():
     """Verify the fragment renders a comparable row (bar + name) without a macro-order error."""
     # Given a comparison with one comparable row (the seed produces none, so build one)
-    from decimal import Decimal
+    from decimal import Decimal  # noqa: PLC0415
 
-    from cartlog.analytics.results import (
+    from cartlog.analytics.results import (  # noqa: PLC0415
         PriceBasis,
         ScaleMode,
         StorePairComparison,
         StorePairRow,
         StorePairSort,
     )
-    from cartlog.web.templating import templates
+    from cartlog.web.templating import templates  # noqa: PLC0415
 
     sc = StorePairComparison(
         store_a="Acut, A",
@@ -149,16 +149,16 @@ def test_store_comparison_fragment_renders_comparable_row_without_error():
 def test_store_comparison_fragment_renders_dollar_mode_with_dimension_header():
     """Verify the dollar-scale groupby path renders dimension sub-headers without error."""
     # Given a comparison with one comparable row in dollar scale mode
-    from decimal import Decimal
+    from decimal import Decimal  # noqa: PLC0415
 
-    from cartlog.analytics.results import (
+    from cartlog.analytics.results import (  # noqa: PLC0415
         PriceBasis,
         ScaleMode,
         StorePairComparison,
         StorePairRow,
         StorePairSort,
     )
-    from cartlog.web.templating import templates
+    from cartlog.web.templating import templates  # noqa: PLC0415
 
     sc = StorePairComparison(
         store_a="Acut, A",
@@ -209,14 +209,14 @@ def test_store_comparison_fragment_renders_dollar_mode_with_dimension_header():
 def test_store_comparison_fragment_links_unmatched_products_to_search():
     """Verify a non-comparable product links to a prefilled Search and shows the fixable reason."""
     # Given a comparison whose only entry is a both-stores product missing a unit size
-    from cartlog.analytics.results import (
+    from cartlog.analytics.results import (  # noqa: PLC0415
         PriceBasis,
         ScaleMode,
         StorePairComparison,
         StorePairSort,
         StorePairUnmatched,
     )
-    from cartlog.web.templating import templates
+    from cartlog.web.templating import templates  # noqa: PLC0415
 
     sc = StorePairComparison(
         store_a="Acut, A",
@@ -290,16 +290,16 @@ def test_store_comparison_invalid_store_id_falls_back(app_client):
 def test_store_comparison_fragment_row_aria_label():
     """Verify each comparable row carries an aria-label summarizing product, prices, and pricier store."""
     # Given a comparison with one comparable row where store B is pricier
-    from decimal import Decimal
+    from decimal import Decimal  # noqa: PLC0415
 
-    from cartlog.analytics.results import (
+    from cartlog.analytics.results import (  # noqa: PLC0415
         PriceBasis,
         ScaleMode,
         StorePairComparison,
         StorePairRow,
         StorePairSort,
     )
-    from cartlog.web.templating import templates
+    from cartlog.web.templating import templates  # noqa: PLC0415
 
     sc = StorePairComparison(
         store_a="Acut, A",
