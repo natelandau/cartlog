@@ -128,8 +128,10 @@ const Insights = (function () {
 
 // Render the server-embedded initial fragment once the DOM is ready.
 document.addEventListener("DOMContentLoaded", Insights.renderActive);
-// Render the freshly swapped fragment after each select-driven htmx swap (history restores also
-// settle the panel, so back/forward re-renders too).
+// Render the freshly swapped fragment after each select-driven htmx swap.
 document.body.addEventListener("htmx:afterSettle", function (e) {
   if (e.target && e.target.id === "insights-panel") Insights.renderActive();
 });
+// Back/forward restores the panel from htmx's history cache, which fires historyRestore on the
+// body rather than afterSettle on the panel, so re-render the restored analysis here too.
+document.body.addEventListener("htmx:historyRestore", Insights.renderActive);

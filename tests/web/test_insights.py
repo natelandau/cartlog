@@ -34,3 +34,9 @@ def test_get_view_returns_match_by_key():
 def test_get_view_returns_none_for_unknown_key():
     """An unknown key yields None so the route can 404."""
     assert get_view("not-a-view") is None
+
+
+def test_get_view_resolves_every_registered_view():
+    """Every registered key resolves back to its own InsightView, guarding typo'd template paths."""
+    for view in INSIGHT_VIEWS:
+        assert get_view(view.key) is view

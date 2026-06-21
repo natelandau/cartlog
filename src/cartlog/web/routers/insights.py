@@ -40,6 +40,7 @@ def insights_view(view: str, request: Request) -> HTMLResponse:
     if selected is None:
         raise HTTPException(status_code=404, detail="Unknown analysis")
     if wants_partial(request):
+        # Fragments are self-contained (they self-fetch their JSON), so no server context is needed.
         return templates.TemplateResponse(request, selected.template, {})
     return templates.TemplateResponse(
         request,

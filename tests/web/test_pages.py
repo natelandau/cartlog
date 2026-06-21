@@ -206,6 +206,16 @@ def test_insights_unknown_view_404s(app_client):
     assert response.status_code == 404
 
 
+def test_insights_js_rerenders_on_history_restore(app_client):
+    """Back/forward (htmx history restore) must re-trigger chart rendering, else the panel is blank."""
+    # When fetching the served Insights rendering layer
+    response = app_client.get("/static/insights.js")
+
+    # Then it wires a renderer to htmx's history-restore event
+    assert response.status_code == 200
+    assert "htmx:historyRestore" in response.text
+
+
 def test_charts_redirects_to_insights(app_client):
     """The legacy /charts path permanently redirects to /insights."""
     # When loading the old charts URL without following the redirect

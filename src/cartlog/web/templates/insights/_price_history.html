@@ -17,7 +17,10 @@
       const el = root.querySelector("#price-history-chart");
       if (!data.points.length) {
         Plotly.purge(el);
-        el.innerHTML = `<p class="text-base-content/60 py-16 text-center">No purchases recorded for "${data.product}".</p>`;
+        const msg = document.createElement("p");
+        msg.className = "text-base-content/60 py-16 text-center";
+        msg.textContent = `No purchases recorded for "${data.product}".`;
+        el.replaceChildren(msg);
         return;
       }
       const dates = data.points.map((p) => p.purchase_date);

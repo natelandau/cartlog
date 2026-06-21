@@ -11,7 +11,10 @@
       const data = await Insights.getJSON(`/api/analytics/category-spend`);
       const el = root.querySelector("#category-spend-chart");
       if (!data.rows.length) {
-        el.innerHTML = `<p class="text-base-content/60 py-16 text-center">No category spend data yet.</p>`;
+        const msg = document.createElement("p");
+        msg.className = "text-base-content/60 py-16 text-center";
+        msg.textContent = "No category spend data yet.";
+        el.replaceChildren(msg);
         return;
       }
       const trace = {
