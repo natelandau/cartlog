@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from cartlog.db.models import Receipt, ReceiptStatus, Store, User
+from cartlog.db.models import Receipt, ReceiptStatus, Role, Store, User
+from tests.factories import seed_user
 
 
 def test_dashboard_renders_recent_and_review_count(app_client):
@@ -340,9 +341,6 @@ def test_nav_shows_sign_in_for_anonymous_user(anon_client):
     """Verify the navbar shows a Sign in link when no user is logged in."""
     # Given anonymous access is enabled (default) and at least one admin exists so
     # the first-run setup gate does not redirect to /setup
-    from cartlog.db.models import Role  # noqa: PLC0415
-    from tests.factories import seed_user  # noqa: PLC0415
-
     with anon_client.app.state.session_factory() as s:
         seed_user(s, username="admin_gate", role=Role.ADMIN)
 

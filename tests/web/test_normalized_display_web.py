@@ -173,8 +173,6 @@ def test_search_item_row_includes_unit_system(app_client, receipt_with_normalize
     """Verify the single-row endpoint passes unit_system so the cell renders without error."""
     # Given the seeded line item's id
     with app_client.app.state.session_factory() as session:
-        from cartlog.db.models import LineItem, Product  # noqa: PLC0415
-
         line = (
             session.query(LineItem)
             .join(Product, LineItem.product_id == Product.id)

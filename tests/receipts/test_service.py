@@ -21,7 +21,9 @@ from cartlog.db.models import (
     Product,
     Receipt,
     ReceiptStatus,
+    Role,
     Store,
+    User,
 )
 from cartlog.receipts.service import (
     ReparseImageMissingError,
@@ -554,8 +556,6 @@ def test_reparse_receipt_preserves_source(session, tmp_path) -> None:
 def test_reparse_receipt_preserves_uploader(session, tmp_path) -> None:
     """Verify the reparse job keeps the original receipt's uploader attribution."""
     # Given a receipt uploaded by a known user with an on-disk image
-    from cartlog.db.models import Role, User  # noqa: PLC0415
-
     storage = tmp_path / "storage"
     storage.mkdir()
     image = storage / "rp-user.png"

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session  # noqa: TC002 - runtime import for FastAPI D
 from cartlog.auth.passwords import validate_password
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
+from cartlog.db.models import User
 from cartlog.web.dependencies import cookie_is_secure, get_session, resolve_settings
 from cartlog.web.guards import AuthRedirect, load_user
 from cartlog.web.routers.auth_routes import _set_session_cookie
@@ -57,8 +58,6 @@ def _revoke_and_refresh(
         user_id: The PK of the user whose sessions to revoke.
         response: The response object to attach the new session cookie to.
     """
-    from cartlog.db.models import User  # noqa: PLC0415
-
     settings = resolve_settings(request)
     svc = SessionService(
         session,
