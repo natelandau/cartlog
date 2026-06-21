@@ -36,6 +36,10 @@ FOLDER_SETTLE_SECONDS: float = 10.0
 # runtime value is configurable via CARTLOG_MAX_RECLASSIFY_ATTEMPTS; this is the code default.
 DEFAULT_MAX_RECLASSIFY_ATTEMPTS = 2
 
+# Max times the LLM size extractor is spent on a line with no resolvable size before the line
+# is left as-is (prevents unbounded retries on genuinely size-less items like a single apple).
+DEFAULT_MAX_SIZE_EXTRACT_ATTEMPTS = 2
+
 # Measurement dimensions, each with a canonical base unit: weight=gram, volume=milliliter,
 # count=each. Stored values use the base unit so prices stay comparable across pack sizes.
 WEIGHT = "weight"

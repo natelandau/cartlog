@@ -22,7 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cartlog.db.base import Base
-from cartlog.units import MeasureStatus
+from cartlog.units import MeasureSource, MeasureStatus
 
 
 class Role(StrEnum):
@@ -205,6 +205,10 @@ class Product(Base):
     # How many times the LLM reclassifier has been spent on this product while it stayed
     # Uncategorized; once it hits the cap we stop retrying and leave it for manual review.
     reclassify_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
+    # The learned per-package size in canonical base units (gram/ml/each), used to infer a
+    # size for blank lines of this product. NULL when no size dominates its history.
+    typical_measure_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    typical_measure_dimension: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     category: Mapped[Category | None] = relationship(back_populates="products")
     line_items: Mapped[list[LineItem]] = relationship(back_populates="product")
@@ -289,6 +293,16 @@ class LineItem(Base):
         default=MeasureStatus.NOT_APPLICABLE,
         server_default=MeasureStatus.NOT_APPLICABLE.value,
     )
+    # How the effective measure was obtained (printed/extracted/repaired/inferred/manual/none);
+    # orthogonal to measure_status. MANUAL is never overwritten by the startup backfill.
+    measure_source: Mapped[str] = mapped_column(
+        String(16),
+        default=MeasureSource.NONE,
+        server_default=MeasureSource.NONE.value,
+    )
+    # Per-line cap on LLM size-extraction calls; mirrors Product.reclassify_attempts so a line
+    # whose size is genuinely absent is retried at most max_size_extract_attempts times.
+    size_extract_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
 
     receipt: Mapped[Receipt] = relationship(back_populates="line_items")
     product: Mapped[Product] = relationship(back_populates="line_items")
@@ -359,6 +373,9 @@ class ParseCostEvent(Base):
     classify_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parse_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     classify_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    size_extract_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    size_extract_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    size_extract_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     estimated_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
 
 

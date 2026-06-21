@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from cartlog.db.base import Base
 from cartlog.db.models import Category, LineItem, Product, Receipt, Store
+from cartlog.units import MeasureSource
 
 
 @pytest.fixture
@@ -91,3 +92,40 @@ def test_measure_status_defaults_to_not_applicable(session):
     # Then measure_status defaults to 'not_applicable' and numeric columns are null
     assert line.measure_status == "not_applicable"
     assert line.normalized_unit_price is None
+
+
+def test_new_size_columns_have_expected_defaults(session):
+    """Verify a freshly inserted LineItem/Product carry the new size columns with safe defaults."""
+    # Given a store, product, receipt, and a bare line item with no size data
+    store = Store(chain_name="Test", location=None)
+    product = Product(canonical_name="pasta")
+    receipt = Receipt(
+        store=store,
+        purchase_date=date(2026, 1, 1),
+        total=Decimal("1.00"),
+        currency="USD",
+        image_path="x.png",
+        raw_parser_json="{}",
+        source="test",
+        status="parsed",
+    )
+    line = LineItem(
+        receipt=receipt,
+        product=product,
+        raw_description="PASTA 16OZ",
+        quantity=Decimal("1.000"),
+        unit_price=Decimal("1.00"),
+        line_total=Decimal("1.00"),
+    )
+
+    # When the entities are persisted
+    session.add_all([store, product, receipt, line])
+    session.commit()
+    session.refresh(line)
+    session.refresh(product)
+
+    # Then the new size columns carry their safe defaults
+    assert line.measure_source == MeasureSource.NONE
+    assert line.size_extract_attempts == 0
+    assert product.typical_measure_value is None
+    assert product.typical_measure_dimension is None
