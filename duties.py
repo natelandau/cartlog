@@ -165,3 +165,20 @@ def test(ctx: Context, *cli_args: str) -> None:
         title=pyprefix("Running tests - this may take a while"),
         capture=CI,
     )
+
+
+@duty()
+def e2e(ctx: Context, *cli_args: str) -> None:
+    """Run the Playwright browser end-to-end tests (installs the browser first).
+
+    The `e2e` marker is deselected by default, so these never run as part of `duty test`,
+    `duty lint`, or the pre-commit hooks. The `live_server` fixture builds the CSS bundle.
+    """
+    ctx.run(["uv", "run", "playwright", "install", "chromium"], title="install chromium")
+    ctx.run(
+        tools.pytest("tests/e2e", config_file="pyproject.toml", color="yes").add_args(
+            "-m", "e2e", *cli_args
+        ),
+        title=pyprefix("Running browser e2e tests"),
+        capture=CI,
+    )
