@@ -7,8 +7,10 @@ import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from cartlog.exceptions import ModelConfigurationError
 from cartlog.ingest.pipeline import process_job
 from cartlog.ingest.queue import claim_next_job, reap_stale_jobs
+from cartlog.parsing.factory import build_size_extractor
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
     from cartlog.config import Settings
     from cartlog.parsing.category_classifier import CategoryClassifier
     from cartlog.parsing.protocol import ReceiptParser
+    from cartlog.parsing.size_extractor import SizeExtractor
 
 
 def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
@@ -31,7 +34,9 @@ def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
     classifier: CategoryClassifier | None = None,
     max_reclassify_attempts: int = 2,
     parse_model: str | None = None,
-    classify_model: str | None = None,
+    assist_model: str | None = None,
+    size_extractor: SizeExtractor | None = None,
+    max_size_extract_attempts: int = 2,
 ) -> bool:
     """Claim and process a single job in its own session/transaction.
 
@@ -47,7 +52,9 @@ def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
         classifier: Optional focused classifier forwarded to process_job for auto-reclassification.
         max_reclassify_attempts: Per-product LLM reclassification cap forwarded to process_job.
         parse_model: Provider-prefixed model id forwarded to process_job for cost tracking.
-        classify_model: Provider-prefixed model id forwarded to process_job for cost tracking.
+        assist_model: Provider-prefixed model id forwarded to process_job for cost tracking.
+        size_extractor: Optional LLM size extractor forwarded to process_job for the size sweep.
+        max_size_extract_attempts: Per-line cap on size-extraction attempts forwarded to process_job.
 
     Returns:
         True if a job was processed, False if the queue was empty.
@@ -67,7 +74,9 @@ def run_once(  # noqa: PLR0913 - forwards settings-derived knobs to process_job
             classifier=classifier,
             max_reclassify_attempts=max_reclassify_attempts,
             parse_model=parse_model,
-            classify_model=classify_model,
+            assist_model=assist_model,
+            size_extractor=size_extractor,
+            max_size_extract_attempts=max_size_extract_attempts,
         )
         return True
 
@@ -86,7 +95,9 @@ def run_worker(  # noqa: PLR0913 - top-level entrypoint forwarding settings-deri
     max_reclassify_attempts: int = 2,
     stop: Callable[[], bool] | None = None,
     parse_model: str | None = None,
-    classify_model: str | None = None,
+    assist_model: str | None = None,
+    size_extractor: SizeExtractor | None = None,
+    max_size_extract_attempts: int = 2,
 ) -> None:
     """Continuously drain the queue, sleeping poll_interval when idle.
 
@@ -105,7 +116,9 @@ def run_worker(  # noqa: PLR0913 - top-level entrypoint forwarding settings-deri
         stop: Optional predicate checked each iteration; the loop exits when it returns
             True. Defaults to running until interrupted.
         parse_model: Provider-prefixed model id forwarded to process_job for cost tracking.
-        classify_model: Provider-prefixed model id forwarded to process_job for cost tracking.
+        assist_model: Provider-prefixed model id forwarded to process_job for cost tracking.
+        size_extractor: Optional LLM size extractor forwarded to process_job for the size sweep.
+        max_size_extract_attempts: Per-line cap on size-extraction attempts forwarded to process_job.
     """
     # Reap at most once per stale window; a tighter cadence only re-scans for an event that
     # cannot occur more often than that, wasting a full table scan on every poll.
@@ -132,7 +145,9 @@ def run_worker(  # noqa: PLR0913 - top-level entrypoint forwarding settings-deri
             classifier=classifier,
             max_reclassify_attempts=max_reclassify_attempts,
             parse_model=parse_model,
-            classify_model=classify_model,
+            assist_model=assist_model,
+            size_extractor=size_extractor,
+            max_size_extract_attempts=max_size_extract_attempts,
         )
         if not processed:
             time.sleep(poll_interval)
@@ -154,6 +169,12 @@ def worker_pool(
     process can still exit if a worker is mid-parse past the join timeout.
     """
     stop_event = threading.Event()
+    # Build the size extractor once, shared across threads (it is stateless per call). A missing
+    # or invalid key returns None so ingestion runs without the LLM size pass rather than failing.
+    try:
+        size_extractor = build_size_extractor(settings)
+    except ModelConfigurationError:
+        size_extractor = None
     threads = [
         threading.Thread(
             target=run_worker,
@@ -169,7 +190,9 @@ def worker_pool(
                 "classifier": classifier,
                 "max_reclassify_attempts": settings.max_reclassify_attempts,
                 "parse_model": settings.parse_model,
-                "classify_model": settings.classify_model,
+                "assist_model": settings.assist_model,
+                "size_extractor": size_extractor,
+                "max_size_extract_attempts": settings.max_size_extract_attempts,
                 "stop": stop_event.is_set,
             },
             name=f"cartlog-worker-{i}",

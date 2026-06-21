@@ -26,10 +26,12 @@ from cartlog.ingest.pipeline import process_job
 from cartlog.ingest.queue import enqueue_job
 from cartlog.parsing.pricing import estimate_cost
 from cartlog.parsing.schema import ParsedLineItem, ParsedReceipt
+from cartlog.parsing.size_extractor import LineToSize, ParsedSize
+from cartlog.units import MeasureSource, MeasureStatus
 from tests.conftest import FakeReceiptParser
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from cartlog.parsing.schema import ParsedReceipt as ParsedReceiptAlias
 
@@ -666,7 +668,7 @@ def test_process_job_records_classify_usage_and_sums_cost(session, tmp_path):
         max_retries=0,
         classifier=UsageClassifier(),
         parse_model="anthropic:claude-opus-4-8",
-        classify_model="anthropic:claude-haiku-4-5",
+        assist_model="anthropic:claude-haiku-4-5",
     )
 
     # Then the cost event records classify tokens and a total exceeding the parse-only cost
@@ -678,3 +680,137 @@ def test_process_job_records_classify_usage_and_sums_cost(session, tmp_path):
         model="anthropic:claude-opus-4-8", usage=RunUsage(input_tokens=1000, output_tokens=200)
     )
     assert event.estimated_cost_usd > parse_only
+
+
+def test_process_job_runs_size_sweep_and_records_cost(session, tmp_path):
+    """Verify a size-less line is resolved by the LLM extractor and size-extract cost is recorded."""
+    # Given a parser that yields one line with no structured measure and no parseable size in text.
+    # "Large economy protein powder" has no embedded number+unit the deterministic extractor reads,
+    # so the line is unresolved after persist and becomes eligible for the LLM size sweep.
+    no_size_receipt = ParsedReceipt(
+        store_name="Test Store",
+        purchase_date=date(2026, 1, 1),
+        currency="USD",
+        total=5.0,
+        confidence=0.95,
+        line_items=[
+            ParsedLineItem(
+                raw_description="Large economy protein powder",
+                canonical_name="protein powder",
+                category="",
+                quantity=1,
+                unit_size=None,
+                unit_price=5.0,
+                line_total=5.0,
+            )
+        ],
+    )
+    parser = FakeReceiptParser(no_size_receipt)
+
+    # And a stub extractor that returns ParsedSize(11.0, "oz") for whatever key it receives,
+    # simulating the LLM recovering the size the deterministic pass missed.
+    class _AnyKeyStub:
+        """Return ParsedSize(11.0, "oz") for whatever key the caller passes."""
+
+        def extract(
+            self, lines: Sequence[LineToSize], *, usage: RunUsage | None = None
+        ) -> dict[str, ParsedSize | None]:
+            if usage is not None:
+                usage.input_tokens += 200
+                usage.output_tokens += 30
+            return {line.key: ParsedSize(value=11.0, unit="oz") for line in lines}
+
+    job = _enqueue(session, tmp_path)
+
+    # When processing with the stub extractor and a known assist model
+    receipt = process_job(
+        session,
+        job,
+        parser=parser,
+        review_confidence_threshold=0.0,
+        total_mismatch_tolerance=1.0,
+        max_retries=0,
+        parse_model="anthropic:claude-opus-4-8",
+        assist_model="anthropic:claude-haiku-4-5",
+        size_extractor=_AnyKeyStub(),
+    )
+
+    # Then the line is RESOLVED by the LLM sweep with measure_source EXTRACTED
+    assert receipt is not None
+    line = receipt.line_items[0]
+    assert line.measure_status == MeasureStatus.RESOLVED
+    assert line.measure_source == MeasureSource.EXTRACTED
+
+    # And the cost event records size-extract tokens and a non-null cost
+    event = session.query(ParseCostEvent).one()
+    assert event.size_extract_input_tokens == 200
+    assert event.size_extract_output_tokens == 30
+    assert event.size_extract_model == "anthropic:claude-haiku-4-5"
+    assert event.estimated_cost_usd is not None
+
+
+def test_process_job_infers_blank_sibling_within_same_batch(session, tmp_path):
+    """Verify a size learned from siblings in one receipt infers a blank line in the same batch."""
+    # Given a receipt where the same product appears 3x: two lines carry a deterministic 16oz
+    # size and one is blank. The two sized lines make 16oz the product's dominant typical size.
+    receipt_data = ParsedReceipt(
+        store_name="Test Store",
+        purchase_date=date(2026, 1, 1),
+        currency="USD",
+        total=15.0,
+        confidence=0.95,
+        line_items=[
+            ParsedLineItem(
+                raw_description="Tomato Sauce 16oz",
+                canonical_name="tomato sauce",
+                category="",
+                quantity=1,
+                unit_price=5.0,
+                line_total=5.0,
+            ),
+            ParsedLineItem(
+                raw_description="Tomato Sauce 16oz",
+                canonical_name="tomato sauce",
+                category="",
+                quantity=1,
+                unit_price=5.0,
+                line_total=5.0,
+            ),
+            ParsedLineItem(
+                raw_description="Tomato Sauce",
+                canonical_name="tomato sauce",
+                category="",
+                quantity=1,
+                unit_price=5.0,
+                line_total=5.0,
+            ),
+        ],
+    )
+    parser = FakeReceiptParser(receipt_data)
+
+    class _DecliningStub:
+        """A size extractor that always declines; only the inference pass should resolve the blank."""
+
+        def extract(
+            self, lines: Sequence[LineToSize], *, usage: RunUsage | None = None
+        ) -> dict[str, ParsedSize | None]:
+            return {line.key: None for line in lines}
+
+    job = _enqueue(session, tmp_path)
+
+    # When processing the batch with a declining extractor so the size sweep resolves nothing
+    receipt = process_job(
+        session,
+        job,
+        parser=parser,
+        review_confidence_threshold=0.0,
+        total_mismatch_tolerance=1.0,
+        max_retries=0,
+        size_extractor=_DecliningStub(),
+    )
+
+    # Then the blank line is resolved via inference from its just-learned sibling typical size
+    assert receipt is not None
+    blank = next(line for line in receipt.line_items if line.raw_description == "Tomato Sauce")
+    assert blank.measure_status == MeasureStatus.RESOLVED
+    assert blank.measure_source == MeasureSource.INFERRED

@@ -11,6 +11,7 @@ from cartlog.db.models import Category, LineItem, Product, Receipt, Store
 from cartlog.db.session import create_session_factory
 from cartlog.ingest.persistence import _get_or_create, persist_receipt
 from cartlog.parsing.schema import ParsedLineItem, ParsedReceipt
+from cartlog.units import MeasureSource, MeasureStatus
 
 
 def _receipt_with(item: ParsedLineItem) -> ParsedReceipt:
@@ -251,3 +252,46 @@ def test_get_or_create_resolves_concurrent_unique_collision(tmp_path, mocker) ->
         session_b.close()
         session_a.close()
         engine.dispose()
+
+
+def test_persist_sets_measure_source_extracted_from_description(session):
+    """Verify a line whose size lives only in the description is extracted and marked EXTRACTED."""
+    # Given a receipt with a line item whose size is only in the raw description
+    parsed = ParsedReceipt(
+        store_name="Test",
+        purchase_date=date(2026, 1, 1),
+        currency="USD",
+        total=5.0,
+        confidence=0.9,
+        line_items=[
+            ParsedLineItem(
+                raw_description="Granola, Maple Sea Salt, 11oz, Bob's",
+                canonical_name="granola",
+                category="",
+                quantity=1.0,
+                unit=None,
+                unit_size=None,
+                measure_value=None,
+                measure_unit=None,
+                unit_price=5.0,
+                line_total=5.0,
+            )
+        ],
+    )
+
+    # When persisting the receipt
+    receipt, _ = persist_receipt(
+        session,
+        parsed,
+        image_path="x.png",
+        source="test",
+        status="parsed",
+        raw_json="{}",
+    )
+    session.flush()
+
+    # Then the line item is EXTRACTED with the correct unit_size
+    line = receipt.line_items[0]
+    assert line.measure_source == MeasureSource.EXTRACTED
+    assert line.measure_status == MeasureStatus.RESOLVED
+    assert line.unit_size == "11oz"
