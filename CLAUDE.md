@@ -46,6 +46,7 @@ The web UI uses Tailwind CSS v4 and daisyUI v5. `cartlog serve` compiles `web/st
     uv run ruff check --config pyproject.toml
     uv run ruff format --config pyproject.toml src/ tests/
     ```
+- **Imports go at the top of the file, never inside a function or test body.** CI runs `uv run duty lint`, whose `ruff` step is `ruff check --no-fix src tests duties.py scripts` and enforces `PLC0415` more strictly than the prek pre-commit hook, so a function-local import that passes prek locally still fails CI. Run `uv run duty lint` before pushing front-end or test changes. The **only** acceptable `# noqa: PLC0415` is a genuine, documented need: breaking a circular import, or lazily loading a heavy/optional dependency with a measurable startup cost. Convenience or scoping is not a reason.
 - Run the test suite with pytest:
     ```bash
     uv run pytest
