@@ -86,12 +86,19 @@ running them locally first saves a round trip.
 ```bash
 uv run duty lint   # ruff, ty, typos, and the pre-commit hooks
 uv run duty test   # the pytest suite
+uv run duty e2e    # Playwright browser end-to-end tests (web UI changes)
 ```
 
 `uv run duty lint` runs the formatter, the [ruff](https://docs.astral.sh/ruff/)
 linter, the [ty](https://github.com/astral-sh/ty) type checker, and a spell
 check. Fix anything it reports. The project treats type errors and lint
 warnings as failures, so a clean run is required before your change can merge.
+
+`uv run duty e2e` exercises the web UI in a real browser via Playwright. It
+installs the Chromium binary on first run, then runs `pytest -m e2e`. The `e2e`
+marker is deselected by default, so these stay out of `duty test`, `duty lint`,
+and the pre-commit hooks; a dedicated CI job runs them. Run it when you change
+templates, CSS, or other front-end behavior.
 
 ## Commit your work
 
@@ -142,8 +149,8 @@ uv run prek run --all-files
 2. Give the pull request a title that follows the same Conventional Commits
    format as a commit header. The CI title check rejects anything else.
 3. Describe what the change does and why. Link any related issue.
-4. Make sure the CI checks pass. They run the tests, the linters, and a Docker
-   build smoke test.
+4. Make sure the CI checks pass. They run the tests, the linters, a Docker
+   build smoke test, and the Playwright browser end-to-end tests.
 
 A maintainer reviews open pull requests and merges them once the checks pass
 and the change looks good. Thanks for contributing.

@@ -5,13 +5,15 @@
 {{ ui.page_header("Search") }}
 <label class="input mb-4 flex w-full max-w-lg items-center gap-2">
   {{ ui.icon('search', 16, 'opacity-60') }}
+  {# A `q` deep link (e.g. from the store-comparison disclosure) prefills the box and adds a
+     `load` trigger so the results render immediately without the user retyping. #}
   <input
     class="grow"
-    type="search" name="q" placeholder="milk, eggs, Safeway…"
+    type="search" name="q" placeholder="milk, eggs, Safeway…" value="{{ q }}"
     aria-label="Search line items by description, product, store, or category"
     hx-get="/search/results" hx-target="#results"
     hx-include="#search-sort-state"
-    hx-trigger="input changed delay:300ms, search"
+    hx-trigger="input changed delay:300ms, search{% if q %}, load{% endif %}"
     hx-sync="this:abort" />
 </label>
 <div id="results"></div>

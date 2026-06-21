@@ -16,17 +16,6 @@ def test_price_history_endpoint_returns_points(app_client):
     assert body["min_unit_price"] is not None
 
 
-def test_store_comparison_endpoint_groups_by_store(app_client):
-    """Verify /api/analytics/store-comparison returns one row per store."""
-    # When comparing egg prices across stores
-    response = app_client.get("/api/analytics/store-comparison", params={"product": "eggs"})
-
-    # Then both seeded stores appear
-    assert response.status_code == 200
-    chains = {row["store_chain"] for row in response.json()["rows"]}
-    assert chains == {"Safeway", "Costco"}
-
-
 def test_category_spend_endpoint_full_breakdown(app_client):
     """Verify /api/analytics/category-spend returns a per-category breakdown."""
     # When requesting category spend with no category filter

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 from cartlog.categories.service import CategoryService
-from cartlog.db.models import Category
+from cartlog.db.models import AppConfig, Category
 from cartlog.normalization import normalize_text
 
 if TYPE_CHECKING:
@@ -71,7 +71,5 @@ def seed_categories(session: Session, *, path: Path = _FIXTURE_PATH) -> int:
 
 def seed_app_config(session: Session) -> None:
     """Ensure the singleton app_config row exists (open read access by default)."""
-    from cartlog.db.models import AppConfig  # noqa: PLC0415
-
     if session.get(AppConfig, 1) is None:
         session.add(AppConfig(id=1))

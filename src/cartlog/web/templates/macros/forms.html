@@ -1,0 +1,61 @@
+{# Reusable multi-select rendered as a daisyUI dropdown of checkboxes plus removable pills.
+   No JS: each pill's remove control is a <label for> bound to that option's checkbox, so a
+   click unchecks it and the enclosing form's change trigger re-fetches the fragment.
+   Keyboard path: Tab into the trigger button, Enter/Space opens the dropdown, Tab through
+   checkboxes to select/deselect; pill removal via the dropdown checkbox is the keyboard path
+   (the pill <label> is a mouse/pointer convenience).
+   `options` is a list of (value, text) pairs; `selected` is a list of chosen values. #}
+{% macro multiselect_pills(field_name, label, options, selected, id_prefix) %}
+{% set selected_set = selected | map('string') | list %}
+<fieldset class="fieldset">
+  {# daisyUI v5 form heading; the dropdown button's aria-label mirrors it for assistive tech. #}
+  <legend class="fieldset-legend" id="{{ id_prefix }}-label">{{ label }}</legend>
+  <div class="flex flex-wrap items-center gap-2">
+    <div class="dropdown">
+      {# aria-label provides an explicit accessible name; aria-haspopup="true" signals generic popup
+         (not "listbox"; the content is a checkbox group, not a listbox/option tree). #}
+      <div tabindex="0" role="button"
+           aria-label="Select {{ label }}"
+           aria-haspopup="true"
+           class="btn btn-sm btn-outline">
+        {{ label }}
+        <span aria-hidden="true">+</span>
+      </div>
+      {# fieldset+legend is the correct ARIA pattern for a grouped set of native checkboxes.
+         role="listbox" + role="option" wrapping <input type="checkbox"> is a content-model
+         conflict: option is not allowed to contain an interactive element. #}
+      <fieldset tabindex="0"
+                class="dropdown-content bg-base-100 rounded-box z-10 max-h-64 w-56 overflow-y-auto shadow">
+        <legend class="sr-only">{{ label }}</legend>
+        <ul class="menu flex-nowrap">
+          {% for value, text in options %}
+          {% set vid = id_prefix ~ '-' ~ loop.index %}
+          <li>
+            <label class="label cursor-pointer justify-start gap-2" for="{{ vid }}">
+              <input type="checkbox" id="{{ vid }}" name="{{ field_name }}" value="{{ value }}"
+                     class="checkbox checkbox-sm"
+                     {% if value | string in selected_set %}checked{% endif %} />
+              <span class="text-sm">{{ text }}</span>
+            </label>
+          </li>
+          {% else %}
+          <li><span class="px-2 py-1 text-sm opacity-60">No options</span></li>
+          {% endfor %}
+        </ul>
+      </fieldset>
+    </div>
+    {% for value, text in options %}
+      {% if value | string in selected_set %}
+      {% set vid = id_prefix ~ '-' ~ loop.index %}
+      <span class="badge badge-neutral gap-1">
+        {{ text }}
+        {# Pill remove: mouse/pointer shortcut; keyboard users uncheck via the dropdown above. #}
+        <label for="{{ vid }}" class="cursor-pointer" aria-label="Remove {{ text }}">
+          <span aria-hidden="true">&times;</span>
+        </label>
+      </span>
+      {% endif %}
+    {% endfor %}
+  </div>
+</fieldset>
+{% endmacro %}

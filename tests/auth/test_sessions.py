@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from cartlog.auth.sessions import SessionService
 from cartlog.db.models import Role, User
+from cartlog.db.models import Session as SessionRow
 
 
 def _user(session):
@@ -59,6 +60,4 @@ def test_revoke_all_for_user(session):
     session.commit()
 
     # Then the sessions table is empty
-    from cartlog.db.models import Session as SessionRow  # noqa: PLC0415
-
     assert session.query(SessionRow).count() == 0

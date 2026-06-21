@@ -14,7 +14,6 @@ from cartlog.analytics.results import (
     CategorySpend,
     PriceHistory,
     SearchResult,
-    StoreComparison,
 )
 from cartlog.analytics.search_sort import SearchSortKey
 
@@ -48,17 +47,6 @@ def price_history_api(
     """Return a product's price history as JSON."""
     # An explicitly empty ?store= means "no filter", not "match the empty store name".
     return service.price_history(product, store=store or None, start=from_, end=to)
-
-
-@router.get("/api/analytics/store-comparison", response_model=StoreComparison)
-def store_comparison_api(
-    service: ServiceDep,
-    product: Annotated[str, Query(min_length=1)],
-    from_: Annotated[date | None, Query(alias="from")] = None,
-    to: Annotated[date | None, Query()] = None,
-) -> StoreComparison:
-    """Return a product's per-store price comparison as JSON."""
-    return service.store_comparison(product, start=from_, end=to)
 
 
 @router.get("/api/analytics/category-spend", response_model=CategorySpend)
@@ -111,9 +99,16 @@ def export_download(
 
 
 @router.get("/search", response_class=HTMLResponse)
-def search_page(request: Request) -> HTMLResponse:
-    """Render the search page with an HTMX-driven results area."""
-    return templates.TemplateResponse(request, "search.html", {})
+def search_page(
+    request: Request,
+    q: Annotated[str | None, Query()] = None,
+) -> HTMLResponse:
+    """Render the search page with an HTMX-driven results area.
+
+    An optional `q` prefills the box and auto-runs the search on load, so other pages (e.g.
+    the store-comparison disclosure) can deep-link straight to a product's line items.
+    """
+    return templates.TemplateResponse(request, "search.html", {"q": q or ""})
 
 
 @router.get("/search/results", response_class=HTMLResponse)

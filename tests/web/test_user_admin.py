@@ -5,6 +5,7 @@ from __future__ import annotations
 from cartlog.auth.sessions import SessionService
 from cartlog.auth.users import UserService
 from cartlog.db.models import Role
+from cartlog.db.models import Session as SessionRow
 from tests.factories import seed_user
 
 
@@ -67,8 +68,6 @@ def test_reset_password_sets_must_change_and_revokes_sessions(admin_client):
         fresh = s.get(type(target), target_id)
         assert fresh.must_change_password is True
         # The old session must be gone
-        from cartlog.db.models import Session as SessionRow  # noqa: PLC0415
-
         still_alive = s.get(SessionRow, session_id)
         assert still_alive is None
     # And the temp password is shown in the response body

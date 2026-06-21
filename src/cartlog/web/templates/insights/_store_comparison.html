@@ -1,37 +1,242 @@
-{# Store comparison analysis fragment. Self-registers its Plotly renderer with the Insights shell. #}
-<div data-insight-view="store-comparison" class="flex flex-col gap-3">
-  <div class="join">
-    <input id="sc-product" class="input join-item" placeholder="product (e.g. eggs)" value="eggs" />
-    <button id="sc-show" class="btn btn-primary join-item">Show</button>
+{# Store comparison: a server-rendered, two-store diverging-bar table. No charting library.
+   The toolbar form re-fetches this same fragment into #insights-panel on any change; selection
+   state lives in the form, so the server re-renders the controls in their chosen state. #}
+{% import "macros/forms.html" as forms with context %}
+
+{# One comparison row: name | price_a | diverging bar | delta | price_b. The bar is a half-track
+   div whose width is bar_fraction of the 50% half, growing toward the pricier store.
+   Defined before use, since Jinja2 does not hoist macros. #}
+{% macro _sc_row(row, sc, unit_system) %}
+{% set half = (row.bar_fraction * 50) | round(2) %}
+{% set price_a_fmt = row.price_a | normalized_price(row.measure_dimension, "resolved", unit_system) %}
+{% set price_b_fmt = row.price_b | normalized_price(row.measure_dimension, "resolved", unit_system) %}
+{# The cheaper store wins: its price is highlighted green; the bar (red) shows the premium paid. #}
+{% set a_cheaper = row.pricier == "b" %}
+{% set b_cheaper = row.pricier == "a" %}
+{% if row.pricier == "a" %}
+  {% set pricier_label = sc.store_a ~ " is pricier" %}
+{% elif row.pricier == "b" %}
+  {% set pricier_label = sc.store_b ~ " is pricier" %}
+{% else %}
+  {% set pricier_label = "same price at both stores" %}
+{% endif %}
+{# Screen-reader summary for the entire row: product name, both prices, and which store is pricier.
+   The bar is purely decorative so all informational content is in this label. #}
+{% set row_aria = row.canonical_name ~ ": " ~ sc.store_a ~ " " ~ price_a_fmt ~ ", " ~ sc.store_b ~ " " ~ price_b_fmt ~ "; " ~ pricier_label %}
+<div role="row"
+     aria-label="{{ row_aria }}"
+     class="grid grid-cols-[minmax(8rem,14rem)_6rem_1fr_4.5rem_6rem] items-center gap-3 py-2">
+  <span role="cell" aria-hidden="true" class="truncate text-base" title="{{ row.canonical_name }}">{{ row.canonical_name }}</span>
+  <span role="cell" class="num text-right text-sm {{ 'text-success font-semibold' if a_cheaper else '' }}" aria-hidden="true">{{ price_a_fmt }}</span>
+  {# Bar track is decorative: aria-hidden so the screen reader uses the row aria-label instead. #}
+  <div role="cell" aria-hidden="true" class="relative h-6">
+    {# Single-pixel center axis; bar div is the only heavy ink (Tufte: minimal non-data ink). #}
+    <div class="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-base-300"></div>
+    {% if row.pricier == "b" %}
+      <div class="absolute inset-y-0.5 left-1/2 rounded-r bg-error" style="width: {{ half }}%;"></div>
+    {% elif row.pricier == "a" %}
+      <div class="absolute inset-y-0.5 right-1/2 rounded-l bg-error" style="width: {{ half }}%;"></div>
+    {% else %}
+      <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm opacity-50">same</span>
+    {% endif %}
   </div>
-  <div id="store-comparison-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+  {# Delta cell: include an explicit sign for dollar mode so direction is not color/position-only. #}
+  <span role="cell" aria-hidden="true" class="num text-sm {{ 'text-right' if row.pricier == 'a' else 'text-left' }}">
+    {% if sc.scale == "dollar" %}
+      {{ "+" if row.pricier == "b" else ("-" if row.pricier == "a" else "") }}{{ row.abs_diff | normalized_price(row.measure_dimension, "resolved", unit_system) }}
+    {% elif row.pct_diff is none %}
+      n/a
+    {% else %}
+      {{ "+" if row.pct_diff > 0 else "" }}{{ row.pct_diff | round(0) | int }}%
+    {% endif %}
+  </span>
+  <span role="cell" class="num text-left text-sm {{ 'text-success font-semibold' if b_cheaper else '' }}" aria-hidden="true">{{ price_b_fmt }}</span>
 </div>
-<script>
-  (function () {
-    // Re-query root on each render so a renderer invoked after an htmx history-restore acts on
-    // the live node, not a stale closure over the pre-navigation element.
-    function root() {
-      return document.querySelector('[data-insight-view="store-comparison"]');
-    }
-    async function render() {
-      await Insights.ensurePlotly();
-      const product = root().querySelector("#sc-product").value;
-      const data = await Insights.getJSON(`/api/analytics/store-comparison?product=${encodeURIComponent(product)}`);
-      const el = root().querySelector("#store-comparison-chart");
-      if (!data.rows.length) {
-        Insights.showEmpty(el, `No purchases recorded for "${data.product}".`);
-        return;
-      }
-      const trace = {
-        x: data.rows.map((r) => `${r.store_chain}${r.store_location ? ", " + r.store_location : ""}`),
-        y: data.rows.map((r) => Number(r.avg_unit_price)),
-        type: "bar",
-        marker: { color: Insights.themeColor("--color-primary", "#3a7d5d") },
-      };
-      const layout = { ...Insights.baseLayout(`Avg unit price by store: ${data.product}`), yaxis: { tickprefix: "$" } };
-      Plotly.newPlot(el, [trace], layout, Insights.PLOT_CONFIG);
-    }
-    root().querySelector("#sc-show").addEventListener("click", render);
-    Insights.register("store-comparison", render);
-  })();
-</script>
+{% endmacro %}
+
+{# One non-comparable product: a link to its line items (a prefilled Search), with an optional price. #}
+{% macro _unmatched_li(u, unit_system, with_price=False) %}
+<li>
+  <a href="/search?q={{ u.canonical_name | urlencode }}" class="link link-hover">{{ u.canonical_name }}</a>
+  {% if with_price and u.price is not none %}
+  <span class="num opacity-70">{{ u.price | normalized_price(u.measure_dimension, "resolved", unit_system) }}</span>
+  {% endif %}
+</li>
+{% endmacro %}
+
+<div data-insight-view="store-comparison" class="flex flex-col gap-4">
+{% if sc is none %}
+  <p class="text-base-content/60 py-16 text-center">
+    Add receipts from at least two stores to compare prices.
+  </p>
+{% else %}
+  {# Live-updates on any control change; the explicit submit button covers the date range,
+     where the user sets two fields before wanting a single refresh. #}
+  <form id="sc-controls"
+        hx-get="/insights/store-comparison"
+        hx-target="#insights-panel"
+        hx-swap="innerHTML"
+        hx-trigger="change, submit"
+        hx-push-url="true"
+        class="space-y-4">
+
+    {# Store selectors: full-width selects clip long store labels instead of overflowing. #}
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Store A</legend>
+        <select name="store_a" class="select w-full">
+          {% for s in store_options %}
+          <option value="{{ s.id }}" {% if s.id == sc.store_a_id %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Store B</legend>
+        <select name="store_b" class="select w-full">
+          {% for s in store_options %}
+          <option value="{{ s.id }}" {% if s.id == sc.store_b_id %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </fieldset>
+    </div>
+
+    {# Product + category multi-select pills.
+       Build (value, text) pairs for products since sc.product_options is a flat list of names. #}
+    {% set product_pairs = [] %}
+    {% for name in sc.product_options %}{% set _ = product_pairs.append((name, name)) %}{% endfor %}
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {{ forms.multiselect_pills("product", "Products", product_pairs, selected_products, "sc-prod") }}
+      {{ forms.multiselect_pills("category", "Categories", sc.category_options, selected_categories, "sc-cat") }}
+    </div>
+
+    {# Date range, scale, price basis, and sort. #}
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">From</legend>
+        <input type="date" name="from" class="input w-full"
+               value="{{ date_from.isoformat() if date_from else '' }}" />
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">To</legend>
+        <input type="date" name="to" class="input w-full"
+               value="{{ date_to.isoformat() if date_to else '' }}" />
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Scale</legend>
+        <select name="scale" class="select w-full">
+          <option value="percent" {% if sc.scale == "percent" %}selected{% endif %}>% difference</option>
+          <option value="dollar" {% if sc.scale == "dollar" %}selected{% endif %}>$ difference</option>
+        </select>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Price</legend>
+        <select name="basis" class="select w-full">
+          <option value="typical" {% if sc.basis == "typical" %}selected{% endif %}>Typical</option>
+          <option value="latest" {% if sc.basis == "latest" %}selected{% endif %}>Latest</option>
+        </select>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Sort</legend>
+        <select name="sort" class="select w-full">
+          <option value="alphabetical" {% if sc.sort == "alphabetical" %}selected{% endif %}>A to Z</option>
+          <option value="largest" {% if sc.sort == "largest" %}selected{% endif %}>Largest difference</option>
+          <option value="smallest" {% if sc.sort == "smallest" %}selected{% endif %}>Smallest difference</option>
+        </select>
+      </fieldset>
+    </div>
+
+    <div class="flex justify-end">
+      <button type="submit" class="btn btn-primary btn-sm">Update comparison</button>
+    </div>
+  </form>
+
+  {# Comparison table: CSS grid with ARIA table roles so prices are announced as tabular data. #}
+  <div id="sc-table" role="table" aria-label="Price comparison: {{ sc.store_a }} vs {{ sc.store_b }}" class="flex flex-col gap-1">
+    {# Header row: product | Store A price | bar axis | delta | Store B price #}
+    <div role="row" class="grid grid-cols-[minmax(8rem,14rem)_6rem_1fr_4.5rem_6rem] items-center gap-3 border-b border-base-300 pb-2 text-sm font-semibold">
+      <span role="columnheader">Product</span>
+      <span role="columnheader" class="text-right">{{ sc.store_a }}</span>
+      {# The "0" label marks the center axis; sr-only text clarifies it for screen readers. #}
+      <span role="columnheader" class="text-center opacity-60" aria-label="Price difference axis">0</span>
+      <span role="columnheader"><span class="sr-only">Difference</span></span>
+      <span role="columnheader" class="text-left">{{ sc.store_b }}</span>
+    </div>
+
+    {% if not sc.rows %}
+      <p class="text-base-content/60 py-12 text-center">No products are comparable at both stores for this selection.</p>
+    {% elif sc.scale == "dollar" %}
+      {% for dimension, group in sc.rows | groupby("measure_dimension") %}
+        {# Dimension sub-header (dollar mode only): groups rows by unit type (Weight/Volume/Count). #}
+        <div role="presentation" class="bg-base-200 mt-2 px-2 py-1 text-sm font-semibold uppercase tracking-wide opacity-70">
+          {{ {"weight": "Weight", "volume": "Volume", "count": "Count"}.get(dimension, dimension) }}
+        </div>
+        {% for row in group %}{{ _sc_row(row, sc, unit_system) }}{% endfor %}
+      {% endfor %}
+    {% else %}
+      {% for row in sc.rows %}{{ _sc_row(row, sc, unit_system) }}{% endfor %}
+    {% endif %}
+  </div>
+
+  {% if sc.rows %}
+  {# Color legend so the red bar reads as cost, not "bigger is better". #}
+  <p class="text-base-content/60 text-xs">
+    Each bar shows the price gap and points to the more expensive store
+    (<span class="text-error font-medium">red</span>); the cheaper price is shown in
+    <span class="text-success font-medium">green</span>.
+  </p>
+  {% endif %}
+
+  {# Non-comparable disclosure. Every product links to its line items so the user can fix it;
+     the mismatched bucket is split by reason so the fixable "missing size" case is actionable. #}
+  {% if sc.unmatched_count > 0 %}
+  {% set needs_unit = sc.mismatched | selectattr("reason", "equalto", "needs_unit") | list %}
+  {% set different_units = sc.mismatched | selectattr("reason", "equalto", "different_units") | list %}
+  <details class="text-sm">
+    <summary class="cursor-pointer opacity-70">
+      {{ sc.unmatched_count }} product{{ "s" if sc.unmatched_count != 1 else "" }} can't be compared.
+      Click any product to open its line items and fix it.
+    </summary>
+    <div class="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {% if needs_unit %}
+      <div class="sm:col-span-2">
+        <p class="font-medium">Add a unit size to compare</p>
+        <p class="text-base-content/60 text-xs">
+          These are carried at both stores but have no unit size, so there is no per-unit price.
+          Open a product, edit its line item, and set a Size (e.g. <span class="num">16oz</span>) to include it.
+        </p>
+        <ul class="mt-1 opacity-80">
+          {% for u in needs_unit %}{{ _unmatched_li(u, unit_system) }}{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <div>
+        <p class="font-medium">Only at {{ sc.store_a }}</p>
+        <ul class="opacity-80">
+          {% for u in sc.only_a %}{{ _unmatched_li(u, unit_system, with_price=True) }}
+          {% else %}<li class="opacity-60">None</li>{% endfor %}
+        </ul>
+      </div>
+      <div>
+        <p class="font-medium">Only at {{ sc.store_b }}</p>
+        <ul class="opacity-80">
+          {% for u in sc.only_b %}{{ _unmatched_li(u, unit_system, with_price=True) }}
+          {% else %}<li class="opacity-60">None</li>{% endfor %}
+        </ul>
+      </div>
+      {% if different_units %}
+      <div class="sm:col-span-2">
+        <p class="font-medium">Sold by different units</p>
+        <p class="text-base-content/60 text-xs">
+          Measured one way at one store and another at the other (e.g. by weight vs by count), so a
+          per-unit comparison would not be like for like.
+        </p>
+        <ul class="mt-1 opacity-80">
+          {% for u in different_units %}{{ _unmatched_li(u, unit_system) }}{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </details>
+  {% endif %}
+{% endif %}
+</div>

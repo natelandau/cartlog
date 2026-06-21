@@ -47,6 +47,7 @@
         "coverage>=7.14.2",
         "duty>=1.9.0",
         "httpx2>=2.4.0",
+        "playwright>=1.60.0",
         "prek>=0.4.5",
         "pytest-clarity>=1.0.1",
         "pytest-cov>=7.1.0",
@@ -60,7 +61,7 @@
         "ty>=0.0.51",
         "typos>=1.47.2",
         "yamllint>=1.38.0",
-    ]
+]
 
 [tool.commitizen]
     bump_message               = "bump(release): v$current_version → v$new_version"
@@ -93,9 +94,10 @@
     output = ".cache/coverage.xml"
 
 [tool.pytest.ini_options]
-    addopts        = "--color=yes --exitfirst --failed-first --strict-config --strict-markers --junitxml=.cache/pytest.xml"
+    addopts        = "--color=yes --exitfirst --failed-first --strict-config --strict-markers --junitxml=.cache/pytest.xml -m 'not e2e'"
     cache_dir      = ".cache/pytest"
     filterwarnings = ["error", "ignore::DeprecationWarning"]
+    markers        = ["e2e: browser end-to-end tests via Playwright (need a built CSS bundle and installed browsers; deselected by default, run with `uv run duty e2e`)"]
     testpaths      = ["src", "tests"]
     xfail_strict   = true
 

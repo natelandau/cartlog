@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from cartlog.db.models import Receipt, ReceiptStatus, Store, User
+from cartlog.db.models import Receipt, ReceiptStatus, Role, Store, User
+from tests.factories import seed_user
 
 
 def test_dashboard_renders_recent_and_review_count(app_client):
@@ -136,6 +137,17 @@ def test_search_page_renders_box(app_client):
     # Then a search box is present
     assert response.status_code == 200
     assert 'name="q"' in response.text
+
+
+def test_search_page_prefills_query_from_param(app_client):
+    """Verify GET /search?q=eggs prefills the box and adds a load trigger so it auto-runs."""
+    # When deep-linking to the search page with a query
+    response = app_client.get("/search", params={"q": "eggs"})
+
+    # Then the box is prefilled and the input fires on load so results render immediately
+    assert response.status_code == 200
+    assert 'value="eggs"' in response.text
+    assert "load" in response.text
 
 
 def test_search_results_partial_returns_matches(app_client):
@@ -329,9 +341,6 @@ def test_nav_shows_sign_in_for_anonymous_user(anon_client):
     """Verify the navbar shows a Sign in link when no user is logged in."""
     # Given anonymous access is enabled (default) and at least one admin exists so
     # the first-run setup gate does not redirect to /setup
-    from cartlog.db.models import Role  # noqa: PLC0415
-    from tests.factories import seed_user  # noqa: PLC0415
-
     with anon_client.app.state.session_factory() as s:
         seed_user(s, username="admin_gate", role=Role.ADMIN)
 

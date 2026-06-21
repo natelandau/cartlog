@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from fastapi.testclient import TestClient as RawTestClient
 
 from cartlog.auth.tokens import ApiTokenService
 from cartlog.auth.users import UserService
@@ -126,8 +127,6 @@ def test_api_token_upload_needs_no_csrf_token(token_client: tuple[TestClient, st
     truly accepts a header-only token. A raw client (no CSRF cookie or header) reproduces what a
     non-browser client actually sends: a token request is immune to CSRF and must be exempt.
     """
-    from fastapi.testclient import TestClient as RawTestClient  # noqa: PLC0415
-
     auth_client, plaintext, _ = token_client
     raw = RawTestClient(auth_client.app)
 
@@ -146,8 +145,6 @@ def test_anonymous_upload_without_csrf_is_blocked(
     token_client: tuple[TestClient, str, int],
 ) -> None:
     """Verify the CSRF exemption is token-only: a cookie-less, tokenless POST is still rejected."""
-    from fastapi.testclient import TestClient as RawTestClient  # noqa: PLC0415
-
     auth_client, _, _ = token_client
     raw = RawTestClient(auth_client.app)
 

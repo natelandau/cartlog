@@ -10,6 +10,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse, Response
 
 from cartlog.auth.users import UserService
+from cartlog.web.dependencies import cookie_is_secure, resolve_settings
+from cartlog.web.guards import Forbidden, load_user
 from cartlog.web.security import make_csrf_token, verify_csrf_token
 
 if TYPE_CHECKING:
@@ -82,8 +84,6 @@ class ForcePasswordChangeMiddleware(BaseHTTPMiddleware):
 
         factory = request.app.state.session_factory
         with factory() as session:
-            from cartlog.web.guards import load_user  # noqa: PLC0415
-
             user = load_user(request, session)
 
         if user is not None and user.must_change_password:
@@ -122,8 +122,6 @@ class CsrfMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Read settings at dispatch time so tests can override via app.state.settings.
-        from cartlog.web.dependencies import cookie_is_secure, resolve_settings  # noqa: PLC0415
-
         secret: str = resolve_settings(request).secret_key
         # Only mark the cookie Secure over HTTPS; a Secure cookie over HTTP is dropped by
         # Safari and never returned by any browser, which would break CSRF on the next POST.
@@ -180,8 +178,6 @@ async def csrf_protect(request: Request) -> None:
         return
 
     # Read settings at call time so tests can override via app.state.settings.
-    from cartlog.web.dependencies import resolve_settings  # noqa: PLC0415
-
     secret: str = resolve_settings(request).secret_key
 
     cookie = request.cookies.get(CSRF_COOKIE)
@@ -200,6 +196,4 @@ async def csrf_protect(request: Request) -> None:
         or not secrets.compare_digest(submitted, cookie)
         or not verify_csrf_token(cookie, secret)
     ):
-        from cartlog.web.guards import Forbidden  # noqa: PLC0415
-
         raise Forbidden

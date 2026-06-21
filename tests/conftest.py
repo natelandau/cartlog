@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from cartlog.db import models  # noqa: F401  # registers tables on Base.metadata
 from cartlog.db.base import Base
 from cartlog.parsing.schema import ParsedLineItem, ParsedReceipt
+from cartlog.web.templating import templates
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -49,8 +50,6 @@ def _restore_template_auto_reload() -> Generator[None]:
     build dev/prod apps would otherwise leak that flag into later tests and make assertions
     on template reloading order-dependent.
     """
-    from cartlog.web.templating import templates  # noqa: PLC0415
-
     original = templates.env.auto_reload
     yield
     templates.env.auto_reload = original

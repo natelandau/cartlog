@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from cartlog.db.models import Category, ReceiptReviewReason, ReviewReasonCode
+from cartlog.ingest.persistence import persist_receipt
 
 
 def test_duplicate_category_name_rejected(session) -> None:
@@ -22,8 +23,6 @@ def test_duplicate_category_name_rejected(session) -> None:
 
 def test_review_reason_cascades_with_receipt(session, sample_parsed_receipt) -> None:
     """Verify deleting a receipt removes its review reasons."""
-    from cartlog.ingest.persistence import persist_receipt  # noqa: PLC0415
-
     receipt, _ = persist_receipt(
         session,
         sample_parsed_receipt,

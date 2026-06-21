@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 
 from pydantic import BaseModel
 
@@ -34,28 +35,6 @@ class PriceHistory(BaseModel):
     min_unit_price: Decimal | None
     max_unit_price: Decimal | None
     avg_unit_price: Decimal | None
-
-
-class StoreComparisonRow(BaseModel):
-    """Aggregated price stats for one product at one store."""
-
-    store_chain: str
-    store_location: str | None
-    avg_unit_price: Decimal
-    min_unit_price: Decimal
-    max_unit_price: Decimal
-    latest_unit_price: Decimal
-    purchase_count: int
-    avg_normalized_unit_price: Decimal | None = None
-    measure_dimension: str | None = None
-    normalized_count: int = 0
-
-
-class StoreComparison(BaseModel):
-    """A product's price compared across stores, cheapest average first."""
-
-    product: str
-    rows: list[StoreComparisonRow]
 
 
 class CategorySpendRow(BaseModel):
@@ -187,6 +166,87 @@ class MonthComparison(BaseModel):
     trips_prev: int
     items_this: int
     items_prev: int
+
+
+class PriceBasis(StrEnum):
+    """Which single price represents a store for a product over a date range."""
+
+    TYPICAL = "typical"  # median normalized price, robust to sales
+    LATEST = "latest"  # most recent normalized price in range
+
+
+class ScaleMode(StrEnum):
+    """How the comparison bar length is scaled."""
+
+    PERCENT = "percent"  # one shared dimensionless axis across all rows
+    DOLLAR = "dollar"  # per-dimension-group dollar axis
+
+
+class StorePairSort(StrEnum):
+    """Row ordering for the comparison table."""
+
+    ALPHABETICAL = "alphabetical"
+    LARGEST = "largest"  # widest percent gap first
+    SMALLEST = "smallest"  # narrowest percent gap first
+
+
+class StoreOption(BaseModel):
+    """One selectable store for the comparison toolbar, ranked by receipt count."""
+
+    id: int
+    chain_name: str
+    location: str | None
+    label: str
+    receipt_count: int
+
+
+class StorePairRow(BaseModel):
+    """One product comparable at both stores, with the gap and its bar geometry."""
+
+    canonical_name: str
+    measure_dimension: str
+    price_a: Decimal  # metric-base normalized price at store A
+    price_b: Decimal
+    abs_diff: Decimal  # |price_a - price_b|, metric base
+    pct_diff: float | None  # signed: positive means B is pricier; None when A is free
+    pricier: str  # "a", "b", or "same"
+    bar_fraction: float  # 0..1 width of the bar for the active scale
+
+
+class StorePairUnmatched(BaseModel):
+    """A product that cannot be compared: carried by one store only, or unresolved/mismatched.
+
+    `reason` drives how the disclosure presents it and what fix it suggests:
+    "only_store" (sold at one store), "needs_unit" (missing a unit size, so it can be made
+    comparable by editing the line item), or "different_units" (resolved but in different
+    dimensions, e.g. weight vs count).
+    """
+
+    canonical_name: str
+    measure_dimension: str | None
+    price: Decimal | None  # representative normalized price where one exists
+    reason: str = "only_store"
+
+
+class StorePairComparison(BaseModel):
+    """A two-store normalized-price comparison: comparable rows plus the unmatched buckets."""
+
+    store_a: str
+    store_b: str
+    store_a_id: int
+    store_b_id: int
+    scale: ScaleMode
+    basis: PriceBasis
+    sort: StorePairSort
+    rows: list[StorePairRow]
+    only_a: list[StorePairUnmatched]
+    only_b: list[StorePairUnmatched]
+    mismatched: list[StorePairUnmatched]
+    unmatched_count: int
+    product_options: list[str]
+    category_options: list[tuple[int, str]]
+    axis_max_pct: float  # widest percent gap in view, for the % caption
+    dollar_group_max: dict[str, Decimal]  # dimension -> widest dollar gap, for the $ caption
 
 
 class LineItemExportRow(BaseModel):
