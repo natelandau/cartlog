@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import statistics
+from collections import Counter
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
@@ -23,12 +25,17 @@ from cartlog.analytics.results import (
     MonthlySpend,
     ParsingCostOverview,
     ParsingCostSummary,
+    PriceBasis,
     PriceHistory,
     PricePoint,
     PriceTrendRow,
+    ScaleMode,
     SearchResult,
-    StoreComparison,
-    StoreComparisonRow,
+    StoreOption,
+    StorePairComparison,
+    StorePairRow,
+    StorePairSort,
+    StorePairUnmatched,
     StoreRow,
     TopProduct,
 )
@@ -65,6 +72,60 @@ def _price_stats(prices: list[Decimal]) -> tuple[Decimal, Decimal, Decimal]:
     Averaging is done over Decimal to avoid the float drift SQL AVG would introduce.
     """
     return min(prices), max(prices), sum(prices, Decimal(0)) / len(prices)
+
+
+def _median_price(prices: list[Decimal]) -> Decimal:
+    """Return the median normalized price, quantized to the stored 6-decimal precision.
+
+    Median (not mean) is used so a one-off sale or bulk buy does not skew a store's
+    representative price.
+    """
+    median = statistics.median(prices)
+    return Decimal(median).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+
+def _store_label(chain: str, location: str | None) -> str:
+    """Render a store's display name, joining chain and location with a comma."""
+    return f"{chain}, {location}" if location else chain
+
+
+def _unmatched(
+    name: str, chosen: tuple[str, Decimal] | None, *, reason: str = "only_store"
+) -> StorePairUnmatched:
+    """Build an unmatched-product entry from a store's representative (dimension, price), if any."""
+    return StorePairUnmatched(
+        canonical_name=name,
+        measure_dimension=chosen[0] if chosen else None,
+        price=chosen[1] if chosen else None,
+        reason=reason,
+    )
+
+
+def _pct_more(*, base: Decimal, other: Decimal) -> float | None:
+    """Return how much pricier `other` is than `base`, in signed percent.
+
+    None when the base price is zero (a free item), so the caller renders a max-width
+    'cannot compute a ratio' bar instead of dividing by zero.
+    """
+    if base == 0:
+        return None
+    return float((other - base) / base * Decimal(100))
+
+
+def _sort_comparable(rows: list[StorePairRow], *, sort: StorePairSort) -> None:
+    """Order comparable rows in place.
+
+    Largest/smallest use absolute percent difference as the universal, dimension-free
+    magnitude; a free-item None magnitude sorts as the widest gap.
+    """
+    if sort == StorePairSort.ALPHABETICAL:
+        rows.sort(key=lambda r: r.canonical_name.lower())
+        return
+
+    def magnitude(row: StorePairRow) -> float:
+        return float("inf") if row.pct_diff is None else abs(row.pct_diff)
+
+    rows.sort(key=magnitude, reverse=sort == StorePairSort.LARGEST)
 
 
 def _month_key(day: date) -> str:
@@ -355,6 +416,224 @@ class AnalyticsService:
         out.sort(key=lambda s: s.total_spend, reverse=True)
         return out
 
+    def stores_by_frequency(self) -> list[StoreOption]:
+        """Return stores ranked by counted-receipt count, most-shopped first.
+
+        Feeds the comparison toolbar's two store selectors and supplies the default pair
+        (the two busiest stores) when the user has not chosen any.
+        """
+        rows = (
+            self._session.query(Store.id, Store.chain_name, Store.location, func.count(Receipt.id))
+            .join(Receipt, Receipt.store_id == Store.id)
+            .filter(Receipt.status.in_(COUNTED_STATUSES))
+            .group_by(Store.id, Store.chain_name, Store.location)
+            .order_by(func.count(Receipt.id).desc(), Store.chain_name.asc())
+            .all()
+        )
+        return [
+            StoreOption(
+                id=store_id,
+                chain_name=chain,
+                location=location,
+                label=_store_label(chain, location),
+                receipt_count=count,
+            )
+            for (store_id, chain, location, count) in rows
+        ]
+
+    def _pair_rows(self, store_ids: list[int], *, start: date | None, end: date | None) -> list:
+        """Return labeled (product, store, dimension, normalized price, date) rows for two stores."""
+        query = (
+            self._session.query(
+                Product.canonical_name.label("canonical_name"),
+                Receipt.store_id.label("store_id"),
+                Product.category_id.label("category_id"),
+                Category.name.label("category_name"),
+                LineItem.measure_dimension.label("measure_dimension"),
+                LineItem.normalized_unit_price.label("normalized_unit_price"),
+                LineItem.measure_status.label("measure_status"),
+                Receipt.purchase_date.label("purchase_date"),
+                Receipt.id.label("receipt_id"),
+            )
+            .join(Receipt, LineItem.receipt_id == Receipt.id)
+            .join(Product, LineItem.product_id == Product.id)
+            .outerjoin(Category, Product.category_id == Category.id)
+            .filter(Receipt.status.in_(COUNTED_STATUSES))
+            .filter(Receipt.store_id.in_(store_ids))
+        )
+        query = _apply_date_range(query, start=start, end=end)
+        return query.all()
+
+    @staticmethod
+    def _representative(points: list, *, basis: PriceBasis) -> tuple[str, Decimal] | None:
+        """Return (dimension, price) for one store's purchases of a product, or None if unresolved.
+
+        Picks the dominant dimension (the one with the most resolved purchases) so a stray
+        differently-measured line never mixes $/g with $/each, then reduces to a single price
+        per the basis.
+        """
+        resolved = [
+            p
+            for p in points
+            if p.measure_status == MeasureStatus.RESOLVED
+            and p.normalized_unit_price is not None
+            and p.measure_dimension is not None
+        ]
+        if not resolved:
+            return None
+        dimension = Counter(p.measure_dimension for p in resolved).most_common(1)[0][0]
+        same_dim = [p for p in resolved if p.measure_dimension == dimension]
+        if basis == PriceBasis.LATEST:
+            latest = max(same_dim, key=lambda p: (p.purchase_date, p.receipt_id))
+            return dimension, latest.normalized_unit_price
+        return dimension, _median_price([p.normalized_unit_price for p in same_dim])
+
+    @staticmethod
+    def _fill_bar_fractions(
+        rows: list[StorePairRow], *, scale: ScaleMode
+    ) -> tuple[float, dict[str, Decimal]]:
+        """Set each row's bar_fraction (0..1) for the active scale; return the axis maxima.
+
+        Percent mode shares one axis across all rows; dollar mode scales each dimension
+        group to its own widest gap, because $/g and $/each deltas cannot share a length.
+        """
+        if scale == ScaleMode.PERCENT:
+            magnitudes = [abs(r.pct_diff) for r in rows if r.pct_diff is not None]
+            # A row set whose gaps are all zero (a product priced identically at both
+            # stores) yields a zero axis max; fall back to 1 so the zero-width bars do
+            # not divide by zero.
+            axis_max = max(magnitudes) if magnitudes else 1.0
+            if axis_max == 0:
+                axis_max = 1.0
+            for row in rows:
+                row.bar_fraction = (
+                    1.0 if row.pct_diff is None else min(1.0, abs(row.pct_diff) / axis_max)
+                )
+            return axis_max, {}
+        group_max: dict[str, Decimal] = {}
+        for row in rows:
+            group_max[row.measure_dimension] = max(
+                group_max.get(row.measure_dimension, Decimal(0)), row.abs_diff
+            )
+        for row in rows:
+            gmax = group_max.get(row.measure_dimension, Decimal(0))
+            row.bar_fraction = float(row.abs_diff / gmax) if gmax > 0 else 0.0
+        return 0.0, group_max
+
+    def store_pair_comparison(  # noqa: PLR0913
+        self,
+        store_a_id: int,
+        store_b_id: int,
+        *,
+        product_names: list[str] | None = None,
+        category_ids: list[int] | None = None,
+        start: date | None = None,
+        end: date | None = None,
+        basis: PriceBasis = PriceBasis.TYPICAL,
+        scale: ScaleMode = ScaleMode.PERCENT,
+        sort: StorePairSort = StorePairSort.ALPHABETICAL,
+    ) -> StorePairComparison:
+        """Compare normalized prices of products carried by two stores.
+
+        Use this to answer "for the things I buy at both stores, where are the price gaps?".
+        Only products resolved at both stores in a shared measure dimension are comparable;
+        everything else is bucketed into only_a/only_b/mismatched so nothing is silently dropped.
+        Product and category filters narrow the comparable rows, while the option lists reflect
+        what the two stores carry within the selected date range (so a date filter narrows them).
+        """
+        rows = self._pair_rows([store_a_id, store_b_id], start=start, end=end)
+
+        product_options = sorted({r.canonical_name for r in rows}, key=str.lower)
+        category_options = sorted(
+            {(r.category_id, r.category_name) for r in rows if r.category_id is not None},
+            key=lambda c: c[1].lower(),
+        )
+
+        # Drop blank names so a stray empty `?product=` value means "no filter" rather
+        # than an impossible match that would hide every row.
+        cleaned_names = {n.lower() for n in product_names if n.strip()} if product_names else set()
+        name_filter = cleaned_names or None
+        cat_filter = set(category_ids) if category_ids else None
+        kept = [
+            r
+            for r in rows
+            if (name_filter is None or r.canonical_name.lower() in name_filter)
+            and (cat_filter is None or r.category_id in cat_filter)
+        ]
+
+        by_product: dict[str, dict[int, list]] = {}
+        for r in kept:
+            by_product.setdefault(r.canonical_name, {}).setdefault(r.store_id, []).append(r)
+
+        comparable: list[StorePairRow] = []
+        only_a: list[StorePairUnmatched] = []
+        only_b: list[StorePairUnmatched] = []
+        mismatched: list[StorePairUnmatched] = []
+
+        for name, stores in by_product.items():
+            a_points = stores.get(store_a_id, [])
+            b_points = stores.get(store_b_id, [])
+            a_repr = self._representative(a_points, basis=basis)
+            b_repr = self._representative(b_points, basis=basis)
+
+            if a_repr is not None and b_repr is not None and a_repr[0] == b_repr[0]:
+                dimension, price_a = a_repr
+                _, price_b = b_repr
+                pricier = "same" if price_a == price_b else ("a" if price_a > price_b else "b")
+                comparable.append(
+                    StorePairRow(
+                        canonical_name=name,
+                        measure_dimension=dimension,
+                        price_a=price_a,
+                        price_b=price_b,
+                        abs_diff=abs(price_a - price_b),
+                        pct_diff=_pct_more(base=price_a, other=price_b),
+                        pricier=pricier,
+                        bar_fraction=0.0,  # set by _fill_bar_fractions below
+                    )
+                )
+            elif a_points and b_points:
+                # Carried by both but not comparable. If both stores have a resolved price the
+                # dimensions must differ (the comparable branch above already ruled out a match);
+                # otherwise at least one store is missing a unit size and is fixable by editing.
+                reason = (
+                    "different_units" if a_repr is not None and b_repr is not None else "needs_unit"
+                )
+                mismatched.append(_unmatched(name, a_repr or b_repr, reason=reason))
+            elif a_points:
+                only_a.append(_unmatched(name, a_repr))
+            else:
+                only_b.append(_unmatched(name, b_repr))
+
+        axis_max_pct, dollar_group_max = self._fill_bar_fractions(comparable, scale=scale)
+        _sort_comparable(comparable, sort=sort)
+        for bucket in (only_a, only_b, mismatched):
+            bucket.sort(key=lambda u: u.canonical_name.lower())
+
+        return StorePairComparison(
+            store_a=self._store_label_for(store_a_id),
+            store_b=self._store_label_for(store_b_id),
+            store_a_id=store_a_id,
+            store_b_id=store_b_id,
+            scale=scale,
+            basis=basis,
+            sort=sort,
+            rows=comparable,
+            only_a=only_a,
+            only_b=only_b,
+            mismatched=mismatched,
+            unmatched_count=len(only_a) + len(only_b) + len(mismatched),
+            product_options=product_options,
+            category_options=category_options,
+            axis_max_pct=float(axis_max_pct),
+            dollar_group_max=dollar_group_max,
+        )
+
+    def _store_label_for(self, store_id: int) -> str:
+        """Return the comma-joined display label for a store id, or a fallback if missing."""
+        store = self._session.get(Store, store_id)
+        return _store_label(store.chain_name, store.location) if store else "Unknown store"
+
     def _tracked_products(self, *, start: date | None, end: date | None) -> list[str]:
         """Return canonical names of products bought at least twice in the window.
 
@@ -464,8 +743,8 @@ class AnalyticsService:
     ) -> list[PricePoint]:
         """Return one PricePoint per counted purchase of `product`, oldest first.
 
-        Shared by `price_history` and `store_comparison` so the latter does not pay for
-        the whole-product min/max/avg it would otherwise discard.
+        Shared by `price_history` and related methods so callers do not duplicate the
+        receipt/store join or the counted-status filter.
         """
         query = (
             self._session.query(LineItem, Receipt, Store)
@@ -523,71 +802,6 @@ class AnalyticsService:
             max_unit_price=max_price,
             avg_unit_price=avg_price,
         )
-
-    def store_comparison(
-        self,
-        product: str,
-        *,
-        start: date | None = None,
-        end: date | None = None,
-    ) -> StoreComparison:
-        """Compare a product's price across stores, cheapest average first.
-
-        Use this to answer "where is cereal cheapest?". Groups the product's price points
-        by store.
-        """
-        points = self._price_points(product, start=start, end=end)
-
-        by_store: dict[tuple[str, str | None], list[PricePoint]] = {}
-        for point in points:
-            by_store.setdefault((point.store_chain, point.store_location), []).append(point)
-
-        rows: list[StoreComparisonRow] = []
-        for (chain, location), store_points in by_store.items():
-            min_price, max_price, avg_price = _price_stats([p.unit_price for p in store_points])
-            latest = max(store_points, key=lambda p: (p.purchase_date, p.receipt_id))
-            resolved = [p for p in store_points if p.measure_status == MeasureStatus.RESOLVED]
-            dimension = resolved[0].measure_dimension if resolved else None
-            # Average only points of the same dimension; mixing $/g and $/each is meaningless.
-            same_dim = [p for p in resolved if p.measure_dimension == dimension]
-            # Defend the sum below against a data-integrity violation: a RESOLVED row should
-            # always carry a normalized price, but guard so a NULL can never crash the average.
-            same_dim = [p for p in same_dim if p.normalized_unit_price is not None]
-            avg_norm = (
-                (
-                    (
-                        sum((p.normalized_unit_price for p in same_dim), Decimal(0)) / len(same_dim)
-                    ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
-                )
-                if same_dim
-                else None
-            )
-            rows.append(
-                StoreComparisonRow(
-                    store_chain=chain,
-                    store_location=location,
-                    avg_unit_price=avg_price,
-                    min_unit_price=min_price,
-                    max_unit_price=max_price,
-                    latest_unit_price=latest.unit_price,
-                    purchase_count=len(store_points),
-                    avg_normalized_unit_price=avg_norm,
-                    measure_dimension=dimension,
-                    normalized_count=len(same_dim),
-                )
-            )
-        # Sort by normalized price when available (honest), falling back to raw average.
-        # Use an explicit None check, not `or`: a free item's normalized price is Decimal(0),
-        # which is falsy and would wrongly fall back to the raw unit price.
-        rows.sort(
-            key=lambda r: (
-                r.avg_normalized_unit_price is None,
-                r.avg_normalized_unit_price
-                if r.avg_normalized_unit_price is not None
-                else r.avg_unit_price,
-            )
-        )
-        return StoreComparison(product=product, rows=rows)
 
     def _category_ids_for(self, name: str) -> list[int]:
         """Return ids of categories whose name matches `name` case-insensitively."""

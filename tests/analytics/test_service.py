@@ -94,40 +94,6 @@ def test_price_history_product_name_is_case_insensitive(analytics_session):
     assert len(result_upper.points) == 3
 
 
-def test_store_comparison_aggregates_per_store_cheapest_first(analytics_session):
-    """Verify store_comparison groups by store and orders by average price ascending."""
-    # Given the seeded dataset
-    svc = AnalyticsService(analytics_session)
-
-    # When comparing egg prices across stores
-    result = svc.store_comparison("eggs")
-
-    # Then Costco (cheaper average) comes before Safeway
-    assert [r.store_chain for r in result.rows] == ["Costco", "Safeway"]
-
-    costco, safeway = result.rows
-    assert costco.avg_unit_price == Decimal("2.50")
-    assert costco.purchase_count == 1
-    # Safeway has two egg purchases: 3.00 (Jan) and 3.20 (Mar)
-    assert safeway.avg_unit_price == Decimal("3.1")
-    assert safeway.min_unit_price == Decimal("3.00")
-    assert safeway.max_unit_price == Decimal("3.20")
-    assert safeway.latest_unit_price == Decimal("3.20")
-    assert safeway.purchase_count == 2
-
-
-def test_store_comparison_unknown_product_is_empty(analytics_session):
-    """Verify an unmatched product yields no rows."""
-    # Given the seeded dataset
-    svc = AnalyticsService(analytics_session)
-
-    # When comparing a product that does not exist
-    result = svc.store_comparison("caviar")
-
-    # Then there are no rows
-    assert result.rows == []
-
-
 def test_category_spend_full_breakdown_highest_first(analytics_session):
     """Verify category_spend sums line totals per category, biggest spend first."""
     # Given the seeded dataset

@@ -138,6 +138,17 @@ def test_search_page_renders_box(app_client):
     assert 'name="q"' in response.text
 
 
+def test_search_page_prefills_query_from_param(app_client):
+    """Verify GET /search?q=eggs prefills the box and adds a load trigger so it auto-runs."""
+    # When deep-linking to the search page with a query
+    response = app_client.get("/search", params={"q": "eggs"})
+
+    # Then the box is prefilled and the input fires on load so results render immediately
+    assert response.status_code == 200
+    assert 'value="eggs"' in response.text
+    assert "load" in response.text
+
+
 def test_search_results_partial_returns_matches(app_client):
     """Verify GET /search/results renders matching line items as an HTML fragment."""
     # When searching for eggs
