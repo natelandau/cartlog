@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
+{% block title %}Insights · cartlog{% endblock %}
+{% block content %}
+{# Load the shared rendering layer synchronously BEFORE the panel so a fragment's inline
+   self-registration script finds the Insights global already defined on the initial page load. #}
+<script src="/static/insights.js"></script>
+
+{{ ui.page_header("Insights", "Explore your data from different angles. Pick an analysis below.") }}
+
+<div class="flex flex-col gap-4">
+  <div class="max-w-xs">
+    <label for="insight-select" class="sr-only">Choose an analysis</label>
+    {# Path-based htmx navigation: htmx.ajax issues GET /insights/<key>, swaps the panel, and
+       pushes the canonical deep-link URL so back/forward and "open in new tab" work. #}
+    <select id="insight-select" class="select w-full"
+            onchange="htmx.ajax('GET', '/insights/' + this.value, {target: '#insights-panel', swap: 'innerHTML', pushUrl: true})">
+      {% for v in views %}
+      <option value="{{ v.key }}" {% if v.key == selected.key %}selected{% endif %}>{{ v.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {% call ui.card() %}
+  <div id="insights-panel">
+    {% include selected.template %}
+  </div>
+  {% endcall %}
+</div>
+{% endblock %}

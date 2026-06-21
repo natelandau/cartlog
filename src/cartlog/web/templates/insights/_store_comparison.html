@@ -1,0 +1,29 @@
+{# Store comparison analysis fragment. Self-registers its Plotly renderer with the Insights shell. #}
+<div data-insight-view="store-comparison" class="flex flex-col gap-3">
+  <div class="join">
+    <input id="sc-product" class="input join-item" placeholder="product (e.g. eggs)" value="eggs" />
+    <button id="sc-show" class="btn btn-primary join-item">Show</button>
+  </div>
+  <div id="store-comparison-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+</div>
+<script>
+  (function () {
+    const root = document.querySelector('[data-insight-view="store-comparison"]');
+    async function render() {
+      await Insights.ensurePlotly();
+      const product = root.querySelector("#sc-product").value;
+      const data = await Insights.getJSON(`/api/analytics/store-comparison?product=${encodeURIComponent(product)}`);
+      const el = root.querySelector("#store-comparison-chart");
+      const trace = {
+        x: data.rows.map((r) => `${r.store_chain}${r.store_location ? ", " + r.store_location : ""}`),
+        y: data.rows.map((r) => Number(r.avg_unit_price)),
+        type: "bar",
+        marker: { color: Insights.themeColor("--color-primary", "#3a7d5d") },
+      };
+      const layout = { ...Insights.baseLayout(`Avg unit price by store: ${data.product}`), yaxis: { tickprefix: "$" } };
+      Plotly.newPlot(el, [trace], layout, Insights.PLOT_CONFIG);
+    }
+    root.querySelector("#sc-show").addEventListener("click", render);
+    Insights.register("store-comparison", render);
+  })();
+</script>

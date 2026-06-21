@@ -1,0 +1,23 @@
+{# Category spend analysis fragment. Self-registers its Plotly renderer with the Insights shell.
+   Renders immediately on mount (no product input), so no Show button is needed. #}
+<div data-insight-view="category-spend" class="flex flex-col gap-3">
+  <div id="category-spend-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+</div>
+<script>
+  (function () {
+    const root = document.querySelector('[data-insight-view="category-spend"]');
+    async function render() {
+      await Insights.ensurePlotly();
+      const data = await Insights.getJSON(`/api/analytics/category-spend`);
+      const el = root.querySelector("#category-spend-chart");
+      const trace = {
+        labels: data.rows.map((r) => r.category),
+        values: data.rows.map((r) => Number(r.total_spend)),
+        type: "pie",
+        marker: { colors: Insights.cartlogPalette() },
+      };
+      Plotly.newPlot(el, [trace], Insights.baseLayout("Spend by category"), Insights.PLOT_CONFIG);
+    }
+    Insights.register("category-spend", render);
+  })();
+</script>
