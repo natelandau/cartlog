@@ -10,6 +10,10 @@
       await Insights.ensurePlotly();
       const data = await Insights.getJSON(`/api/analytics/category-spend`);
       const el = root.querySelector("#category-spend-chart");
+      if (!data.rows.length) {
+        el.innerHTML = `<p class="text-base-content/60 py-16 text-center">No category spend data yet.</p>`;
+        return;
+      }
       const trace = {
         labels: data.rows.map((r) => r.category),
         values: data.rows.map((r) => Number(r.total_spend)),

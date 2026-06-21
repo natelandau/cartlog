@@ -14,6 +14,10 @@
       const product = root.querySelector("#sc-product").value;
       const data = await Insights.getJSON(`/api/analytics/store-comparison?product=${encodeURIComponent(product)}`);
       const el = root.querySelector("#store-comparison-chart");
+      if (!data.rows.length) {
+        el.innerHTML = `<p class="text-base-content/60 py-16 text-center">No purchases recorded for "${data.product}".</p>`;
+        return;
+      }
       const trace = {
         x: data.rows.map((r) => `${r.store_chain}${r.store_location ? ", " + r.store_location : ""}`),
         y: data.rows.map((r) => Number(r.avg_unit_price)),
