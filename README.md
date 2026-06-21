@@ -18,6 +18,7 @@ cartlog takes a receipt photo and gives you back spending you can search and cha
 - Drop receipts into a synced watch folder and have them imported automatically, no upload step
 - Keep using the app while your receipts are read in the background
 - Chart a product's price history, compare prices across stores by normalized unit price, and total your spending by category
+- Capture each item's size and unit so unit-price comparisons stay honest, repairing garbled sizes from the receipt text and, when a size is missing, inferring it from the same product on other receipts (gap-filling can use the assist model, a billable pass)
 - Export your line items to CSV or JSON, filtered by date, store, or category, from the browser or the command line
 - See what each receipt cost to read, so your LLM spend stays visible
 - Keep all your data in a single file, with no separate database to install or maintain
@@ -51,7 +52,7 @@ Running in Docker is the fastest way to get cartlog up. It pulls a prebuilt, mul
     - `CARTLOG_SECRET_KEY` - a random string that signs your session cookies and CSRF tokens. Generate one with `openssl rand -hex 32`.
     - The API key for your chosen LLM provider (e.g. `ANTHROPIC_API_KEY`).
 
-    Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to switch providers. Every other value is optional.
+    Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_ASSIST_MODEL` to switch providers. Every other value is optional.
 
 3. Pull the image and start the container in the background:
 
@@ -111,7 +112,7 @@ For development, or to run cartlog without Docker, install it with uv.
     - `CARTLOG_SECRET_KEY` - a random string that signs your session cookies and CSRF tokens. Generate one with `openssl rand -hex 32`.
     - The API key for your chosen LLM provider (e.g. `ANTHROPIC_API_KEY`).
 
-    Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_CLASSIFY_MODEL` to point at a different provider or model.
+    Optionally set `CARTLOG_PARSE_MODEL` / `CARTLOG_ASSIST_MODEL` to point at a different provider or model.
 
 3. Start the web server and worker:
 
@@ -209,7 +210,7 @@ cartlog is provider-agnostic. For how to point it at Anthropic, OpenAI, Gemini, 
 | `CARTLOG_SESSION_LIFETIME_DAYS`              | `14`                         | Absolute session lifetime in days                                              |
 | `CARTLOG_SESSION_IDLE_TIMEOUT_DAYS`          | `7`                          | Idle timeout in days; sessions expire if inactive for this long                |
 | `CARTLOG_PARSE_MODEL`                        | `anthropic:claude-opus-4-8`  | Provider-prefixed model that reads your receipts                               |
-| `CARTLOG_CLASSIFY_MODEL`                     | `anthropic:claude-haiku-4-5` | Cheaper provider-prefixed model that tidies item categories                    |
+| `CARTLOG_ASSIST_MODEL`                       | `anthropic:claude-haiku-4-5` | Cheaper secondary model for text-only passes (structured output, no vision)    |
 | `CARTLOG_DATABASE_URL`                       | `cartlog.db`                 | Where to store your data file (the folder must exist)                          |
 | `CARTLOG_IMAGE_STORAGE_DIR`                  | `receipt_images`             | Where to keep copies of your receipt images                                    |
 | `CARTLOG_REVIEW_CONFIDENCE_THRESHOLD`        | `0.7`                        | Receipts cartlog is unsure about are flagged for you to review                 |
@@ -270,7 +271,7 @@ Start cartlog with `CARTLOG_DATABASE_URL=/data/cartlog.db` and `CARTLOG_IMAGE_ST
 
 ## Choosing an LLM provider
 
-cartlog reads receipts through [Pydantic AI](https://ai.pydantic.dev/), so you can switch providers without touching code. It ships with support for Anthropic, OpenAI, and Google Gemini, plus any OpenAI-compatible endpoint, which covers API routers like [OpenRouter](https://openrouter.ai/) and local servers like [Ollama](https://ollama.com/). Switching takes two steps: set the model with `CARTLOG_PARSE_MODEL` and `CARTLOG_CLASSIFY_MODEL`, then supply that provider's API key under its own variable name.
+cartlog reads receipts through [Pydantic AI](https://ai.pydantic.dev/), so you can switch providers without touching code. It ships with support for Anthropic, OpenAI, and Google Gemini, plus any OpenAI-compatible endpoint, which covers API routers like [OpenRouter](https://openrouter.ai/) and local servers like [Ollama](https://ollama.com/). Switching takes two steps: set the model with `CARTLOG_PARSE_MODEL` and `CARTLOG_ASSIST_MODEL`, then supply that provider's API key under its own variable name.
 
 Model values use a `provider:model` format. Set both variables in `.env.secret`, alongside the matching key:
 
@@ -278,7 +279,7 @@ Model values use a `provider:model` format. Set both variables in `.env.secret`,
 # Anthropic (the default)
 ANTHROPIC_API_KEY=sk-ant-...
 CARTLOG_PARSE_MODEL=anthropic:claude-opus-4-8
-CARTLOG_CLASSIFY_MODEL=anthropic:claude-haiku-4-5
+CARTLOG_ASSIST_MODEL=anthropic:claude-haiku-4-5
 
 # OpenAI
 OPENAI_API_KEY=sk-...
@@ -293,11 +294,11 @@ OPENROUTER_API_KEY=sk-or-...
 CARTLOG_PARSE_MODEL=openrouter:anthropic/claude-3.5-sonnet
 ```
 
-`CARTLOG_PARSE_MODEL` reads the receipt image or PDF and does the heavy lifting. `CARTLOG_CLASSIFY_MODEL` only sorts product names into categories, so a smaller, cheaper model fits well there (the Anthropic default pairs Opus for parsing with Haiku for classifying). The two variables can use different providers. For exact model-id syntax, see the [Pydantic AI models documentation](https://ai.pydantic.dev/models/).
+`CARTLOG_PARSE_MODEL` is the primary model: it reads the receipt image or PDF and does the heavy extraction, so it must support vision (image input), structured output, and PDF documents. `CARTLOG_ASSIST_MODEL` is a cheaper secondary model that handles focused follow-up passes over already-extracted text, so it needs structured output only and works purely from text (no vision). A small, fast model fits well there (the Anthropic default pairs Opus for parsing with Haiku as the assist model). The two variables can use different providers. For exact model-id syntax, see the [Pydantic AI models documentation](https://ai.pydantic.dev/models/).
 
 Local and self-hosted models work through that same OpenAI-compatible path. They are held to the same capability requirements below, which many small local models do not meet. To use a provider cartlog does not bundle (for example Cohere or Bedrock), add its [Pydantic AI extra](https://ai.pydantic.dev/models/) to the install and rebuild.
 
-> **Important:** The parse model must support image (vision) input and structured output, because cartlog hands it the receipt picture and asks for a typed result. To read PDF receipts, the model must also accept PDF documents. The classify model needs structured output only, since it works from text. Point either variable at a model that lacks these capabilities and ingestion fails: the parse step errors and the receipt is flagged for review. Current frontier models from Anthropic, OpenAI, and Google meet all three requirements; many smaller and local models do not. Test one receipt before switching your whole setup.
+> **Important:** `CARTLOG_PARSE_MODEL` must support image (vision) input and structured output, because cartlog hands it the receipt picture and asks for a typed result. To read PDF receipts, it must also accept PDF documents. `CARTLOG_ASSIST_MODEL` needs structured output only, since it works from already-extracted text with no vision required. Point either variable at a model that lacks these capabilities and ingestion fails: the parse step errors and the receipt is flagged for review. Current frontier models from Anthropic, OpenAI, and Google meet all three requirements; many smaller and local models do not. Test one receipt before switching your whole setup.
 
 ## Contributing
 
