@@ -11,6 +11,8 @@ from alembic.config import Config
 from cartlog.db.backfill import normalize_existing_measures
 from cartlog.db.seed import seed_app_config, seed_categories
 from cartlog.db.session import create_session_factory
+from cartlog.exceptions import ModelConfigurationError
+from cartlog.parsing.factory import build_size_extractor
 
 if TYPE_CHECKING:
     from cartlog.config import Settings
@@ -42,7 +44,17 @@ def prepare_runtime(settings: Settings) -> None:
             seed_app_config(session)
             # Recompute normalization for any rows left stale by older logic. Deterministic
             # and idempotent, so it is safe to run on every startup.
-            normalize_existing_measures(session)
+            try:
+                size_extractor = build_size_extractor(settings)
+            except ModelConfigurationError:
+                # No usable classify key: run the deterministic passes only.
+                size_extractor = None
+            normalize_existing_measures(
+                session,
+                size_extractor=size_extractor,
+                max_size_extract_attempts=settings.max_size_extract_attempts,
+                assist_model=settings.assist_model,
+            )
             session.commit()
     finally:
         session_factory.kw["bind"].dispose()

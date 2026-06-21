@@ -68,3 +68,45 @@ def record_classify_cost(
     event.classify_model = model
     event.estimated_cost_usd = _add_costs(existing=event.estimated_cost_usd, addition=cost)
     session.commit()
+
+
+def record_size_extract_cost(
+    session: Session,
+    event: ParseCostEvent,
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    model: str | None,
+    cost: Decimal | None,
+) -> None:
+    """Add the size-extraction call's usage and cost onto an existing parse cost event. Commits."""
+    event.size_extract_input_tokens = input_tokens
+    event.size_extract_output_tokens = output_tokens
+    event.size_extract_model = model
+    event.estimated_cost_usd = _add_costs(existing=event.estimated_cost_usd, addition=cost)
+    session.commit()
+
+
+def record_standalone_size_extract_cost(
+    session: Session,
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    model: str | None,
+    cost: Decimal | None,
+) -> ParseCostEvent:
+    """Insert a job-less cost event for size-extraction spend during backfill. Commits.
+
+    Backfill has no ingestion job, so the event carries job_id=None and only the size-extract
+    columns, keeping the monthly cost figure complete.
+    """
+    event = ParseCostEvent(
+        job_id=None,
+        size_extract_input_tokens=input_tokens,
+        size_extract_output_tokens=output_tokens,
+        size_extract_model=model,
+        estimated_cost_usd=cost,
+    )
+    session.add(event)
+    session.commit()
+    return event

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from cartlog.categories.service import CategoryService
 from cartlog.db.models import LineItem, Receipt
-from cartlog.units import normalize_line_item
+from cartlog.units import resolve_line_measure
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -124,12 +124,21 @@ def persist_receipt(  # noqa: PLR0913 - each param is a distinct concern with no
             if item.measure_value is not None and item.measure_unit
             else None
         )
-        norm = normalize_line_item(
+        # Read the product's already-learned typical size for last-resort inference.
+        product_typical = (
+            (product.typical_measure_value, product.typical_measure_dimension)
+            if product.typical_measure_value is not None and product.typical_measure_dimension
+            else None
+        )
+        resolved = resolve_line_measure(
             quantity=quantity,
             unit=item.unit,
             unit_size=item.unit_size,
+            raw_description=item.raw_description,
+            canonical_name=item.canonical_name,
             line_total=line_total,
             llm_measure=llm_measure,
+            product_typical=product_typical,
         )
         receipt.line_items.append(
             LineItem(
@@ -138,13 +147,14 @@ def persist_receipt(  # noqa: PLR0913 - each param is a distinct concern with no
                 original_category=item.category,
                 quantity=quantity,
                 unit=item.unit,
-                unit_size=item.unit_size,
+                unit_size=resolved.unit_size_out,
                 unit_price=_money(item.unit_price),
                 line_total=line_total,
-                measure_quantity=norm.measure_quantity,
-                measure_dimension=norm.measure_dimension,
-                normalized_unit_price=norm.normalized_unit_price,
-                measure_status=norm.measure_status,
+                measure_quantity=resolved.result.measure_quantity,
+                measure_dimension=resolved.result.measure_dimension,
+                normalized_unit_price=resolved.result.normalized_unit_price,
+                measure_status=resolved.result.measure_status,
+                measure_source=resolved.measure_source,
             )
         )
 

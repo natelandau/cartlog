@@ -11,13 +11,15 @@ from pydantic_ai.usage import RunUsage
 
 from cartlog.categories.reclassify import reclassify_receipt, unmapped_categories_for
 from cartlog.categories.service import CategoryService
-from cartlog.constants import DEFAULT_MAX_RECLASSIFY_ATTEMPTS
+from cartlog.constants import DEFAULT_MAX_RECLASSIFY_ATTEMPTS, DEFAULT_MAX_SIZE_EXTRACT_ATTEMPTS
+from cartlog.db.backfill import infer_line_measures, recompute_product_typical_sizes
 from cartlog.db.models import JobStep, ReceiptStatus
-from cartlog.ingest.cost import record_classify_cost, record_parse_cost
+from cartlog.ingest.cost import record_classify_cost, record_parse_cost, record_size_extract_cost
 from cartlog.ingest.persistence import persist_receipt
 from cartlog.ingest.queue import complete_job, fail_job, set_job_step
 from cartlog.ingest.review import build_review_reasons
 from cartlog.parsing.pricing import estimate_cost
+from cartlog.sizes.extract import extract_sizes_receipt
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
     from cartlog.db.models import IngestionJob, Receipt
     from cartlog.parsing.category_classifier import CategoryClassifier
     from cartlog.parsing.protocol import ReceiptParser
+    from cartlog.parsing.size_extractor import SizeExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +86,9 @@ def process_job(  # noqa: PLR0913
     max_reclassify_attempts: int = DEFAULT_MAX_RECLASSIFY_ATTEMPTS,
     on_step: Callable[[JobStep], None] | None = None,
     parse_model: str | None = None,
-    classify_model: str | None = None,
+    assist_model: str | None = None,
+    size_extractor: SizeExtractor | None = None,
+    max_size_extract_attempts: int = DEFAULT_MAX_SIZE_EXTRACT_ATTEMPTS,
 ) -> Receipt | None:
     """Parse a claimed job's stored file and persist the result. Commits.
 
@@ -111,8 +116,11 @@ def process_job(  # noqa: PLR0913
             progress display. The worker omits it.
         parse_model: Provider-prefixed model id used to price the parse call (e.g.
             "anthropic:claude-opus-4-8"). None skips cost estimation but still records token counts.
-        classify_model: Provider-prefixed model id used to price the classify call. None skips cost
-            estimation but still records token counts.
+        assist_model: Provider-prefixed model id used to price the assist-model calls. None skips
+            cost estimation but still records token counts.
+        size_extractor: Optional LLM size extractor; when provided, runs a best-effort size sweep
+            after persist to recover sizes left in line text. None disables the sweep.
+        max_size_extract_attempts: Per-line cap on LLM size-extraction attempts.
 
     Returns:
         The committed Receipt on success, or None if the job failed.
@@ -120,6 +128,7 @@ def process_job(  # noqa: PLR0913
     try:
         parse_usage = RunUsage()
         classify_usage = RunUsage()
+        size_extract_usage = RunUsage()
         set_job_step(session, job, JobStep.EXTRACTING)
         _notify_step(on_step, JobStep.EXTRACTING)
         parsed = parser.parse(Path(job.image_path), usage=parse_usage)
@@ -160,6 +169,33 @@ def process_job(  # noqa: PLR0913
                 max_attempts=max_reclassify_attempts,
                 usage=classify_usage,
             )
+        # Third pass: recover sizes the parser left in the description, then learn the products'
+        # typical sizes so this batch's siblings can be inferred. Best-effort: never fail the
+        # receipt on an extractor/network error.
+        if size_extractor is not None:
+            try:
+                extract_sizes_receipt(
+                    session,
+                    receipt,
+                    size_extractor,
+                    max_attempts=max_size_extract_attempts,
+                    usage=size_extract_usage,
+                )
+                # Scope the recompute to this receipt's products; the rest of the catalog is
+                # unaffected by this upload, so a full-table rescan on every job is wasted work.
+                recompute_product_typical_sizes(
+                    session, product_ids={line.product_id for line in receipt.line_items}
+                )
+                # Re-infer this receipt's still-unresolved lines so a size learned from a sibling
+                # earlier in the batch applies now rather than waiting for the next startup.
+                infer_line_measures(receipt.line_items)
+                session.flush()
+            except Exception:  # noqa: BLE001  # size recovery is best-effort
+                logger.warning(
+                    "Size extraction failed for receipt %s; leaving sizes as-is",
+                    receipt.id,
+                    exc_info=True,
+                )
         reasons = build_review_reasons(
             parsed,
             unmapped=unmapped,
@@ -191,21 +227,41 @@ def process_job(  # noqa: PLR0913
     if classifier is not None:
         try:
             classify_cost = (
-                estimate_cost(model=classify_model, usage=classify_usage)
-                if classify_model
-                else None
+                estimate_cost(model=assist_model, usage=classify_usage) if assist_model else None
             )
             record_classify_cost(
                 session,
                 cost_event,
                 input_tokens=classify_usage.input_tokens,
                 output_tokens=classify_usage.output_tokens,
-                model=classify_model,
+                model=assist_model,
                 cost=classify_cost,
             )
         except Exception:  # noqa: BLE001  # cost tracking must never fail a committed receipt
             logger.warning(
                 "Failed to record classify cost for job %s; receipt %s is unaffected",
+                job.id,
+                receipt.id,
+                exc_info=True,
+            )
+    if size_extractor is not None:
+        try:
+            size_cost = (
+                estimate_cost(model=assist_model, usage=size_extract_usage)
+                if assist_model
+                else None
+            )
+            record_size_extract_cost(
+                session,
+                cost_event,
+                input_tokens=size_extract_usage.input_tokens,
+                output_tokens=size_extract_usage.output_tokens,
+                model=assist_model,
+                cost=size_cost,
+            )
+        except Exception:  # noqa: BLE001  # cost tracking must never fail a committed receipt
+            logger.warning(
+                "Failed to record size-extract cost for job %s; receipt %s is unaffected",
                 job.id,
                 receipt.id,
                 exc_info=True,

@@ -19,15 +19,17 @@ The `duty` task runner wraps common workflows. Invoke it as `uv run duty <task>`
 - `src/cartlog/backup.py` — `create_backup()` snapshots the SQLite database with `VACUUM INTO` and bundles it with the receipt images into one tar.gz (`cartlog.db` + `receipt_images/`). Destination precedence: explicit `output` > `CARTLOG_BACKUP_DIR` > current directory. The web admin Settings page (`Admin → Settings → Backup`) builds into a temp dir and streams the archive to the browser instead of writing it to disk.
 - `src/cartlog/web/` — FastAPI app factory (`app.py`), routers, Jinja templates, Tailwind/daisyUI assets.
 - `src/cartlog/ingest/` — upload queue and worker pipeline; web uploads enqueue jobs that workers parse.
-- `src/cartlog/parsing/` — Pydantic AI vision parser and category classifier.
-- `src/cartlog/db/` — SQLAlchemy models, session factory, and seed data. Migrations live in the top-level `alembic/`.
-- `src/cartlog/bootstrap.py` — `prepare_runtime()` runs migrations and seeding; called by `serve`.
+- `src/cartlog/parsing/` — Pydantic AI vision parser, category classifier, and a focused LLM size extractor (`size_extractor.py`, `build_size_extractor`) that recovers a package size from line text.
+- `src/cartlog/units.py` — pure measure resolution: `resolve_line_measure` layers deterministic size extraction, OCR repair, per-each/count detection, and product-typical inference over `normalize_line_item`, recording provenance (`MeasureSource`).
+- `src/cartlog/sizes/` — `extract.py` runs the LLM size extractor over lines that still lack a size, capped per line by `CARTLOG_MAX_SIZE_EXTRACT_ATTEMPTS`.
+- `src/cartlog/db/` — SQLAlchemy models, session factory, and seed data. `backfill.py` holds the four-pass `normalize_existing_measures` (deterministic resolve, LLM size recovery, typical-size learning, inference) and runs at startup. Migrations live in the top-level `alembic/`.
+- `src/cartlog/bootstrap.py` — `prepare_runtime()` runs migrations, seeding, and the size-normalization backfill (`normalize_existing_measures`); called by `serve`. The LLM size pass needs the assist model and is skipped when no key is configured.
 
 ## Configuration
 
 Settings load from environment variables and `.env.secret` (see `config.py` and `.env.sample`). Exported env vars override the file. `CARTLOG_DATABASE_URL` accepts a bare filesystem path (e.g. `cartlog.db`); the `sqlite:///` prefix is added and the directory is verified at startup.
 
-The LLM provider is selected via `CARTLOG_PARSE_MODEL` and `CARTLOG_CLASSIFY_MODEL`, which take provider-prefixed model strings (e.g. `anthropic:claude-opus-4-8`, `openai:gpt-4o`). Credentials are supplied via each provider's native env var (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`), not a `CARTLOG_`-prefixed key. Pydantic AI resolves the provider and reads the key automatically.
+The LLM provider is selected via `CARTLOG_PARSE_MODEL` and `CARTLOG_ASSIST_MODEL`, which take provider-prefixed model strings (e.g. `anthropic:claude-opus-4-8`, `openai:gpt-4o`). `CARTLOG_PARSE_MODEL` is the primary model: it must support vision (image input), structured output, and PDF documents to read PDF receipts. `CARTLOG_ASSIST_MODEL` is a cheaper secondary model: it needs structured output only and works purely from text (no vision), so a small, fast model fits. Credentials are supplied via each provider's native env var (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`), not a `CARTLOG_`-prefixed key. Pydantic AI resolves the provider and reads the key automatically.
 
 ## Frontend / CSS
 

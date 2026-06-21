@@ -7,10 +7,14 @@ import pytest
 
 from cartlog.constants import COUNT, UNIT_FACTORS, VOLUME, WEIGHT
 from cartlog.units import (
+    MeasureSource,
     MeasureStatus,
+    detect_count_sale,
+    extract_size,
     normalize_line_item,
     normalize_unit_token,
     parse_size,
+    resolve_line_measure,
 )
 
 
@@ -170,3 +174,133 @@ def test_measure_status_is_a_str_enum_with_three_members():
     assert MeasureStatus.NOT_APPLICABLE == "not_applicable"
     assert MeasureStatus.NEEDS_REVIEW == "needs_review"
     assert {m.value for m in MeasureStatus} == {"resolved", "not_applicable", "needs_review"}
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Granola, Maple Sea Salt, 11oz, Bob's", (Decimal(11), "oz")),
+        ("Milk, Whole, 64oz, Ithaca", (Decimal(64), "oz")),
+        ("Jerky, Venison, S&P, 1.150z., Chomps", (Decimal("1.15"), "oz")),  # repaired 0z -> oz
+        ("1602", None),  # bare trailing "02" is NOT fabricated into oz (LLM layer recovers it)
+        ("2002", None),  # bare trailing "02" is not a size
+        ("1202", None),  # bare trailing "02" is not a size
+        ("Soda 6x330ml", (Decimal(1980), "ml")),  # multipack combined
+        ("Whole Milk 2%", None),  # percentage is not a size
+        ("Avocados, Organic", None),  # no unit token
+        ("Receipt 2024", None),  # four-digit year is not a size
+    ],
+)
+def test_extract_size(text, expected):
+    """Verify embedded size extraction handles OCR repair, multipacks, and false-positive rejection."""
+    assert extract_size(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("2 Avocados, Organic, Per Count", True),
+        ("Peaches, OG, Per Each", True),
+        ("Plums Per count 1.45 each", True),
+        ("Granola 11oz", False),
+    ],
+)
+def test_detect_count_sale(text, expected):
+    """Verify per-each phrasing is detected as a count sale and other text is not."""
+    assert detect_count_sale(text) is expected
+
+
+def test_resolve_uses_printed_structured_size():
+    """Verify that a structured unit_size on the receipt is resolved as PRINTED."""
+    out = resolve_line_measure(
+        quantity=Decimal(1),
+        unit=None,
+        unit_size="64oz",
+        raw_description="Milk 64oz",
+        canonical_name="milk",
+        line_total=Decimal("4.00"),
+    )
+    assert out.measure_source == MeasureSource.PRINTED
+    assert out.result.measure_status == MeasureStatus.RESOLVED
+
+
+def test_resolve_extracts_size_from_description_when_unit_size_blank():
+    """Verify that a size embedded in the description text is extracted and sourced as EXTRACTED."""
+    out = resolve_line_measure(
+        quantity=Decimal(1),
+        unit=None,
+        unit_size=None,
+        raw_description="Granola, Maple Sea Salt, 11oz, Bob's",
+        canonical_name="granola",
+        line_total=Decimal("5.00"),
+    )
+    assert out.measure_source == MeasureSource.EXTRACTED
+    assert out.unit_size_out == "11oz"
+    assert out.result.measure_status == MeasureStatus.RESOLVED
+
+
+def test_resolve_detects_count_sale_for_per_each_produce():
+    """Verify that per-each produce is resolved via count-sale detection with the correct price."""
+    out = resolve_line_measure(
+        quantity=Decimal(2),
+        unit=None,
+        unit_size=None,
+        raw_description="2 Avocados, Organic, OG, Per Count",
+        canonical_name="avocado",
+        line_total=Decimal("4.04"),
+    )
+    assert out.measure_source == MeasureSource.EXTRACTED
+    assert out.result.measure_dimension == "count"
+    assert out.result.normalized_unit_price == Decimal("2.020000")
+
+
+def test_resolve_infers_from_product_typical_as_last_resort():
+    """Verify that product_typical is used as the final inference layer and never rewrites unit_size."""
+    out = resolve_line_measure(
+        quantity=Decimal(1),
+        unit=None,
+        unit_size=None,
+        raw_description="Mystery Pasta",
+        canonical_name="pasta",
+        line_total=Decimal("2.00"),
+        product_typical=(Decimal("453.592"), "weight"),  # one 1lb box in grams
+    )
+    assert out.measure_source == MeasureSource.INFERRED
+    assert out.result.measure_status == MeasureStatus.RESOLVED
+    assert out.unit_size_out is None  # inference never rewrites verbatim unit_size
+
+
+def test_resolve_returns_none_source_when_nothing_resolves():
+    """Verify that NONE source is returned when no layer can resolve the measure."""
+    out = resolve_line_measure(
+        quantity=Decimal(1),
+        unit=None,
+        unit_size=None,
+        raw_description="A Single Apple",
+        canonical_name="apple",
+        line_total=Decimal("0.50"),
+    )
+    assert out.measure_source == MeasureSource.NONE
+
+
+def test_resolve_round_number_size_in_description_is_parseable():
+    """Verify that a round number size extracted from description resolves without scientific notation.
+
+    Round numbers like 100g produce Decimal("100").  Before the fix, .normalize() would
+    emit "1E+2g", which _SIZE_RE cannot parse, leaving the line NOT_APPLICABLE.  After the
+    fix, ":f" formatting emits "100g", which parse_size handles correctly.
+    """
+    # Given a line with a round-number size embedded in its description and no structured size
+    out = resolve_line_measure(
+        quantity=Decimal(1),
+        unit=None,
+        unit_size=None,
+        raw_description="Beans 100g",
+        canonical_name="beans",
+        line_total=Decimal("2.00"),
+    )
+
+    # Then the size is extracted deterministically and the line is resolved
+    assert out.measure_source == MeasureSource.EXTRACTED
+    assert out.result.measure_status == MeasureStatus.RESOLVED
+    assert out.unit_size_out == "100g"

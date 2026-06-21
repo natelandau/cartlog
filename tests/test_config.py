@@ -118,14 +118,22 @@ def test_settings_model_defaults(monkeypatch):
     """Verify the provider-neutral model settings fall back to their declared defaults."""
     # Given no model overrides in the environment
     monkeypatch.delenv("CARTLOG_PARSE_MODEL", raising=False)
-    monkeypatch.delenv("CARTLOG_CLASSIFY_MODEL", raising=False)
+    monkeypatch.delenv("CARTLOG_ASSIST_MODEL", raising=False)
 
     # When loading settings
     settings = Settings()
 
     # Then the provider-prefixed defaults are used
     assert settings.parse_model == "anthropic:claude-opus-4-8"
-    assert settings.classify_model == "anthropic:claude-haiku-4-5"
+    assert settings.assist_model == "anthropic:claude-haiku-4-5"
+
+
+def test_assist_model_default_and_env(monkeypatch):
+    """Verify the secondary model is configured via CARTLOG_ASSIST_MODEL and defaults to Haiku."""
+    assert Settings().assist_model == "anthropic:claude-haiku-4-5"
+    monkeypatch.setenv("CARTLOG_ASSIST_MODEL", "openai:gpt-4o-mini")
+    assert Settings().assist_model == "openai:gpt-4o-mini"
+    assert not hasattr(Settings(), "classify_model")
 
 
 def test_settings_parse_model_overrides_default_from_env(monkeypatch):

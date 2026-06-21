@@ -20,11 +20,15 @@ class Settings(BaseSettings):
 
     # Provider-prefixed model id for the receipt vision parser (e.g. "openai:gpt-5.2").
     parse_model: str = "anthropic:claude-opus-4-8"
-    # Provider-prefixed model id for the focused category reclassification pass.
-    classify_model: str = "anthropic:claude-haiku-4-5"
+    # Provider-prefixed id for the cheap, text-only assist model used by focused secondary
+    # passes (category reclassification and size extraction). Needs structured output; no vision.
+    assist_model: str = "anthropic:claude-haiku-4-5"
     # Max times the LLM reclassifier is spent on a still-Uncategorized product before it is
     # left as-is for manual review (prevents unbounded retries on products it cannot place).
     max_reclassify_attempts: int = 2
+    # Max times the LLM size extractor is spent on a line that still has no resolvable size
+    # before it is left as-is for manual review.
+    max_size_extract_attempts: int = 2
 
     # Accepts a bare SQLite file path (e.g. /app/data.db); the sqlite:/// prefix is added
     # automatically by the validator so users never have to remember it.

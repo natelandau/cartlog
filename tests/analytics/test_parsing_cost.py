@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from cartlog.analytics.service import AnalyticsService
 from cartlog.db.models import ParseCostEvent
+from cartlog.ingest.cost import record_size_extract_cost, record_standalone_size_extract_cost
 
 
 def _event(cost, created):
@@ -91,3 +92,40 @@ def test_parsing_cost_overview_splits_all_time_and_last_30_days(session_factory)
     assert overview.total_all_time == Decimal("1.00")
     assert overview.total_last_30_days == Decimal("0.40")
     assert overview.avg_per_receipt == Decimal("0.50")
+
+
+def test_record_size_extract_cost_adds_onto_event(session):
+    """Verify size-extract cost adds onto an existing event and updates fields."""
+    # Given an existing parse cost event
+    event = ParseCostEvent(job_id=1, parse_model="m", estimated_cost_usd=Decimal("0.01"))
+    session.add(event)
+    session.commit()
+
+    # When recording size-extract cost
+    record_size_extract_cost(
+        session,
+        event,
+        input_tokens=100,
+        output_tokens=20,
+        model="anthropic:claude-haiku-4-5",
+        cost=Decimal("0.002"),
+    )
+    session.refresh(event)
+
+    # Then size-extract fields are set and cost is added
+    assert event.size_extract_input_tokens == 100
+    assert event.size_extract_model == "anthropic:claude-haiku-4-5"
+    assert event.estimated_cost_usd == Decimal("0.012")
+
+
+def test_record_standalone_size_extract_cost_creates_jobless_event(session):
+    """Verify standalone size-extract cost creates a job-less event."""
+    # When recording standalone size-extract cost
+    event = record_standalone_size_extract_cost(
+        session, input_tokens=50, output_tokens=10, model="m", cost=Decimal("0.001")
+    )
+
+    # Then a job-less event is created with size-extract fields set
+    assert event.job_id is None
+    assert event.size_extract_output_tokens == 10
+    assert event.estimated_cost_usd == Decimal("0.001")
