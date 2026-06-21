@@ -6,25 +6,25 @@ from cartlog.web.insights import DEFAULT_VIEW, INSIGHT_VIEWS, get_view
 
 
 def test_registry_lists_the_three_ported_analyses():
-    """The three existing charts are registered with stable URL keys."""
+    """Verify the three existing charts are registered with stable URL keys."""
     keys = [v.key for v in INSIGHT_VIEWS]
     assert keys == ["price-history", "store-comparison", "category-spend"]
 
 
 def test_registry_keys_are_unique():
-    """Duplicate keys would make /insights/{view} ambiguous."""
+    """Verify keys are unique so /insights/{view} is never ambiguous."""
     keys = [v.key for v in INSIGHT_VIEWS]
     assert len(keys) == len(set(keys))
 
 
 def test_default_view_is_first_entry():
-    """The landing analysis is the first registered view."""
+    """Verify the landing analysis is the first registered view."""
     assert DEFAULT_VIEW is INSIGHT_VIEWS[0]
     assert DEFAULT_VIEW.key == "price-history"
 
 
 def test_get_view_returns_match_by_key():
-    """get_view resolves a known key to its InsightView."""
+    """Verify get_view resolves a known key to its InsightView."""
     view = get_view("store-comparison")
     assert view is not None
     assert view.label == "Store comparison"
@@ -32,11 +32,11 @@ def test_get_view_returns_match_by_key():
 
 
 def test_get_view_returns_none_for_unknown_key():
-    """An unknown key yields None so the route can 404."""
+    """Verify an unknown key yields None so the route can 404."""
     assert get_view("not-a-view") is None
 
 
 def test_get_view_resolves_every_registered_view():
-    """Every registered key resolves back to its own InsightView, guarding typo'd template paths."""
+    """Verify every registered key resolves back to its own InsightView, guarding typo'd templates."""
     for view in INSIGHT_VIEWS:
         assert get_view(view.key) is view

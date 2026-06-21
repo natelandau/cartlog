@@ -22,7 +22,11 @@ const Insights = (function () {
       const s = document.createElement("script");
       s.src = "/static/plotly.min.js";
       s.onload = () => resolve(window.Plotly);
-      s.onerror = () => reject(new Error("Failed to load Plotly"));
+      s.onerror = () => {
+        // Drop the cached rejection so a later render can retry instead of failing forever.
+        plotlyPromise = null;
+        reject(new Error("Failed to load Plotly"));
+      };
       document.head.appendChild(s);
     });
     return plotlyPromise;
@@ -30,6 +34,17 @@ const Insights = (function () {
 
   function register(key, fn) {
     renderers.set(key, fn);
+  }
+
+  // Replace a chart container with a centered empty-state message. Purges any prior Plotly
+  // chart first (renderers await ensurePlotly, so Plotly is loaded here) and uses textContent
+  // so caller-supplied data never reaches innerHTML.
+  function showEmpty(el, message) {
+    if (window.Plotly) Plotly.purge(el);
+    const msg = document.createElement("p");
+    msg.className = "text-base-content/60 py-16 text-center";
+    msg.textContent = message;
+    el.replaceChildren(msg);
   }
 
   // Render whatever analysis is currently mounted in the panel. A view whose root carries no
@@ -123,14 +138,16 @@ const Insights = (function () {
     };
   }
 
-  return { register, ensurePlotly, renderActive, getJSON, themeColor, cartlogPalette, baseLayout, priceHistoryTimeAxis, PLOT_CONFIG };
+  return { register, ensurePlotly, renderActive, getJSON, showEmpty, themeColor, cartlogPalette, baseLayout, priceHistoryTimeAxis, PLOT_CONFIG };
 })();
 
 // Render the server-embedded initial fragment once the DOM is ready.
 document.addEventListener("DOMContentLoaded", Insights.renderActive);
-// Render the freshly swapped fragment after each select-driven htmx swap.
+// Render the freshly swapped fragment after each select-driven htmx swap. htmx fires afterSettle
+// on each inserted node (the analysis root carries data-insight-view), not on #insights-panel, so
+// match the root element; it matches exactly once per swap, avoiding a double render.
 document.body.addEventListener("htmx:afterSettle", function (e) {
-  if (e.target && e.target.id === "insights-panel") Insights.renderActive();
+  if (e.target.matches && e.target.matches("[data-insight-view]")) Insights.renderActive();
 });
 // Back/forward restores the panel from htmx's history cache, which fires historyRestore on the
 // body rather than afterSettle on the panel, so re-render the restored analysis here too.

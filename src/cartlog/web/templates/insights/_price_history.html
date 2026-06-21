@@ -9,18 +9,19 @@
 </div>
 <script>
   (function () {
-    const root = document.querySelector('[data-insight-view="price-history"]');
+    // Re-query root on each render so a renderer invoked after an htmx history-restore (which
+    // re-inserts the fragment without re-running this script) acts on the live node, not a stale
+    // closure over the pre-navigation element.
+    function root() {
+      return document.querySelector('[data-insight-view="price-history"]');
+    }
     async function render() {
       await Insights.ensurePlotly();
-      const product = root.querySelector("#ph-product").value;
+      const product = root().querySelector("#ph-product").value;
       const data = await Insights.getJSON(`/api/analytics/price-history?product=${encodeURIComponent(product)}`);
-      const el = root.querySelector("#price-history-chart");
+      const el = root().querySelector("#price-history-chart");
       if (!data.points.length) {
-        Plotly.purge(el);
-        const msg = document.createElement("p");
-        msg.className = "text-base-content/60 py-16 text-center";
-        msg.textContent = `No purchases recorded for "${data.product}".`;
-        el.replaceChildren(msg);
+        Insights.showEmpty(el, `No purchases recorded for "${data.product}".`);
         return;
       }
       const dates = data.points.map((p) => p.purchase_date);
@@ -49,7 +50,7 @@
       };
       Plotly.newPlot(el, [trace], layout, Insights.PLOT_CONFIG);
     }
-    root.querySelector("#ph-show").addEventListener("click", render);
+    root().querySelector("#ph-show").addEventListener("click", render);
     Insights.register("price-history", render);
   })();
 </script>

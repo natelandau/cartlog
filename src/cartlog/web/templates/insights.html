@@ -14,7 +14,7 @@
     {# Path-based htmx navigation: htmx.ajax issues GET /insights/<key>, swaps the panel, and
        pushes the canonical deep-link URL so back/forward and "open in new tab" work. #}
     <select id="insight-select" class="select w-full"
-            onchange="htmx.ajax('GET', '/insights/' + this.value, {target: '#insights-panel', swap: 'innerHTML', pushUrl: true})">
+            onchange="htmx.ajax('GET', '/insights/' + this.value, {target: '#insights-panel', swap: 'innerHTML', push: true})">
       {% for v in views %}
       <option value="{{ v.key }}" {% if v.key == selected.key %}selected{% endif %}>{{ v.label }}</option>
       {% endfor %}

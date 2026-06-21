@@ -159,7 +159,7 @@ def test_search_results_no_match_message(app_client):
 
 
 def test_insights_index_redirects_to_default_view(app_client):
-    """GET /insights lands on the default analysis."""
+    """Verify GET /insights lands on the default analysis."""
     # When loading the bare insights index without following the redirect
     response = app_client.get("/insights", follow_redirects=False)
 
@@ -169,7 +169,7 @@ def test_insights_index_redirects_to_default_view(app_client):
 
 
 def test_insights_view_renders_full_shell(app_client):
-    """A plain GET of an analysis renders the shell: select, panel, and rendering layer."""
+    """Verify a plain GET of an analysis renders the shell: select, panel, and rendering layer."""
     # When loading an analysis as a full page
     response = app_client.get("/insights/price-history")
 
@@ -186,7 +186,7 @@ def test_insights_view_renders_full_shell(app_client):
 
 
 def test_insights_view_htmx_returns_bare_fragment(app_client):
-    """An htmx request returns only the fragment, without the shell chrome."""
+    """Verify an htmx request returns only the fragment, without the shell chrome."""
     # When htmx requests an analysis
     response = app_client.get("/insights/store-comparison", headers={"HX-Request": "true"})
 
@@ -197,8 +197,22 @@ def test_insights_view_htmx_returns_bare_fragment(app_client):
     assert "<nav" not in response.text
 
 
+def test_insights_view_history_restore_returns_full_shell(app_client):
+    """Verify an htmx history-restore re-fetch gets the full shell, not a bare fragment."""
+    # When htmx re-fetches on a history-cache miss (it sets both headers and swaps into <body>)
+    response = app_client.get(
+        "/insights/store-comparison",
+        headers={"HX-Request": "true", "HX-History-Restore-Request": "true"},
+    )
+
+    # Then the full shell is returned so the page is not replaced by a chrome-less fragment
+    assert response.status_code == 200
+    assert "/static/insights.js" in response.text
+    assert 'id="insight-select"' in response.text
+
+
 def test_insights_unknown_view_404s(app_client):
-    """An unregistered analysis key is a 404, not a blank shell."""
+    """Verify an unregistered analysis key is a 404, not a blank shell."""
     # When requesting a view that is not registered
     response = app_client.get("/insights/not-a-view")
 
@@ -207,7 +221,7 @@ def test_insights_unknown_view_404s(app_client):
 
 
 def test_insights_js_rerenders_on_history_restore(app_client):
-    """Back/forward (htmx history restore) must re-trigger chart rendering, else the panel is blank."""
+    """Verify back/forward (htmx history restore) re-triggers chart rendering, else the panel is blank."""
     # When fetching the served Insights rendering layer
     response = app_client.get("/static/insights.js")
 
@@ -217,7 +231,7 @@ def test_insights_js_rerenders_on_history_restore(app_client):
 
 
 def test_charts_redirects_to_insights(app_client):
-    """The legacy /charts path permanently redirects to /insights."""
+    """Verify the legacy /charts path permanently redirects to /insights."""
     # When loading the old charts URL without following the redirect
     response = app_client.get("/charts", follow_redirects=False)
 
