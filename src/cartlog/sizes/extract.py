@@ -1,23 +1,23 @@
 """Run the focused LLM size extractor over lines that still lack a resolvable size.
 
 Mirrors categories/reclassify.py: each eligible line is sent to the extractor, an attempt is
-spent whether or not a size comes back, and a returned size is applied via resolve_line_measure
-so the line gains a normalized, comparable measure. The per-line attempt cap stops us paying to
-re-examine a genuinely size-less line on every run.
+spent whether or not a size comes back, and a returned size is applied via structure_line and
+compute_measure so the line gains a normalized, comparable measure. The per-line attempt cap
+stops us paying to re-examine a genuinely size-less line on every run.
 """
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from cartlog.constants import DEFAULT_MAX_SIZE_EXTRACT_ATTEMPTS
 from cartlog.parsing.size_extractor import LineToSize
+from cartlog.parsing.structuring import structure_line
 from cartlog.units import (
     MeasureSource,
     MeasureStatus,
-    format_size_text,
-    resolve_line_measure,
+    SoldBy,
+    compute_measure,
 )
 
 if TYPE_CHECKING:
@@ -31,9 +31,15 @@ if TYPE_CHECKING:
 
 
 def _is_eligible(line: LineItem, max_attempts: int) -> bool:
-    """A line is eligible for LLM size extraction when unresolved, not manual, and under cap."""
+    """A line is eligible for LLM size extraction when sold per item with no known size.
+
+    MEASURE lines (sold loose by weight/volume) never need a per-package size. ITEM lines that
+    already carry a size_amount have already been resolved and need no further extraction.
+    Manual entries are pinned by the user and must never be overwritten.
+    """
     return (
-        line.measure_status != MeasureStatus.RESOLVED
+        line.sold_by == SoldBy.ITEM
+        and line.size_amount is None
         and line.measure_source != MeasureSource.MANUAL
         and line.size_extract_attempts < max_attempts
     )
@@ -85,26 +91,31 @@ def extract_sizes_for_lines(
         size = answers.get(str(line.id))
         if size is None:
             continue
-        out = resolve_line_measure(
+        structured = structure_line(
             quantity=line.quantity,
-            unit=line.unit,
-            unit_size=line.unit_size,
+            unit=None,
+            unit_size=None,
             raw_description=line.raw_description,
             canonical_name=line.product.canonical_name,
-            line_total=line.line_total,
             llm_measure=(size.value, size.unit),
         )
-        if out.result.measure_status == MeasureStatus.RESOLVED:
-            # The orchestrator's unit_size_out echoes the original (still blank) unit_size, so
-            # persist a textual size derived from the recovered measure. Without this the next
-            # backfill pass 1 finds no structured size and downgrades the row.
-            line.unit_size = out.unit_size_out or format_size_text(
-                Decimal(str(size.value)), size.unit
-            )
-            line.measure_quantity = out.result.measure_quantity
-            line.measure_dimension = out.result.measure_dimension
-            line.normalized_unit_price = out.result.normalized_unit_price
-            line.measure_status = out.result.measure_status
+        norm = compute_measure(
+            sold_by=structured.sold_by,
+            quantity=line.quantity,
+            measure_unit=structured.measure_unit,
+            size_amount=structured.size_amount,
+            size_unit=structured.size_unit,
+            line_total=line.line_total,
+        )
+        if norm.measure_status == MeasureStatus.RESOLVED:
+            line.sold_by = structured.sold_by
+            line.measure_unit = structured.measure_unit
+            line.size_amount = structured.size_amount
+            line.size_unit = structured.size_unit
+            line.measure_quantity = norm.measure_quantity
+            line.measure_dimension = norm.measure_dimension
+            line.normalized_unit_price = norm.normalized_unit_price
+            line.measure_status = norm.measure_status
             line.measure_source = MeasureSource.EXTRACTED
             resolved += 1
     session.flush()

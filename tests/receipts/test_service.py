@@ -33,7 +33,7 @@ from cartlog.receipts.service import (
     image_file_available,
     reparse_receipt,
 )
-from cartlog.units import MeasureSource, MeasureStatus
+from cartlog.units import MeasureSource, MeasureStatus, SoldBy
 from cartlog.web.forms import LineEdit, ReceiptEdit
 from tests.factories import seed_receipts
 
@@ -251,8 +251,10 @@ def _line_edit(line: LineItem, **overrides: object) -> LineEdit:
         "canonical_name": line.product.canonical_name,
         "category_id": None,
         "quantity": line.quantity,
-        "unit": line.unit,
-        "unit_size": line.unit_size,
+        "sold_by": SoldBy(line.sold_by),
+        "measure_unit": line.measure_unit,
+        "size_amount": line.size_amount,
+        "size_unit": line.size_unit,
         "unit_price": line.unit_price,
         "line_total": line.line_total,
     }
@@ -304,8 +306,10 @@ def test_apply_receipt_edit_adds_new_line(session) -> None:
         canonical_name="bread",
         category_id=bakery.id,
         quantity=Decimal(1),
-        unit=None,
-        unit_size=None,
+        sold_by=SoldBy.ITEM,
+        measure_unit=None,
+        size_amount=None,
+        size_unit=None,
         unit_price=Decimal("2.50"),
         line_total=Decimal("2.50"),
     )
@@ -406,8 +410,10 @@ def test_apply_receipt_edit_dedups_new_shared_product(session) -> None:
         canonical_name="bread",
         category_id=bakery.id,
         quantity=Decimal(1),
-        unit=None,
-        unit_size=None,
+        sold_by=SoldBy.ITEM,
+        measure_unit=None,
+        size_amount=None,
+        size_unit=None,
         unit_price=Decimal("2.00"),
         line_total=Decimal("2.00"),
     )
@@ -417,8 +423,10 @@ def test_apply_receipt_edit_dedups_new_shared_product(session) -> None:
         canonical_name="bread",
         category_id=bakery.id,
         quantity=Decimal(1),
-        unit=None,
-        unit_size=None,
+        sold_by=SoldBy.ITEM,
+        measure_unit=None,
+        size_amount=None,
+        size_unit=None,
         unit_price=Decimal("2.50"),
         line_total=Decimal("2.50"),
     )
@@ -518,8 +526,10 @@ def line_item_factory(session):
     def factory(
         *,
         quantity: Decimal,
-        unit: str | None,
-        unit_size: str | None,
+        sold_by: SoldBy = SoldBy.ITEM,
+        measure_unit: str | None = None,
+        size_amount: Decimal | None = None,
+        size_unit: str | None = None,
         line_total: Decimal,
         measure_source: MeasureSource = MeasureSource.NONE,
         measure_dimension: str | None = None,
@@ -540,8 +550,10 @@ def line_item_factory(session):
             product=product,
             raw_description="TEST ITEM",
             quantity=quantity,
-            unit=unit,
-            unit_size=unit_size,
+            sold_by=sold_by,
+            measure_unit=measure_unit,
+            size_amount=size_amount,
+            size_unit=size_unit,
             unit_price=line_total,
             line_total=line_total,
             measure_source=measure_source,
@@ -556,22 +568,24 @@ def line_item_factory(session):
 
 
 def test_apply_line_item_edit_recomputes_measure_on_size_change(session, line_item_factory) -> None:
-    """Verify editing unit_size recomputes the measure and stamps it MANUAL."""
+    """Verify editing size_amount/size_unit recomputes the measure and stamps it MANUAL."""
     # Given a line with no resolved size
-    line = line_item_factory(quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal(4))
+    line = line_item_factory(quantity=Decimal(1), line_total=Decimal(4))
 
-    # When the size is edited to a parseable value
+    # When the size is edited to a parseable value (2L = 2000 ml)
     apply_line_item_edit(
         session,
         line,
         canonical_name=line.product.canonical_name,
         category_id=None,
-        unit=None,
-        unit_size="2L",
+        sold_by=SoldBy.ITEM,
+        size_amount=Decimal(2),
+        size_unit="L",
     )
 
     # Then the measure columns are recomputed and provenance is MANUAL
-    assert line.unit_size == "2L"
+    assert line.size_amount == Decimal(2)
+    assert line.size_unit == "L"
     assert line.measure_dimension == "volume"
     assert line.measure_quantity == Decimal("2000.0000")
     assert line.normalized_unit_price == Decimal("0.002000")
@@ -579,24 +593,31 @@ def test_apply_line_item_edit_recomputes_measure_on_size_change(session, line_it
     assert line.measure_source == MeasureSource.MANUAL
 
 
-def test_apply_line_item_edit_blank_size_normalizes_to_none(session, line_item_factory) -> None:
-    """Verify blank unit/unit_size strings are stored as None."""
-    # Given a line with a size
-    line = line_item_factory(quantity=Decimal(1), unit="lb", unit_size="2L", line_total=Decimal(4))
+def test_apply_line_item_edit_clearing_size_fields(session, line_item_factory) -> None:
+    """Verify passing None for size fields clears them to None."""
+    # Given a line with size fields set
+    line = line_item_factory(
+        quantity=Decimal(1),
+        sold_by=SoldBy.ITEM,
+        size_amount=Decimal(2),
+        size_unit="L",
+        line_total=Decimal(4),
+    )
 
-    # When cleared with blank strings
+    # When size_amount and size_unit are explicitly cleared
     apply_line_item_edit(
         session,
         line,
         canonical_name=line.product.canonical_name,
         category_id=None,
-        unit="  ",
-        unit_size="",
+        sold_by=SoldBy.ITEM,
+        size_amount=None,
+        size_unit=None,
     )
 
     # Then both are None
-    assert line.unit is None
-    assert line.unit_size is None
+    assert line.size_amount is None
+    assert line.size_unit is None
 
 
 def test_apply_line_item_edit_product_only_leaves_measure_untouched(
@@ -606,8 +627,9 @@ def test_apply_line_item_edit_product_only_leaves_measure_untouched(
     # Given a line whose measure was inferred
     line = line_item_factory(
         quantity=Decimal(1),
-        unit="lb",
-        unit_size="2L",
+        sold_by=SoldBy.ITEM,
+        size_amount=Decimal(2),
+        size_unit="L",
         line_total=Decimal(4),
         measure_source=MeasureSource.INFERRED,
         measure_dimension="volume",
@@ -616,14 +638,15 @@ def test_apply_line_item_edit_product_only_leaves_measure_untouched(
     before_quantity = line.measure_quantity
     before_normalized_unit_price = line.normalized_unit_price
 
-    # When only the product name changes (unit/unit_size passed unchanged)
+    # When only the product name changes (measure fields passed unchanged)
     apply_line_item_edit(
         session,
         line,
         canonical_name="Renamed Product",
         category_id=None,
-        unit="lb",
-        unit_size="2L",
+        sold_by=SoldBy.ITEM,
+        size_amount=Decimal(2),
+        size_unit="L",
     )
 
     # Then measure provenance and all recomputed measure columns are unchanged
@@ -636,7 +659,7 @@ def test_apply_line_item_edit_product_only_leaves_measure_untouched(
 def test_apply_line_item_edit_updates_receipt_text(session, line_item_factory) -> None:
     """Verify a supplied raw_description overwrites the line's receipt text."""
     # Given a line with the seeded receipt text
-    line = line_item_factory(quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal(4))
+    line = line_item_factory(quantity=Decimal(1), line_total=Decimal(4))
 
     # When the receipt text is edited
     apply_line_item_edit(
@@ -656,7 +679,7 @@ def test_apply_line_item_edit_none_receipt_text_leaves_it_unchanged(
 ) -> None:
     """Verify omitting raw_description (None) leaves the existing receipt text intact."""
     # Given a line with existing receipt text
-    line = line_item_factory(quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal(4))
+    line = line_item_factory(quantity=Decimal(1), line_total=Decimal(4))
 
     # When editing without supplying raw_description
     apply_line_item_edit(
@@ -665,6 +688,64 @@ def test_apply_line_item_edit_none_receipt_text_leaves_it_unchanged(
 
     # Then the original receipt text is preserved
     assert line.raw_description == "TEST ITEM"
+
+
+def test_apply_line_item_edit_sets_structured_and_pins_manual(session, line_item_factory) -> None:
+    """Verify editing size fields recomputes the measure and pins MANUAL provenance."""
+    # Given a line with no size set
+    line = line_item_factory(
+        quantity=Decimal(1),
+        sold_by=SoldBy.ITEM,
+        size_amount=None,
+        size_unit=None,
+        line_total=Decimal(4),
+    )
+
+    # When the size is edited
+    apply_line_item_edit(
+        session,
+        line,
+        canonical_name=line.product.canonical_name,
+        category_id=None,
+        sold_by=SoldBy.ITEM,
+        size_amount=Decimal(16),
+        size_unit="oz",
+        measure_unit=None,
+    )
+    session.refresh(line)
+
+    # Then the structured fields and derived columns are set, provenance is MANUAL
+    assert (line.size_amount, line.size_unit) == (Decimal(16), "oz")
+    assert line.measure_source == MeasureSource.MANUAL
+    assert line.measure_dimension == "weight"
+
+
+def test_apply_line_item_edit_product_only_keeps_provenance(session, line_item_factory) -> None:
+    """Verify a product-only edit (measure inputs unchanged) preserves existing provenance."""
+    # Given a line with a MEASURE mode and PRINTED provenance
+    line = line_item_factory(
+        quantity=Decimal(1),
+        sold_by=SoldBy.MEASURE,
+        measure_unit="lb",
+        line_total=Decimal(4),
+        measure_source=MeasureSource.PRINTED,
+    )
+
+    # When only the product name changes (measure fields identical to stored values)
+    apply_line_item_edit(
+        session,
+        line,
+        canonical_name="new name",
+        category_id=None,
+        sold_by=SoldBy.MEASURE,
+        measure_unit="lb",
+        size_amount=None,
+        size_unit=None,
+    )
+    session.refresh(line)
+
+    # Then the PRINTED provenance is preserved (MANUAL was not stamped)
+    assert line.measure_source == MeasureSource.PRINTED
 
 
 # ---------------------------------------------------------------------------
@@ -812,8 +893,8 @@ def test_image_file_available_true_only_inside_storage(tmp_path) -> None:
 
 
 def test_edit_recomputes_normalization(session) -> None:
-    """Verify editing a line recomputes its normalization columns from unit/unit_size."""
-    # Given a receipt with a line item that has no unit_size (so normalization is not_applicable)
+    """Verify editing a line recomputes its normalization columns from structured measure fields."""
+    # Given a receipt with a line item that has no size (so normalization is count/not_applicable)
     product = Product(canonical_name="milk", category=Category(name="dairy"))
     store = Store(chain_name="Safeway", location="Main St")
     receipt = Receipt(
@@ -831,8 +912,6 @@ def test_edit_recomputes_normalization(session) -> None:
             product=product,
             raw_description="MILK",
             quantity=Decimal(1),
-            unit="ea",
-            unit_size=None,
             unit_price=Decimal("4.50"),
             line_total=Decimal("4.50"),
         )
@@ -840,7 +919,7 @@ def test_edit_recomputes_normalization(session) -> None:
     session.add(receipt)
     session.commit()
 
-    # When applying an edit that supplies a volume unit_size
+    # When applying an edit that supplies a volume size (1.5 L)
     line = receipt.line_items[0]
     edit = ReceiptEdit(
         chain_name="Safeway",
@@ -855,8 +934,10 @@ def test_edit_recomputes_normalization(session) -> None:
                 canonical_name="milk",
                 category_id=None,
                 quantity=Decimal(1),
-                unit="ea",
-                unit_size="1.5L",
+                sold_by=SoldBy.ITEM,
+                measure_unit=None,
+                size_amount=Decimal("1.5"),
+                size_unit="L",
                 unit_price=Decimal("4.50"),
                 line_total=Decimal("4.50"),
             )
@@ -864,7 +945,7 @@ def test_edit_recomputes_normalization(session) -> None:
     )
     apply_receipt_edit(session, receipt, edit)
 
-    # Then normalization columns are recomputed from the new unit_size
+    # Then normalization columns are recomputed from the new size_amount/size_unit
     session.refresh(line)
     assert line.measure_status == "resolved"
     assert line.measure_dimension == "volume"

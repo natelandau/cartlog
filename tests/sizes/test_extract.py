@@ -11,7 +11,7 @@ from cartlog.db.backfill import normalize_existing_measures
 from cartlog.db.models import LineItem, Product, Receipt, ReceiptStatus, Store
 from cartlog.parsing.size_extractor import ParsedSize
 from cartlog.sizes.extract import extract_sizes_for_lines
-from cartlog.units import MeasureSource, MeasureStatus, parse_size
+from cartlog.units import MeasureSource, MeasureStatus
 
 
 class _StubExtractor:
@@ -89,9 +89,9 @@ def test_sweep_resolves_hits_and_increments_attempts(session, receipt):
     assert resolved == 1
     assert hit.measure_status == MeasureStatus.RESOLVED
     assert hit.measure_source == MeasureSource.EXTRACTED
-    # The recovered size is persisted into unit_size so a later backfill pass 1 keeps it resolved.
-    # ":f" formatting of Decimal("11.0") produces "11.0oz", not "11oz" -- both are parseable.
-    assert hit.unit_size == "11.0oz"
+    # The recovered size is persisted into structured columns (size_amount + size_unit).
+    assert hit.size_amount == Decimal(11)
+    assert hit.size_unit == "oz"
     assert hit.measure_quantity is not None
     assert hit.normalized_unit_price is not None
     assert hit.size_extract_attempts == 1  # attempt spent even on the hit
@@ -117,12 +117,12 @@ def test_sweep_skips_lines_at_attempt_cap(session, receipt):
 def test_round_number_size_survives_backfill(session, receipt):
     """Verify a round LLM-extracted size (330ml) stays RESOLVED after a normalize_existing_measures pass.
 
-    Before the fix, Decimal("330.0") formatted as "3.3E+2ml" via .normalize(), which
-    parse_size cannot read.  The backfill's deterministic pass 1 then found no parseable size
-    and downgraded the line to NOT_APPLICABLE.  After the fix, ":f" emits "330.0ml", which
-    parse_size handles and the line remains RESOLVED with MeasureSource.EXTRACTED.
+    With the structured model, sizes are stored as (size_amount, size_unit) Decimal + token
+    columns -- not as free text -- so there is no longer a scientific-notation formatting bug.
+    This test verifies the structured columns are persisted correctly and the backfill pass 1
+    re-derives the same RESOLVED/EXTRACTED state from them.
     """
-    # Given a soda line with no structured unit_size (the LLM must recover the size)
+    # Given a soda line with no structured size (the LLM must recover the size)
     product = Product(canonical_name="sparkling water")
     line = _blank_line(receipt, product, "Soda 330ml Can")
     session.add_all([product, line])
@@ -131,12 +131,11 @@ def test_round_number_size_survives_backfill(session, receipt):
     # When the LLM sweep resolves it with a round size value
     resolved = extract_sizes_for_lines(session, [line], _RoundSizeExtractor(), max_attempts=3)
 
-    # Then the sweep marked it resolved and persisted a parseable unit_size
+    # Then the sweep marked it resolved and persisted structured size columns
     assert resolved == 1
     assert line.measure_status == MeasureStatus.RESOLVED
-    assert parse_size(line.unit_size) is not None, (
-        f"unit_size {line.unit_size!r} is not parseable by parse_size"
-    )
+    assert line.size_amount == Decimal(330)
+    assert line.size_unit == "ml"
 
     # When a startup backfill re-resolves the line
     session.commit()

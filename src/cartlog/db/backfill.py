@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 from collections import Counter
 from decimal import Decimal
@@ -11,17 +10,18 @@ from typing import TYPE_CHECKING
 from pydantic_ai.usage import RunUsage
 from sqlalchemy.orm import joinedload, selectinload
 
-from cartlog.constants import DEFAULT_MAX_SIZE_EXTRACT_ATTEMPTS, UNIT_FACTORS, VOLUME, WEIGHT
+from cartlog.constants import DEFAULT_MAX_SIZE_EXTRACT_ATTEMPTS
 from cartlog.db.models import LineItem, Product
 from cartlog.ingest.cost import record_standalone_size_extract_cost
 from cartlog.parsing.pricing import estimate_cost
+from cartlog.parsing.structuring import StructuredMeasure, structure_line
 from cartlog.sizes.extract import extract_sizes_for_lines
 from cartlog.units import (
     MeasureSource,
     MeasureStatus,
-    ResolvedMeasure,
-    normalize_unit_token,
-    resolve_line_measure,
+    NormalizationResult,
+    SoldBy,
+    compute_measure,
 )
 
 if TYPE_CHECKING:
@@ -67,30 +67,37 @@ def normalize_existing_measures(
     """
     changed = 0
 
-    # Pass 1: deterministic re-resolution (printed/extracted/repaired/count). No inference yet.
-    # MANUAL is human-pinned and INFERRED is owned by pass 4, so neither is re-resolved here.
-    # joinedload(product) avoids an N+1 lazy load of line.product.canonical_name below.
+    # Pass 1: deterministic re-resolution. MANUAL is human-pinned and INFERRED is owned by
+    # pass 4, so neither is re-resolved here. joinedload(product) avoids N+1 lazy loads.
+    # Two branches: lines that already carry a real measure get derived columns recomputed;
+    # blank lines (size_amount and measure_unit both None) are re-derived from raw_description.
     for line in session.query(LineItem).options(joinedload(LineItem.product)).all():
         if line.measure_source in (MeasureSource.MANUAL, MeasureSource.INFERRED):
             continue
-        out = resolve_line_measure(
-            quantity=line.quantity,
-            unit=line.unit,
-            unit_size=line.unit_size,
-            raw_description=line.raw_description,
-            canonical_name=line.product.canonical_name,
-            line_total=line.line_total,
-        )
-        # Preserve a recovered provenance: a line already RESOLVED as EXTRACTED/REPAIRED (with its
-        # size persisted into unit_size) would otherwise re-resolve as PRINTED, losing the record
-        # that the size was recovered rather than printed on the receipt.
-        if (
-            line.measure_status == MeasureStatus.RESOLVED
-            and line.measure_source in (MeasureSource.EXTRACTED, MeasureSource.REPAIRED)
-            and out.result.measure_status == MeasureStatus.RESOLVED
-        ):
-            out = dataclasses.replace(out, measure_source=line.measure_source)
-        if _apply_resolved(line, out):
+        if line.size_amount is not None or line.measure_unit is not None:
+            # Already structured with a real measure; recompute derived columns only so
+            # existing structured fields and source provenance are preserved, not downgraded.
+            norm = compute_measure(
+                sold_by=SoldBy(line.sold_by),
+                quantity=line.quantity,
+                measure_unit=line.measure_unit,
+                size_amount=line.size_amount,
+                size_unit=line.size_unit,
+                line_total=line.line_total,
+            )
+            structured = StructuredMeasure(
+                SoldBy(line.sold_by),
+                line.measure_unit,
+                line.size_amount,
+                line.size_unit,
+                MeasureSource(line.measure_source),
+            )
+            if _apply_structured(line, structured, norm):
+                changed += 1
+            continue
+        # Blank line: re-derive all structured fields from raw_description/canonical_name.
+        structured, norm = _resolve_and_compute(line)
+        if _apply_structured(line, structured, norm):
             changed += 1
     session.flush()
 
@@ -99,15 +106,16 @@ def normalize_existing_measures(
     if size_extractor is not None:
         usage = RunUsage()
         try:
-            unresolved = [
+            needs_size = [
                 line
                 for line in session.query(LineItem).options(joinedload(LineItem.product)).all()
-                if line.measure_status != MeasureStatus.RESOLVED
+                if line.sold_by == SoldBy.ITEM
+                and line.size_amount is None
                 and line.measure_source != MeasureSource.MANUAL
             ]
             extract_sizes_for_lines(
                 session,
-                unresolved,
+                needs_size,
                 size_extractor,
                 max_attempts=max_size_extract_attempts,
                 usage=usage,
@@ -120,8 +128,8 @@ def normalize_existing_measures(
     # Pass 3: learn each product's dominant typical size from resolved, non-inferred lines.
     recompute_product_typical_sizes(session)
 
-    # Pass 4: infer for lines still unresolved after passes 1-2. Only non-RESOLVED, non-MANUAL
-    # lines are touched, so already-inferred (RESOLVED) lines stay put and the run is stable.
+    # Pass 4: infer for ITEM lines still lacking a per-item size after passes 1-2. MANUAL and
+    # already-sized lines are skipped, so lines with a real size stay unchanged.
     changed += infer_line_measures(
         session.query(LineItem).options(joinedload(LineItem.product)).all()
     )
@@ -130,12 +138,13 @@ def normalize_existing_measures(
 
 
 def infer_line_measures(lines: Iterable[LineItem]) -> int:
-    """Apply product-typical inference to unresolved lines; return the count changed.
+    """Apply product-typical inference to ITEM lines that still lack a per-item size.
 
-    For each line that is not MANUAL, not already RESOLVED, and whose product carries a learned
-    typical measure, re-resolve via the inference layer and write the result. Used both by the
-    backfill's inference pass and by ingestion so a size learned earlier in a batch applies to its
-    siblings immediately. The caller owns the flush/commit; the lines are mutated in place.
+    Targets sold-per-item lines with no size_amount: lines sold loose by weight/volume already
+    carry their measure in measure_unit and need no per-item inference. Skips MANUAL (user-pinned)
+    and lines whose size is already known (size_amount is not None). Used both by the backfill's
+    inference pass and by ingestion so a size learned earlier in a batch immediately applies to
+    its siblings. The caller owns the flush/commit; the lines are mutated in place.
 
     Args:
         lines: The line items to consider for inference.
@@ -147,44 +156,86 @@ def infer_line_measures(lines: Iterable[LineItem]) -> int:
     for line in lines:
         product = line.product
         if (
-            line.measure_status == MeasureStatus.RESOLVED
+            line.sold_by != SoldBy.ITEM
+            or line.size_amount is not None
             or line.measure_source == MeasureSource.MANUAL
             or product.typical_measure_value is None
             or product.typical_measure_dimension is None
         ):
             continue
-        out = resolve_line_measure(
-            quantity=line.quantity,
-            unit=line.unit,
-            unit_size=line.unit_size,
-            raw_description=line.raw_description,
-            canonical_name=product.canonical_name,
-            line_total=line.line_total,
+        structured, norm = _resolve_and_compute(
+            line,
             product_typical=(product.typical_measure_value, product.typical_measure_dimension),
         )
-        if _apply_resolved(line, out):
+        if _apply_structured(line, structured, norm):
             changed += 1
     return changed
 
 
-def _apply_resolved(line: LineItem, out: ResolvedMeasure) -> bool:
-    """Write a ResolvedMeasure onto a line; return True if any column changed."""
+def _apply_structured(
+    line: LineItem,
+    structured: StructuredMeasure,
+    norm: NormalizationResult,
+) -> bool:
+    """Write structured and derived columns onto a line; return True if any column changed."""
     if (
-        line.measure_quantity == out.result.measure_quantity
-        and line.measure_dimension == out.result.measure_dimension
-        and line.normalized_unit_price == out.result.normalized_unit_price
-        and line.measure_status == out.result.measure_status
-        and line.measure_source == out.measure_source
-        and line.unit_size == out.unit_size_out
+        line.sold_by == structured.sold_by
+        and line.measure_unit == structured.measure_unit
+        and line.size_amount == structured.size_amount
+        and line.size_unit == structured.size_unit
+        and line.measure_quantity == norm.measure_quantity
+        and line.measure_dimension == norm.measure_dimension
+        and line.normalized_unit_price == norm.normalized_unit_price
+        and line.measure_status == norm.measure_status
+        and line.measure_source == structured.source
     ):
         return False
-    line.unit_size = out.unit_size_out
-    line.measure_quantity = out.result.measure_quantity
-    line.measure_dimension = out.result.measure_dimension
-    line.normalized_unit_price = out.result.normalized_unit_price
-    line.measure_status = out.result.measure_status
-    line.measure_source = out.measure_source
+    line.sold_by = structured.sold_by
+    line.measure_unit = structured.measure_unit
+    line.size_amount = structured.size_amount
+    line.size_unit = structured.size_unit
+    line.measure_quantity = norm.measure_quantity
+    line.measure_dimension = norm.measure_dimension
+    line.normalized_unit_price = norm.normalized_unit_price
+    line.measure_status = norm.measure_status
+    line.measure_source = structured.source
     return True
+
+
+def _resolve_and_compute(
+    line: LineItem,
+    *,
+    product_typical: tuple[Decimal, str] | None = None,
+) -> tuple[StructuredMeasure, NormalizationResult]:
+    """Run structure_line then compute_measure for a line, optionally with a typical size hint.
+
+    Used by both pass 1 (blank lines) and pass 4 (inference) so the full re-derivation
+    pipeline is centralized in one place.
+
+    Args:
+        line: The line item to re-derive.
+        product_typical: Optional (per_package_base_value, dimension) for inference.
+
+    Returns:
+        A (StructuredMeasure, NormalizationResult) pair ready for _apply_structured.
+    """
+    structured = structure_line(
+        quantity=line.quantity,
+        unit=None,
+        unit_size=None,
+        raw_description=line.raw_description,
+        canonical_name=line.product.canonical_name,
+        product_typical=product_typical,
+    )
+    norm = compute_measure(
+        sold_by=structured.sold_by,
+        quantity=line.quantity,
+        measure_unit=structured.measure_unit,
+        size_amount=structured.size_amount,
+        size_unit=structured.size_unit,
+        line_total=line.line_total,
+    )
+    return structured, norm
 
 
 def _price_backfill_size_extract(
@@ -233,18 +284,13 @@ def recompute_product_typical_sizes(
         for line in product.line_items:
             # A line sold loose by weight/volume has no package: its per_package would be the
             # unit conversion factor (e.g. 453.592 g per lb), not a size, so exclude it.
-            unit_token = normalize_unit_token(line.unit)
-            sold_by_measure = unit_token is not None and UNIT_FACTORS[unit_token][0] in (
-                WEIGHT,
-                VOLUME,
-            )
             if (
                 line.measure_status != MeasureStatus.RESOLVED
                 or line.measure_source not in _LEARNABLE_SOURCES
                 or line.measure_quantity is None
                 or line.measure_dimension is None
                 or line.quantity <= 0
-                or sold_by_measure
+                or line.sold_by == SoldBy.MEASURE
             ):
                 continue
             per_package = (line.measure_quantity / line.quantity).quantize(Decimal("0.0001"))

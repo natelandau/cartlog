@@ -11,7 +11,7 @@ from cartlog.db.models import Category, LineItem, Product, Receipt, Store
 from cartlog.db.session import create_session_factory
 from cartlog.ingest.persistence import _get_or_create, persist_receipt
 from cartlog.parsing.schema import ParsedLineItem, ParsedReceipt
-from cartlog.units import MeasureSource, MeasureStatus
+from cartlog.units import MeasureSource, MeasureStatus, SoldBy
 
 
 def _receipt_with(item: ParsedLineItem) -> ParsedReceipt:
@@ -58,8 +58,10 @@ def test_persist_populates_normalized_columns_from_llm_measure(session):
     assert line.normalized_unit_price == Decimal("0.003000")
 
 
-def test_persist_marks_unmeasured_line_not_applicable(session):
-    """Verify a line item with no unit or size is marked not_applicable after persist."""
+def test_persist_resolves_unsized_line_per_each(session):
+    """Verify a line item with no unit or size is resolved as per-each (count dimension)."""
+    # Under the structured model, every ITEM line resolves to at least $/each even when
+    # no per-item size is present; NOT_APPLICABLE no longer applies to item lines.
     parsed = _receipt_with(
         ParsedLineItem(
             raw_description="APPLE",
@@ -79,7 +81,10 @@ def test_persist_marks_unmeasured_line_not_applicable(session):
         raw_json="{}",
     )
     session.flush()
-    assert receipt.line_items[0].measure_status == "not_applicable"
+    line = receipt.line_items[0]
+    assert line.measure_status == MeasureStatus.RESOLVED
+    assert line.measure_dimension == "count"
+    assert line.sold_by == SoldBy.ITEM
 
 
 def test_persist_receipt_creates_rows(session, sample_parsed_receipt):
@@ -290,8 +295,45 @@ def test_persist_sets_measure_source_extracted_from_description(session):
     )
     session.flush()
 
-    # Then the line item is EXTRACTED with the correct unit_size
+    # Then the line item is EXTRACTED with the correct structured size
     line = receipt.line_items[0]
     assert line.measure_source == MeasureSource.EXTRACTED
     assert line.measure_status == MeasureStatus.RESOLVED
-    assert line.unit_size == "11oz"
+    assert line.size_amount == Decimal(11)
+    assert line.size_unit == "oz"
+
+
+def test_ingest_persists_structured_measure(session):
+    """Verify structured measure fields are populated correctly from a packaged line item on persist."""
+    # Given a receipt with a packaged line item: quantity=2, unit="ea", unit_size="16oz", line_total=20.60
+    parsed = _receipt_with(
+        ParsedLineItem(
+            raw_description="GRANOLA BAR 16oz",
+            canonical_name="granola bar",
+            category="snacks",
+            quantity=2,
+            unit="ea",
+            unit_size="16oz",
+            measure_value=None,
+            measure_unit=None,
+            unit_price=10.30,
+            line_total=20.60,
+        )
+    )
+
+    # When persisting the receipt
+    receipt, _ = persist_receipt(
+        session,
+        parsed,
+        image_path="/tmp/x.png",  # noqa: S108
+        source="cli",
+        status="parsed",
+        raw_json="{}",
+    )
+    session.flush()
+
+    # Then the line item carries structured measure fields
+    line = receipt.line_items[0]
+    assert line.sold_by == SoldBy.ITEM
+    assert (line.size_amount, line.size_unit) == (Decimal(16), "oz")
+    assert line.measure_dimension == "weight"
