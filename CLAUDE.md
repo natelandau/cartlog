@@ -22,7 +22,7 @@ The `duty` task runner wraps common workflows. Invoke it as `uv run duty <task>`
 - `src/cartlog/parsing/` — Pydantic AI vision parser, category classifier, and a focused LLM size extractor (`size_extractor.py`, `build_size_extractor`) that recovers a package size from line text.
 - `src/cartlog/units.py` — pure measure resolution: `resolve_line_measure` layers deterministic size extraction, OCR repair, per-each/count detection, and product-typical inference over `normalize_line_item`, recording provenance (`MeasureSource`).
 - `src/cartlog/sizes/` — `extract.py` runs the LLM size extractor over lines that still lack a size, capped per line by `CARTLOG_MAX_SIZE_EXTRACT_ATTEMPTS`.
-- `src/cartlog/db/` — SQLAlchemy models, session factory, and seed data. `backfill.py` holds the four-pass `normalize_existing_measures` (deterministic resolve, LLM size recovery, typical-size learning, inference) and runs at startup. Migrations live in the top-level `alembic/`.
+- `src/cartlog/db/` — SQLAlchemy models, session factory, and seed data. `backfill.py` holds the four-pass `normalize_existing_measures` (deterministic resolve, LLM size recovery, typical-size learning, inference) and runs at startup; it skips lines whose `measure_source` is `MeasureSource.MANUAL`. `apply_line_item_edit` (`receipts/service.py`, the search inline editor) pins `MANUAL` when a human edits a line's unit or size, so the backfill never overwrites that edit. Migrations live in the top-level `alembic/`.
 - `src/cartlog/bootstrap.py` — `prepare_runtime()` runs migrations, seeding, and the size-normalization backfill (`normalize_existing_measures`); called by `serve`. The LLM size pass needs the assist model and is skipped when no key is configured.
 
 ## Configuration
