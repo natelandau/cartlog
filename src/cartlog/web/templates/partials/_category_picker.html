@@ -1,6 +1,9 @@
-{# Constrained category <select>. options = list of (id, name); current_id selects. #}
-<select name="category_id" class="category-picker select select-xs w-full min-w-32">
-  <option value=""{% if current_id is none %} selected{% endif %}>(no category)</option>
+{# Constrained category <select>. options = list of (id, name); current_id selects.
+   select_class lets each form size the picker to match its sibling controls (defaults to the
+   standard full-size select); pass e.g. "select select-sm w-full" for dense layouts. #}
+<select name="category_id" class="category-picker {{ select_class | default('select w-full') }} min-w-32"
+        aria-label="Category">
+  <option value=""{% if current_id is none %} selected{% endif %}>No category</option>
   {% for cid, name in options %}
   <option value="{{ cid }}"{% if cid == current_id %} selected{% endif %}>{{ name }}</option>
   {% endfor %}

@@ -437,15 +437,17 @@ def test_product_names_are_alphabetical(analytics_session):
     assert "eggs" in names
 
 
-def test_line_item_row_exposes_unit_and_size(analytics_service, seeded_line_with_size):
-    """Verify the search projection carries the editable unit and size."""
-    # Given a line item with a known unit and size (see fixture)
+def test_line_item_row_exposes_structured_measure_fields(analytics_service, seeded_line_with_size):
+    """Verify the search projection carries the structured measure fields for the row editor."""
+    # Given a line item with known structured measure fields (see fixture)
     line_id = seeded_line_with_size.id
 
     # When projecting it for the row editor
     row = analytics_service.line_item_row(line_id)
 
-    # Then unit and size are available to prefill the panel
+    # Then the structured measure fields are available to prefill the panel
     assert row is not None
-    assert row.unit == seeded_line_with_size.unit
-    assert row.unit_size == seeded_line_with_size.unit_size
+    assert row.sold_by == seeded_line_with_size.sold_by
+    assert row.measure_unit == seeded_line_with_size.measure_unit
+    assert row.size_amount == seeded_line_with_size.size_amount
+    assert row.size_unit == seeded_line_with_size.size_unit

@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from cartlog.web.units_display import format_normalized
+from cartlog.web.units_display import format_measure, format_normalized
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
@@ -70,3 +70,59 @@ def test_toggle_unit_system_flips_back_to_imperial(app_client: TestClient):
     # Then the cookie is set back to imperial
     assert response.status_code == 204
     assert response.cookies.get("unit_system") == "imperial"
+
+
+def test_format_measure_measure_mode_string():
+    """Verify MEASURE mode returns quantity + measure_unit as a trimmed string."""
+    assert (
+        format_measure(
+            sold_by="measure",
+            quantity=Decimal("1.47"),
+            measure_unit="lb",
+            size_amount=None,
+            size_unit=None,
+        )
+        == "1.47 lb"
+    )
+
+
+def test_format_measure_item_with_size_multipack():
+    """Verify ITEM mode with quantity > 1 returns 'N x size unit' format."""
+    assert (
+        format_measure(
+            sold_by="item",
+            quantity=Decimal(2),
+            measure_unit=None,
+            size_amount=Decimal(16),
+            size_unit="oz",
+        )
+        == "2 x 16 oz"
+    )
+
+
+def test_format_measure_item_single_drops_count():
+    """Verify ITEM mode with quantity == 1 returns just 'size unit' without count prefix."""
+    assert (
+        format_measure(
+            sold_by="item",
+            quantity=Decimal(1),
+            measure_unit=None,
+            size_amount=Decimal(12),
+            size_unit="ct",
+        )
+        == "12 ct"
+    )
+
+
+def test_format_measure_item_no_size_empty():
+    """Verify ITEM mode without size returns empty string so callers can fall back."""
+    assert (
+        format_measure(
+            sold_by="item",
+            quantity=Decimal(3),
+            measure_unit=None,
+            size_amount=None,
+            size_unit=None,
+        )
+        == ""
+    )

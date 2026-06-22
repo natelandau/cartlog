@@ -8,20 +8,34 @@ from decimal import Decimal
 from cartlog.analytics.results import PriceBasis, ScaleMode, StorePairSort
 from cartlog.analytics.service import AnalyticsService, _median_price, _store_label
 from cartlog.db.models import Category, LineItem, Product, Receipt, ReceiptStatus, Store
-from cartlog.units import normalize_line_item
+from cartlog.parsing.structuring import parse_size
+from cartlog.units import SoldBy, compute_measure
 
 
-def _line(product, *, unit_size, line_total, unit="ea"):
-    """Build a normalized milk-style line item from a package size and total."""
-    norm = normalize_line_item(
-        quantity=Decimal(1), unit=unit, unit_size=unit_size, line_total=Decimal(line_total)
+def _line(product, *, unit_size, line_total):
+    """Build a normalized line item from a package size string and total.
+
+    Parses `unit_size` (e.g. "1.5L", "500g") into structured (size_amount, size_unit) fields
+    and uses compute_measure to derive the normalized measure columns.
+    """
+    parsed = parse_size(unit_size)
+    size_amount = parsed[0] if parsed else None
+    size_unit = parsed[1] if parsed else None
+    norm = compute_measure(
+        sold_by=SoldBy.ITEM,
+        quantity=Decimal(1),
+        measure_unit=None,
+        size_amount=size_amount,
+        size_unit=size_unit,
+        line_total=Decimal(line_total),
     )
     return LineItem(
         product=product,
         raw_description=product.canonical_name.upper(),
         quantity=Decimal(1),
-        unit=unit,
-        unit_size=unit_size,
+        sold_by=SoldBy.ITEM,
+        size_amount=size_amount,
+        size_unit=size_unit,
         unit_price=Decimal(line_total),
         line_total=Decimal(line_total),
         measure_quantity=norm.measure_quantity,

@@ -6,12 +6,19 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, Field, ValidationError
+from pydantic import BaseModel, BeforeValidator, Field, ValidationError, model_validator
+
+from cartlog.units import SoldBy
 
 
 def _blank_to_none(value: str | None) -> str | None:
     """Treat an empty/whitespace-only form field as None so optional columns stay null."""
-    if value is None or value.strip() == "":
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        # Non-string value (e.g. Decimal passed directly from model_copy) passes through.
+        return value  # type: ignore[return-value]
+    if value.strip() == "":
         return None
     return value
 
@@ -51,6 +58,35 @@ OptionalCategoryId = Annotated[int | None, BeforeValidator(_blank_int_to_none)]
 # out-of-range edit is rejected as a clean form error instead of silently corrupting data.
 Money = Annotated[Decimal, Field(max_digits=10, decimal_places=2)]
 Quantity = Annotated[Decimal, Field(max_digits=10, decimal_places=3)]
+# Decimal | None with blank-to-None coercion; mirrors the Numeric(12,4) size_amount column.
+# Use nested Annotated so Field constraints only apply to non-None values.
+_ConstrainedDecimal = Annotated[Decimal, Field(max_digits=12, decimal_places=4)]
+SizeAmount = Annotated[_ConstrainedDecimal | None, BeforeValidator(_blank_to_none)]
+
+
+def measure_mode_error(
+    *,
+    sold_by: SoldBy,
+    measure_unit: str | None,
+    size_amount: Decimal | None,
+    size_unit: str | None,
+) -> str | None:
+    """Return a message for an inconsistent measure mode, or None when the combination is valid.
+
+    Shared by the receipt review form (LineEdit) and the search inline editor so both reject
+    the same impossible combinations: a by-weight/volume line with no unit, an item line
+    carrying a measure unit, and an item size given as only an amount or only a unit, which
+    `compute_measure` would otherwise silently drop (resolving the line as per-each and
+    discarding the entered size).
+    """
+    if sold_by == SoldBy.MEASURE and not measure_unit:
+        return "A by-weight/volume line needs a unit"
+    if sold_by == SoldBy.ITEM:
+        if measure_unit:
+            return "An item line must not set a measure unit"
+        if (size_amount is None) != (size_unit is None):
+            return "A size needs both an amount and a unit"
+    return None
 
 
 class LineEdit(BaseModel):
@@ -62,10 +98,24 @@ class LineEdit(BaseModel):
     # Optional: written back to the shared Product by taxonomy id, recategorizing every receipt using it.
     category_id: OptionalCategoryId
     quantity: Quantity
-    unit: OptionalText
-    unit_size: OptionalText
+    sold_by: SoldBy
+    measure_unit: OptionalText
+    size_amount: SizeAmount
+    size_unit: OptionalText
     unit_price: Money
     line_total: Money
+
+    @model_validator(mode="after")
+    def _check_mode(self) -> LineEdit:
+        error = measure_mode_error(
+            sold_by=self.sold_by,
+            measure_unit=self.measure_unit,
+            size_amount=self.size_amount,
+            size_unit=self.size_unit,
+        )
+        if error is not None:
+            raise ValueError(error)
+        return self
 
 
 class ReceiptEdit(BaseModel):
@@ -113,8 +163,10 @@ def parse_review_form(form: dict[str, list[str]]) -> ReceiptEdit:
         "raw_description",
         "canonical_name",
         "quantity",
-        "unit",
-        "unit_size",
+        "sold_by",
+        "measure_unit",
+        "size_amount",
+        "size_unit",
         "unit_price",
         "line_total",
     )

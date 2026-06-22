@@ -9,7 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from cartlog.constants import COUNT, VOLUME, WEIGHT
+from cartlog.constants import COUNT, UNIT_LABELS, VOLUME, WEIGHT
 from cartlog.units import MeasureStatus
 
 if TYPE_CHECKING:
@@ -50,6 +50,75 @@ def format_normalized(
     if dimension == VOLUME:
         return f"${normalized_unit_price * _FLOZ_PER_ML:.3f}/fl oz"
     return "n/a"
+
+
+def _trim(value: Decimal) -> str:
+    """Render a Decimal without trailing zeros (1.50 -> '1.5', 16.0 -> '16')."""
+    return format(value.normalize(), "f")
+
+
+def format_measure(
+    *,
+    sold_by: str,
+    quantity: Decimal | None,
+    measure_unit: str | None,
+    size_amount: Decimal | None,
+    size_unit: str | None,
+) -> str:
+    """Render the human measure string for a line, or '' when there is no measure to show.
+
+    Use this to display the package measure alongside a receipt line item. MEASURE lines
+    show the quantity with its unit (e.g. "1.47 lb"); ITEM lines show the package size and
+    optionally a multipack count (e.g. "2 x 16 oz"). Returns '' for ITEM lines with no size
+    so callers can fall back to the plain quantity number.
+
+    Args:
+        sold_by: Either "measure" (priced by weight/volume) or "item" (priced per unit).
+        quantity: The purchased quantity; used as the measure amount or multipack count.
+        measure_unit: The unit token for MEASURE lines (e.g. "lb", "kg").
+        size_amount: The package size for ITEM lines (e.g. Decimal("16") for 16 oz).
+        size_unit: The unit token for the package size (e.g. "oz").
+
+    Returns:
+        A human-readable measure string, or '' when no measure is available.
+    """
+    if sold_by == "measure" and measure_unit:
+        # A measure line always carries a quantity; guard None defensively so a malformed
+        # row can never raise AttributeError mid-render and 500 the whole results page.
+        return f"{_trim(quantity)} {measure_unit}" if quantity is not None else measure_unit
+    if sold_by == "item" and size_amount is not None and size_unit:
+        size = f"{_trim(size_amount)} {size_unit}"
+        if quantity is None or quantity == 1:
+            return size
+        return f"{_trim(quantity)} x {size}"
+    return ""
+
+
+# Which tokens each dropdown offers (order is irrelevant here; the helpers sort by label).
+# The redundant 'each' token is omitted ('ea' already reads as "Each") so the menu has no
+# duplicate entries.
+_MEASURE_UNIT_TOKENS = ("oz", "lb", "g", "kg", "mg", "floz", "cup", "pt", "qt", "gal", "ml", "l")
+_SIZE_UNIT_TOKENS = (*_MEASURE_UNIT_TOKENS, "ea", "ct")
+
+
+def measure_unit_options() -> list[tuple[str, str]]:
+    """Return (token, label) pairs of weight and volume units, sorted alphabetically by label.
+
+    Excludes count tokens because measure_unit applies only to MEASURE (weight/volume) lines.
+    The token is the option value; the label is the spelled-out name (e.g. ("lb", "Pound")).
+    """
+    return sorted(
+        ((token, UNIT_LABELS[token]) for token in _MEASURE_UNIT_TOKENS), key=lambda p: p[1]
+    )
+
+
+def size_unit_options() -> list[tuple[str, str]]:
+    """Return (token, label) pairs of all units (weight, volume, count), sorted by label.
+
+    Used for ITEM package-size unit pickers, where count tokens like 'ct' or 'ea' are valid.
+    The token is the option value; the label is the spelled-out name (e.g. ("ct", "Count")).
+    """
+    return sorted(((token, UNIT_LABELS[token]) for token in _SIZE_UNIT_TOKENS), key=lambda p: p[1])
 
 
 def read_unit_system(request: Request) -> str:

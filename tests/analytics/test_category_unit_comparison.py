@@ -5,19 +5,26 @@ from decimal import Decimal
 
 from cartlog.analytics.service import AnalyticsService
 from cartlog.db.models import Category, LineItem, Product, Receipt, ReceiptStatus, Store
-from cartlog.units import normalize_line_item
+from cartlog.units import SoldBy, compute_measure
 
 
-def _line(product, *, unit, unit_size, qty, total):
-    norm = normalize_line_item(
-        quantity=Decimal(qty), unit=unit, unit_size=unit_size, line_total=Decimal(total)
+def _line(product, *, sold_by, measure_unit=None, size_amount=None, size_unit=None, qty, total):
+    norm = compute_measure(
+        sold_by=sold_by,
+        quantity=Decimal(qty),
+        measure_unit=measure_unit,
+        size_amount=size_amount,
+        size_unit=size_unit,
+        line_total=Decimal(total),
     )
     return LineItem(
         product=product,
         raw_description=product.canonical_name,
         quantity=Decimal(qty),
-        unit=unit,
-        unit_size=unit_size,
+        sold_by=sold_by,
+        measure_unit=measure_unit,
+        size_amount=size_amount,
+        size_unit=size_unit,
         unit_price=Decimal(total),
         line_total=Decimal(total),
         measure_quantity=norm.measure_quantity,
@@ -44,8 +51,12 @@ def test_category_units_ranks_weight_products(session):
         status=ReceiptStatus.PARSED,
     )
     # bananas 2 lb @ 1.00 (cheap/g); grapes 1 lb @ 4.00 (dear/g)
-    r.line_items.append(_line(bananas, unit="lb", unit_size=None, qty="2", total="1.00"))
-    r.line_items.append(_line(grapes, unit="lb", unit_size=None, qty="1", total="4.00"))
+    r.line_items.append(
+        _line(bananas, sold_by=SoldBy.MEASURE, measure_unit="lb", qty="2", total="1.00")
+    )
+    r.line_items.append(
+        _line(grapes, sold_by=SoldBy.MEASURE, measure_unit="lb", qty="1", total="4.00")
+    )
     session.add(r)
     session.commit()
 
@@ -73,14 +84,16 @@ def test_category_units_excludes_resolved_row_with_null_price(session):
         source="cli",
         status=ReceiptStatus.PARSED,
     )
-    r.line_items.append(_line(bananas, unit="lb", unit_size=None, qty="2", total="1.00"))
+    r.line_items.append(
+        _line(bananas, sold_by=SoldBy.MEASURE, measure_unit="lb", qty="2", total="1.00")
+    )
     r.line_items.append(
         LineItem(
             product=broken,
             raw_description="broken",
             quantity=Decimal(1),
-            unit="lb",
-            unit_size=None,
+            sold_by=SoldBy.MEASURE,
+            measure_unit="lb",
             unit_price=Decimal("4.00"),
             line_total=Decimal("4.00"),
             measure_quantity=Decimal("453.5920"),

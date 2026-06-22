@@ -38,7 +38,7 @@ from cartlog.web.guards import (  # noqa: TC001  # runtime imports: FastAPI Depe
 from cartlog.web.htmx import wants_partial
 from cartlog.web.sort import SORT_COLUMNS, ReceiptSortKey
 from cartlog.web.templating import templates
-from cartlog.web.units_display import read_unit_system
+from cartlog.web.units_display import measure_unit_options, read_unit_system, size_unit_options
 
 router = APIRouter()
 
@@ -76,6 +76,8 @@ def _edit_context(session: Session, receipt: Receipt, *, errors: str | None) -> 
         "product_names": product_names,
         "category_options": category_options,
         "review_status": ReceiptStatus.NEEDS_REVIEW,
+        "measure_units": measure_unit_options(),
+        "size_units": size_unit_options(),
     }
 
 

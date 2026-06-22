@@ -66,8 +66,9 @@ def receipt_with_normalized(app_client) -> int:
             product=milk,
             raw_description="NORM MILK 1.5L",
             quantity=Decimal(1),
-            unit="ea",
-            unit_size="1.5L",
+            sold_by="item",
+            size_amount=Decimal("1.5"),
+            size_unit="L",
             unit_price=Decimal("4.50"),
             line_total=Decimal("4.50"),
             # Stored as $/ml; 4.50 / 1500 ml = 0.003 $/ml
