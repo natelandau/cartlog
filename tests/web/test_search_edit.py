@@ -2,8 +2,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+import pytest
+
 from cartlog.db.models import Category, LineItem, Product
 from tests.web.helpers import first_line_item_id, unit_prices_in_order
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
+
+
+@pytest.fixture
+def seeded_line_id(editor_client: TestClient) -> int:
+    """Return the line_item_id of the first seeded eggs line for editor-client tests."""
+    return first_line_item_id(editor_client)
 
 
 def test_search_results_sorts_by_unit_price_ascending(app_client) -> None:
@@ -41,7 +54,7 @@ def test_search_results_active_column_has_aria_sort(app_client) -> None:
 
 
 def test_search_item_edit_renders_controls(app_client) -> None:
-    """Verify the edit fragment renders the product datalist input and category picker."""
+    """Verify the edit fragment renders all panel inputs and suppresses the Edit button."""
     # Given a known eggs line
     line_id = first_line_item_id(app_client)
 
@@ -53,6 +66,13 @@ def test_search_item_edit_renders_controls(app_client) -> None:
     assert 'name="canonical_name"' in response.text
     assert 'list="search-products"' in response.text
     assert 'name="category_id"' in response.text
+    # And the panel row and size/unit controls are present
+    assert f'id="search-edit-{line_id}"' in response.text
+    assert 'name="unit"' in response.text
+    assert 'name="unit_size"' in response.text
+    assert 'list="search-units"' in response.text
+    # And the Edit button is suppressed while the panel is open
+    assert f'hx-get="/search/items/{line_id}/edit"' not in response.text
 
 
 def test_search_item_edit_unknown_id_404(app_client) -> None:
@@ -71,13 +91,15 @@ def test_search_item_save_reassigns_product(app_client) -> None:
 
     # When saving a brand-new product name with no category change
     response = app_client.post(
-        f"/search/items/{line_id}", data={"canonical_name": "duck eggs", "category_id": ""}
+        f"/search/items/{line_id}",
+        data={"canonical_name": "duck eggs", "category_id": "", "raw_description": "LRG EGGS 12CT"},
     )
 
     # Then a read-only row comes back showing the new product, and the DB reflects it
     assert response.status_code == 200
     assert "duck eggs" in response.text
     assert f'id="search-row-{line_id}"' in response.text
+    assert 'hx-swap-oob="true"' in response.text
     factory = app_client.app.state.session_factory
     with factory() as session:
         assert session.get(LineItem, line_id).product.canonical_name == "duck eggs"
@@ -94,11 +116,16 @@ def test_search_item_save_recategorizes_shared_product(app_client) -> None:
     # When saving the eggs line's category as produce (name unchanged)
     response = app_client.post(
         f"/search/items/{line_id}",
-        data={"canonical_name": "eggs", "category_id": str(produce_id)},
+        data={
+            "canonical_name": "eggs",
+            "category_id": str(produce_id),
+            "raw_description": "LRG EGGS 12CT",
+        },
     )
 
-    # Then the shared eggs product is now produce
+    # Then the shared eggs product is now produce, and the OOB swap attribute is present
     assert response.status_code == 200
+    assert 'hx-swap-oob="true"' in response.text
     with factory() as session:
         product = session.query(Product).filter_by(canonical_name="eggs").one()
         assert product.category.name == "produce"
@@ -119,6 +146,60 @@ def test_search_item_save_blank_name_returns_422_edit_row(app_client) -> None:
     assert 'name="canonical_name"' in response.text
     assert 'role="alert"' in response.text
     assert "Product name is required" in response.text
+
+
+def test_search_item_save_422_returns_panel_only_with_submitted_values(app_client) -> None:
+    """Verify a 422 re-renders the panel alone (no duplicate read row) keeping typed values."""
+    # Given a known eggs line
+    line_id = first_line_item_id(app_client)
+
+    # When a save fails validation while the user had typed a new size
+    response = app_client.post(
+        f"/search/items/{line_id}",
+        data={"canonical_name": "  ", "category_id": "", "unit": "", "unit_size": "2L"},
+    )
+
+    # Then only the panel comes back: exactly one search-edit row and no read row, so the
+    # outerHTML swap into the panel cannot leave a second #search-row-{id} in the DOM
+    assert response.status_code == 422
+    assert response.text.count(f'id="search-edit-{line_id}"') == 1
+    assert f'id="search-row-{line_id}"' not in response.text
+    # And the user's typed size survives the error instead of reverting to the stored value
+    assert 'value="2L"' in response.text
+
+
+def test_search_item_save_edits_receipt_text(app_client) -> None:
+    """Verify saving a new receipt text overwrites the line's raw_description."""
+    # Given a known eggs line
+    line_id = first_line_item_id(app_client)
+
+    # When saving a corrected receipt text
+    response = app_client.post(
+        f"/search/items/{line_id}",
+        data={"canonical_name": "eggs", "category_id": "", "raw_description": "LARGE EGGS 12 CT"},
+    )
+
+    # Then the response is OK and the line's raw_description reflects the edit
+    assert response.status_code == 200
+    factory = app_client.app.state.session_factory
+    with factory() as session:
+        assert session.get(LineItem, line_id).raw_description == "LARGE EGGS 12 CT"
+
+
+def test_search_item_save_blank_receipt_text_returns_422(app_client) -> None:
+    """Verify a blank receipt text is rejected with the shared required-text message."""
+    # Given a known eggs line
+    line_id = first_line_item_id(app_client)
+
+    # When saving with a whitespace-only receipt text but a valid product name
+    response = app_client.post(
+        f"/search/items/{line_id}",
+        data={"canonical_name": "eggs", "category_id": "", "raw_description": "   "},
+    )
+
+    # Then the same validator the receipt form uses surfaces an inline 422
+    assert response.status_code == 422
+    assert "Receipt text is required" in response.text
 
 
 def test_search_item_save_non_numeric_category_returns_422(app_client) -> None:
@@ -147,15 +228,66 @@ def test_search_item_save_unknown_id_404(app_client) -> None:
     assert response.status_code == 404
 
 
-def test_search_item_cancel_returns_readonly_row(app_client) -> None:
-    """Verify the cancel endpoint returns the read-only row for a line."""
+def test_search_item_row_returns_readonly_row(app_client) -> None:
+    """Verify the row endpoint returns the read-only row with its Edit button."""
     # Given a known eggs line
     line_id = first_line_item_id(app_client)
 
-    # When requesting the read-only row
+    # When requesting the read-only row directly
     response = app_client.get(f"/search/items/{line_id}")
 
     # Then a read-only row (with an Edit button) comes back
     assert response.status_code == 200
     assert f'id="search-row-{line_id}"' in response.text
     assert f"/search/items/{line_id}/edit" in response.text
+
+
+def test_search_item_save_updates_unit_and_size(
+    editor_client: TestClient, seeded_line_id: int
+) -> None:
+    """Verify saving the panel persists unit/size and returns the OOB read row."""
+    # When the editor saves new size + unit
+    resp = editor_client.post(
+        f"/search/items/{seeded_line_id}",
+        data={
+            "canonical_name": "Milk",
+            "category_id": "",
+            "raw_description": "2% MILK",
+            "unit": "",
+            "unit_size": "2L",
+        },
+    )
+
+    # Then the response is OK and swaps the read row out of band
+    assert resp.status_code == 200
+    assert f'id="search-row-{seeded_line_id}"' in resp.text
+    assert 'hx-swap-oob="true"' in resp.text
+
+
+def test_search_item_cancel_returns_oob_read_row(
+    editor_client: TestClient, seeded_line_id: int
+) -> None:
+    """Verify cancel closes the panel and restores the read row."""
+    # When cancelling an open edit panel
+    resp = editor_client.get(f"/search/items/{seeded_line_id}/cancel")
+
+    # Then the read row comes back as OOB to restore it
+    assert resp.status_code == 200
+    assert f'id="search-row-{seeded_line_id}"' in resp.text
+    assert 'hx-swap-oob="true"' in resp.text
+
+
+def test_search_item_save_blank_name_returns_panel_422(
+    editor_client: TestClient, seeded_line_id: int
+) -> None:
+    """Verify a blank product name re-renders the open panel with a 422."""
+    # When saving with an empty canonical name
+    resp = editor_client.post(
+        f"/search/items/{seeded_line_id}",
+        data={"canonical_name": "  ", "category_id": "", "unit": "", "unit_size": "2L"},
+    )
+
+    # Then the panel is re-rendered as a 422 with the error
+    assert resp.status_code == 422
+    assert f'id="search-edit-{seeded_line_id}"' in resp.text
+    assert "Product name is required." in resp.text

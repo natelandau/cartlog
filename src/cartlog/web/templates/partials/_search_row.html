@@ -1,6 +1,9 @@
 {# One read-only search result row. `r` is a SearchResult. The id lets htmx swap just this
-   row in place for inline editing. #}
-<tr id="search-row-{{ r.line_item_id }}">
+   row in place for inline editing. When `editing` is set, the Edit button is suppressed so a
+   second panel cannot open while one is active. When `oob` is set, the <tr> carries
+   hx-swap-oob="true" so htmx restores it out of band while the panel's primary target is
+   emptied. #}
+<tr id="search-row-{{ r.line_item_id }}"{% if editing %} class="search-row-active"{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>
   <td data-label="Description">{{ r.raw_description }}</td>
   <td data-label="Product">{{ r.canonical_name }}</td>
   <td data-label="Category">{{ r.category or "" }}</td>
@@ -12,9 +15,11 @@
   {# Edit action is editor-only; the server also guards /search/items/* with RequireEditor. #}
   {% if can_edit %}
   <td data-label="">
+    {% if not editing %}
     <button type="button" class="btn btn-ghost btn-xs"
             hx-get="/search/items/{{ r.line_item_id }}/edit"
             hx-target="#search-row-{{ r.line_item_id }}" hx-swap="outerHTML">Edit</button>
+    {% endif %}
   </td>
   {% endif %}
 </tr>

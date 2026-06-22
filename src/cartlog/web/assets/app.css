@@ -318,6 +318,55 @@
     box-shadow: 0 1px 2px color-mix(in oklch, black 14%, transparent);
   }
 
+  /* Inline search editor. The active row and its editor drawer read as one connected unit:
+     a shared pine tint plus a continuous left accent bar (inset shadow, so no layout shift),
+     making it obvious the panel belongs to the row above rather than the row below. The shared
+     tint is a variable so the row and drawer (desktop and mobile) never drift apart. */
+  .data-table { --search-active-tint: color-mix(in oklch, var(--color-primary) 7%, var(--color-base-100)); }
+  .data-table tbody tr.search-row-active { background: var(--search-active-tint); }
+  .data-table tbody tr.search-row-active:hover {
+    background: color-mix(in oklch, var(--color-primary) 11%, var(--color-base-100));
+  }
+  /* Drop the row separator beneath the active row so it flows straight into the drawer. */
+  .data-table tbody tr.search-row-active > td { border-bottom: 0; }
+  /* Mute the active row's text (the date link included): its values are the frozen snapshot,
+     now being edited in the drawer below. */
+  .data-table tbody tr.search-row-active > td,
+  .data-table tbody tr.search-row-active > td a {
+    color: color-mix(in oklch, var(--color-base-content) 42%, transparent);
+  }
+  .data-table tbody tr.search-row-active td:first-child { box-shadow: inset 3px 0 0 var(--color-primary); }
+
+  /* The drawer animates its real height (grid-template-rows 0fr<->1fr) so the whole tinted box
+     grows and collapses as one. Animating only the form's opacity made the full-height box pop
+     in/out and read as a flash; the box now lives on .search-drawer__box and is clipped by the
+     collapsing track. */
+  /* Zero the cell padding so the drawer box fills the cell edge-to-edge: its left accent bar
+     then lines up with the active row's bar, and the tint reaches the row's edges instead of
+     sitting in an inset white frame. !important overrides daisyUI's .table-sm cell padding,
+     which lives in a later cascade layer. */
+  .search-edit-panel > td { padding: 0 !important; }
+  .search-drawer { display: grid; grid-template-rows: 1fr; }
+  .search-edit-panel > td > .search-drawer { animation: search-drawer-in 300ms ease-out; }
+  .search-edit-panel.htmx-swapping > td > .search-drawer {
+    animation: search-drawer-out 300ms ease-in forwards;
+  }
+  .search-drawer__box {
+    overflow: hidden;
+    min-height: 0;
+    background: var(--search-active-tint);
+    box-shadow: inset 3px 0 0 var(--color-primary);
+    border-bottom: var(--border) solid color-mix(in oklch, var(--color-primary) 30%, transparent);
+  }
+  @keyframes search-drawer-in {
+    from { grid-template-rows: 0fr; opacity: 0; }
+    to { grid-template-rows: 1fr; opacity: 1; }
+  }
+  @keyframes search-drawer-out {
+    from { grid-template-rows: 1fr; opacity: 1; }
+    to { grid-template-rows: 0fr; opacity: 0; }
+  }
+
   /* Receipt-tape motif (moved out of auth templates' inline <style>). */
   .tape-card { animation: tape-print-in 0.35s ease-out both; }
   /* The tear edge is a dashed border that reads as a perforation cut line */
@@ -359,6 +408,40 @@
     font-weight: 600;
     text-align: left;
     color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+  }
+  /* The inline edit panel is a full-width form, not a labeled data cell: opt its <td> out of
+     the card-stacking so the form renders as a normal block on phones. Qualified with
+     .data-table to beat the (0,1,2) specificity of .data-table tbody td above. */
+  .data-table .search-edit-panel td {
+    display: block;
+    text-align: left;
+  }
+  .data-table .search-edit-panel td::before { content: none; }
+  /* On phones the rows are cards. The active card fuses with the drawer below; the drawer's
+     card look lives on the collapsing .search-drawer__box (not the <tr>), so a closing drawer
+     leaves no empty card strip behind. The panel <tr> itself is a layout passthrough. */
+  .data-table tbody tr.search-row-active {
+    background: var(--search-active-tint);
+    border-color: var(--color-primary);
+    border-left-width: 3px;
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .data-table .search-edit-panel {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+  }
+  .data-table .search-edit-panel .search-drawer__box {
+    background: var(--search-active-tint);
+    border: var(--border) solid var(--color-primary);
+    border-top: 0;
+    border-left-width: 3px;
+    border-bottom-left-radius: var(--radius-box);
+    border-bottom-right-radius: var(--radius-box);
+    box-shadow: none;
   }
 }
 

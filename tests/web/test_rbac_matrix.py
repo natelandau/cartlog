@@ -232,6 +232,28 @@ def test_search_item_edit_allows_editor(editor_client) -> None:
     assert resp.status_code == 200
 
 
+def test_search_item_cancel_forbids_viewer(viewer_client) -> None:
+    """Verify GET /search/items/{id}/cancel returns 403 for a viewer (cancel is editor-only)."""
+    # Given a real line item id
+    line_id = first_line_item_id(viewer_client)
+
+    # When a viewer requests the cancel route
+    resp = viewer_client.get(f"/search/items/{line_id}/cancel")
+
+    # Then the request is forbidden
+    assert resp.status_code == 403
+
+
+def test_search_item_cancel_redirects_anon(anon_client) -> None:
+    """Verify GET /search/items/{id}/cancel redirects an unauthenticated visitor to login."""
+    # The anon_client has its own db; id=1 will exist after seeding, and the
+    # auth guard fires before any db lookup, so the exact id does not matter.
+    resp = anon_client.get("/search/items/1/cancel", follow_redirects=False)
+
+    # Then the unauthenticated visitor is sent to login
+    assert resp.status_code in (302, 303)
+
+
 def test_receipt_edit_forbids_viewer(viewer_client) -> None:
     """Verify GET /receipts/{id}/edit returns 403 for a viewer (edit panel is editor-only)."""
     # Given a real receipt id
