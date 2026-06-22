@@ -161,3 +161,13 @@ def page(_browser: Browser) -> Iterator[Page]:
         yield context.new_page()
     finally:
         context.close()
+
+
+@pytest.fixture
+def mobile_page(_browser: Browser) -> Iterator[Page]:
+    """Yield a fresh page in a phone-sized context (below the 40rem table-collapse breakpoint)."""
+    context = _browser.new_context(viewport={"width": 390, "height": 844})
+    try:
+        yield context.new_page()
+    finally:
+        context.close()

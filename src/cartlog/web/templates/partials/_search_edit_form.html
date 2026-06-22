@@ -1,0 +1,55 @@
+{# The inline edit panel <tr> for one search line: product, category, size, unit + save/cancel.
+   Context: r (SearchResult), category_options [(id, name)], colspan (int), errors (str|None).
+
+   Rendered two ways, both targeting #search-edit-{id} so the swap never duplicates the read row:
+     - included by _search_edit_panel.html (open=True) directly beneath the freshly-swapped read row;
+     - returned standalone on a 422 re-render, replacing only the panel with the error + the user's
+       submitted values still in the inputs. #}
+<tr id="search-edit-{{ r.line_item_id }}" class="search-edit-panel"
+    data-cancel-url="/search/items/{{ r.line_item_id }}/cancel">
+  <td colspan="{{ colspan }}">
+    <div class="search-drawer"><div class="search-drawer__box">
+      <form class="p-2"
+            hx-post="/search/items/{{ r.line_item_id }}"
+            hx-target="#search-edit-{{ r.line_item_id }}" hx-swap="outerHTML">
+      <fieldset class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <legend class="sr-only">Edit line item</legend>
+        <label class="form-control sm:col-span-2">
+          <span class="label-text mb-1 block font-medium">Receipt text</span>
+          <input class="input input-sm w-full" name="raw_description"
+                 value="{{ r.raw_description }}" aria-label="Receipt text" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1 block font-medium">Product</span>
+          <input class="input input-sm w-full" name="canonical_name" list="search-products"
+                 value="{{ r.canonical_name }}" autofocus aria-label="Product name" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1 block font-medium">Category</span>
+          {% with options=category_options, current_id=r.category_id %}
+            {% include "partials/_category_picker.html" %}
+          {% endwith %}
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1 block font-medium">Size</span>
+          <input class="input input-sm w-full" name="unit_size" value="{{ r.unit_size or '' }}"
+                 placeholder="e.g. 1.5L, 6x330ml" aria-label="Package size" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1 block font-medium">Unit</span>
+          <input class="input input-sm w-full" name="unit" list="search-units"
+                 value="{{ r.unit or '' }}" placeholder="e.g. lb, ea" aria-label="Unit" />
+        </label>
+      </fieldset>
+      <div class="mt-3 flex items-center gap-2">
+        {% if errors %}<span class="text-xs font-medium text-error" role="alert">{{ errors }}</span>{% endif %}
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        <button type="button" class="btn btn-ghost btn-sm"
+                hx-get="/search/items/{{ r.line_item_id }}/cancel"
+                hx-target="#search-edit-{{ r.line_item_id }}"
+                hx-swap="outerHTML swap:320ms">Cancel</button>
+      </div>
+    </form>
+    </div></div>
+  </td>
+</tr>

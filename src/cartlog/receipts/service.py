@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from cartlog.db.models import Category, IngestionJob, JobStatus, LineItem, Receipt, Store
 from cartlog.ingest.persistence import _get_or_create
 from cartlog.products.service import resolve_product
-from cartlog.units import normalize_line_item
+from cartlog.units import MeasureSource, normalize_line_item
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -171,30 +171,40 @@ def apply_receipt_edit(session: Session, receipt: Receipt, edit: ReceiptEdit) ->
     session.commit()
 
 
-def apply_line_item_edit(
+def apply_line_item_edit(  # noqa: PLR0913 - args map 1:1 to a line's editable fields
     session: Session,
     line_item: LineItem,
     *,
     canonical_name: str,
     category_id: int | None,
+    raw_description: str | None = None,
+    unit: str | None = None,
+    unit_size: str | None = None,
 ) -> None:
-    """Normalize one line: reassign its product and optionally recategorize that product.
+    """Normalize one line: reassign its product, recategorize, fix its receipt text/size/unit.
 
     Use this from the search view to fix a single line in isolation. The line is repointed to
-    the product named `canonical_name` (get-or-created, so a new name creates a product), which
-    affects only this line. A supplied `category_id` is written back to that shared product,
-    recategorizing every line that resolves to it. Commits on success.
+    the product named `canonical_name` (get-or-created). A supplied `category_id` is written
+    back to the shared product. A supplied `raw_description` overwrites this line's receipt
+    text. When `unit` or `unit_size` changes, the measure columns are recomputed and
+    `measure_source` is pinned to MANUAL so the startup backfill never overwrites the human
+    edit. Commits on success.
 
     Args:
         session: SQLAlchemy session; this function commits on success.
-        line_item: The line to reassign; mutated in place.
+        line_item: The line to edit; mutated in place.
         canonical_name: The product name to point the line at, created if it does not exist.
         category_id: Taxonomy category to write back to the product, or None to leave it.
+        raw_description: Edited receipt text for this line, or None to leave it unchanged.
+        unit: Edited unit string ("lb", "ea", ...); blank is treated as None.
+        unit_size: Edited package-size text ("2L", "12CT", ...); blank is treated as None.
 
     Raises:
         ValueError: If `category_id` is given but no such category exists.
     """
     product = resolve_product(session, canonical_name)
+    if raw_description is not None:
+        line_item.raw_description = raw_description
     if category_id is not None:
         category = session.get(Category, category_id)
         if category is None:
@@ -203,6 +213,26 @@ def apply_line_item_edit(
         # Write-back to the shared product recategorizes every line using it (by design).
         product.category = category
     line_item.product = product
+
+    new_unit = unit.strip() or None if unit is not None else line_item.unit
+    new_size = unit_size.strip() or None if unit_size is not None else line_item.unit_size
+    # Only recompute (and pin MANUAL) when the human actually changed the measure inputs;
+    # a product-only edit must leave inferred/printed provenance intact.
+    if new_unit != line_item.unit or new_size != line_item.unit_size:
+        line_item.unit = new_unit
+        line_item.unit_size = new_size
+        norm = normalize_line_item(
+            quantity=line_item.quantity,
+            unit=new_unit,
+            unit_size=new_size,
+            line_total=line_item.line_total,
+        )
+        line_item.measure_quantity = norm.measure_quantity
+        line_item.measure_dimension = norm.measure_dimension
+        line_item.normalized_unit_price = norm.normalized_unit_price
+        line_item.measure_status = norm.measure_status
+        line_item.measure_source = MeasureSource.MANUAL
+
     session.commit()
 
 

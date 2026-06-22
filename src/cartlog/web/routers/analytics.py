@@ -22,10 +22,12 @@ from cartlog.analytics.search_sort import SearchSortKey
 from cartlog.analytics.service import AnalyticsService
 from cartlog.categories.service import CategoryService
 from cartlog.clock import naive_utcnow
+from cartlog.constants import ALLOWED_UNIT_TOKENS
 from cartlog.db.models import LineItem
 from cartlog.db.sort import SortDir
 from cartlog.receipts.service import apply_line_item_edit
 from cartlog.web.dependencies import get_analytics_service, get_session
+from cartlog.web.forms import clean_required_text
 from cartlog.web.guards import RequireEditor, require_read
 from cartlog.web.templating import templates
 from cartlog.web.units_display import read_unit_system
@@ -34,6 +36,9 @@ from cartlog.web.units_display import read_unit_system
 router = APIRouter(dependencies=[Depends(require_read)])
 
 ServiceDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
+
+# Data columns + the editor action column; the panel <td> spans the whole row.
+_SEARCH_COLSPAN = 9
 
 
 @router.get("/api/analytics/price-history", response_model=PriceHistory)
@@ -134,6 +139,7 @@ def search_results(
             "sort": sort,
             "direction": direction,
             "product_names": service.product_names(),
+            "unit_tokens": ALLOWED_UNIT_TOKENS,
             "unit_system": read_unit_system(request),
         },
     )
@@ -162,20 +168,44 @@ def search_item_edit(
     session: Annotated[Session, Depends(get_session)],
     _editor: RequireEditor,
 ) -> HTMLResponse:
-    """Render the editable row for one line: product datalist input + category picker."""
+    """Open the inline edit panel for one line: product, category, size, and unit."""
     row = service.line_item_row(line_item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Line item not found")
     category_options = CategoryService(session).candidate_pairs(include_system=True)
     return templates.TemplateResponse(
         request,
-        "partials/_search_row_edit.html",
-        {"r": row, "category_options": category_options, "unit_system": read_unit_system(request)},
+        "partials/_search_edit_panel.html",
+        {
+            "r": row,
+            "category_options": category_options,
+            "colspan": _SEARCH_COLSPAN,
+            "open": True,
+            "unit_system": read_unit_system(request),
+        },
+    )
+
+
+@router.get("/search/items/{line_item_id}/cancel", response_class=HTMLResponse)
+def search_item_cancel(
+    line_item_id: int,
+    request: Request,
+    service: ServiceDep,
+    _editor: RequireEditor,
+) -> HTMLResponse:
+    """Close the edit panel without saving: drop the panel and restore the read row (OOB)."""
+    row = service.line_item_row(line_item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Line item not found")
+    return templates.TemplateResponse(
+        request,
+        "partials/_search_edit_panel.html",
+        {"r": row, "open": False, "unit_system": read_unit_system(request)},
     )
 
 
 @router.post("/search/items/{line_item_id}", response_class=HTMLResponse)
-def search_item_save(
+def search_item_save(  # noqa: PLR0913 - form fields map 1:1 to panel inputs
     line_item_id: int,
     request: Request,
     service: ServiceDep,
@@ -183,13 +213,17 @@ def search_item_save(
     _editor: RequireEditor,
     canonical_name: Annotated[str, Form()],
     category_id: Annotated[str, Form()] = "",
+    raw_description: Annotated[str, Form()] = "",
+    unit: Annotated[str, Form()] = "",
+    unit_size: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
-    """Reassign a line's product (and optionally its category), returning the updated row.
+    """Save the inline edit panel, returning the closed panel + OOB read row, or a 422 panel.
 
-    A blank canonical name or a bad category id re-renders the edit row with a 422 and an
-    error message; base.html opts 422 responses into an htmx swap for search rows. An empty
-    category_id means 'leave the category unchanged' (the picker cannot clear a category to
-    null), matching the receipt editor.
+    A blank canonical name, blank receipt text, or a bad category id re-renders the open panel
+    with a 422 and an error message; base.html opts 422 responses into an htmx swap for
+    search-edit panels. An empty category_id means 'leave the category unchanged'. unit/unit_size
+    recompute the measure when they change. The receipt text is validated by the same
+    clean_required_text rule the receipt review form uses.
     """
     # 404 when the line is missing OR not something search would surface (failed receipt):
     # line_item_row applies search()'s counted-status filter, so it guards both at once. The
@@ -201,6 +235,7 @@ def search_item_save(
     name = canonical_name.strip()
     error: str | None = None
     cat_id: int | None = None
+    text: str | None = None
     # Parse the picker value defensively: a non-numeric category_id reaches us only via a
     # tampered POST, but it must surface as an inline 422 rather than an unhandled 500.
     try:
@@ -211,9 +246,24 @@ def search_item_save(
     if error is None and not name:
         error = "Product name is required."
 
+    # Receipt text is required: reuse the same validator the receipt review form applies.
     if error is None:
         try:
-            apply_line_item_edit(session, line_item, canonical_name=name, category_id=cat_id)
+            text = clean_required_text(raw_description)
+        except ValueError as exc:
+            error = str(exc)
+
+    if error is None:
+        try:
+            apply_line_item_edit(
+                session,
+                line_item,
+                canonical_name=name,
+                category_id=cat_id,
+                raw_description=text,
+                unit=unit,
+                unit_size=unit_size,
+            )
         except ValueError as exc:
             session.rollback()
             error = str(exc)
@@ -226,12 +276,25 @@ def search_item_save(
 
     if error is not None:
         category_options = CategoryService(session).candidate_pairs(include_system=True)
+        # Re-render the panel form ALONE (not via _search_edit_panel.html, which also emits the
+        # read row): the form targets #search-edit-{id}, so emitting the read row here too would
+        # swap a second copy of it into the DOM. Prefill the user's submitted values so a
+        # validation error never discards what they typed.
+        prefilled = row.model_copy(
+            update={
+                "raw_description": raw_description,
+                "canonical_name": name,
+                "unit": unit.strip() or None,
+                "unit_size": unit_size.strip() or None,
+            }
+        )
         return templates.TemplateResponse(
             request,
-            "partials/_search_row_edit.html",
+            "partials/_search_edit_form.html",
             {
-                "r": row,
+                "r": prefilled,
                 "category_options": category_options,
+                "colspan": _SEARCH_COLSPAN,
                 "errors": error,
                 "unit_system": read_unit_system(request),
             },
@@ -239,5 +302,7 @@ def search_item_save(
         )
 
     return templates.TemplateResponse(
-        request, "partials/_search_row.html", {"r": row, "unit_system": read_unit_system(request)}
+        request,
+        "partials/_search_edit_panel.html",
+        {"r": row, "open": False, "unit_system": read_unit_system(request)},
     )

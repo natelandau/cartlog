@@ -92,7 +92,9 @@
         const allowed = ["items-panel", "category-panel", "folder-settings", "access-settings"];
         // search rows have dynamic ids (search-row-<line_item_id>); match by prefix so the
         // inline editor's 422 re-render displays its error instead of being dropped.
-        const isSearchRow = target && target.id && target.id.startsWith("search-row-");
+        const isSearchRow =
+          target && target.id &&
+          (target.id.startsWith("search-row-") || target.id.startsWith("search-edit-"));
         if (
           event.detail.xhr.status === 422 &&
           target &&
@@ -100,6 +102,21 @@
         ) {
           event.detail.shouldSwap = true;
           event.detail.isError = false;
+        }
+      });
+
+      // Escape dismisses an open inline search-edit panel. A single delegated listener is more
+      // reliable than a per-panel inline handler on freshly htmx-swapped content. It issues the
+      // cancel request via htmx.ajax() rather than clicking the panel's Cancel button: htmx may
+      // not have finished wiring that button's hx-get immediately after the swap, but htmx.ajax
+      // resolves its target at call time, so it never races the swap's settle.
+      document.body.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape") return;
+        var panel = document.querySelector(".search-edit-panel");
+        var url = panel && panel.getAttribute("data-cancel-url");
+        if (panel && panel.id && url) {
+          event.preventDefault();
+          htmx.ajax("GET", url, { target: "#" + panel.id, swap: "outerHTML swap:320ms" });
         }
       });
 

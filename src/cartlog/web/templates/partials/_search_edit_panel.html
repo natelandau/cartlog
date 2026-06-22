@@ -1,0 +1,15 @@
+{# Inline edit panel for one search line. Context: r (SearchResult), category_options
+   [(id, name)], colspan (int), open (bool).
+
+   open=True  -> read row (Edit suppressed) + the panel form (used by /edit to open the panel).
+   open=False -> empty body + OOB read row that restores the Edit button (save-success/cancel).
+
+   A 422 re-render does NOT use this template: it returns _search_edit_form.html alone so the
+   swap replaces only the panel and never duplicates the read row. #}
+{% if open %}
+  {% with editing=True, can_edit=True %}{% include "partials/_search_row.html" %}{% endwith %}
+  {% include "partials/_search_edit_form.html" %}
+{% else %}
+  {# OOB-restore the read row; the empty primary removes the panel. #}
+  {% with editing=False, can_edit=True, oob=True %}{% include "partials/_search_row.html" %}{% endwith %}
+{% endif %}

@@ -33,6 +33,9 @@
   <datalist id="search-products">
     {% for name in product_names %}<option value="{{ name }}"></option>{% endfor %}
   </datalist>
+  <datalist id="search-units">
+    {% for token in unit_tokens %}<option value="{{ token }}"></option>{% endfor %}
+  </datalist>
   {% else %}
   <p class="text-base-content/60">No matching line items for "{{ q }}".</p>
   {% endif %}
