@@ -25,7 +25,7 @@
     <fieldset class="fieldset">
       <legend class="fieldset-legend">Category</legend>
       <div class="flex items-center gap-1">
-        {% with options=category_options, current_id=(li.product.category_id if li else None) %}
+        {% with options=category_options, current_id=(li.product.category_id if li else None), select_class="select select-sm w-full" %}
           {% include "partials/_category_picker.html" %}
         {% endwith %}
         {# Appends an inline new-category form inside this fieldset (no <td> in the card layout). #}
@@ -34,26 +34,50 @@
       </div>
     </fieldset>
   </div>
-  <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+  <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
     <fieldset class="fieldset">
-      <legend class="fieldset-legend">Qty</legend>
-      <input class="input input-sm num w-full" name="quantity" type="number" step="0.001" inputmode="decimal" value="{{ li.quantity if li else '1' }}" />
+      <legend class="fieldset-legend">Sold by</legend>
+      <select class="select select-sm w-full sold-by" name="sold_by"
+              onchange="syncSoldBy(this)">
+        <option value="item"{{ ' selected' if not li or li.sold_by == 'item' else '' }}>By the item</option>
+        <option value="measure"{{ ' selected' if li and li.sold_by == 'measure' else '' }}>By weight or volume</option>
+      </select>
     </fieldset>
     <fieldset class="fieldset">
+      <legend class="fieldset-legend">Quantity</legend>
+      <input class="input input-sm num w-full" name="quantity" type="number" step="0.001"
+             inputmode="decimal" value="{{ li.quantity if li else '1' }}" />
+    </fieldset>
+    {# ITEM-only: size each. Keep hidden, not disabled, so the strict-zip POST stays aligned #}
+    <fieldset class="fieldset sold-by-group" data-sold-by-group="item">
+      <legend class="fieldset-legend">Size each</legend>
+      <div class="join w-full">
+        <input class="input input-sm num join-item w-3/5" name="size_amount" type="number"
+               step="0.0001" inputmode="decimal" placeholder="Amount" aria-label="Size amount"
+               value="{{ li.size_amount if li and li.size_amount is not none else '' }}" />
+        <select class="select select-sm join-item w-2/5" name="size_unit" aria-label="Size unit">
+          <option value="">No size</option>
+          {% for value, label in size_units %}<option value="{{ value }}"{{ ' selected' if li and li.size_unit == value else '' }}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+    </fieldset>
+    {# MEASURE-only: unit. Hidden by default so ITEM mode shows Size each above #}
+    <fieldset class="fieldset sold-by-group" data-sold-by-group="measure" hidden>
       <legend class="fieldset-legend">Unit</legend>
-      <input class="input input-sm w-full" name="unit" value="{{ (li.unit or '') if li else '' }}" />
-    </fieldset>
-    <fieldset class="fieldset">
-      <legend class="fieldset-legend">Size</legend>
-      <input class="input input-sm w-full" name="unit_size" value="{{ (li.unit_size or '') if li else '' }}" />
+      <select class="select select-sm w-full" name="measure_unit" aria-label="Unit">
+        <option value="">Select a unit</option>
+        {% for value, label in measure_units %}<option value="{{ value }}"{{ ' selected' if li and li.measure_unit == value else '' }}>{{ label }}</option>{% endfor %}
+      </select>
     </fieldset>
     <fieldset class="fieldset">
       <legend class="fieldset-legend">Unit price</legend>
-      <input class="input input-sm num w-full" name="unit_price" type="number" step="0.01" inputmode="decimal" value="{{ li.unit_price if li else '0.00' }}" />
+      <input class="input input-sm num w-full" name="unit_price" type="number" step="0.01"
+             inputmode="decimal" value="{{ li.unit_price if li else '0.00' }}" />
     </fieldset>
     <fieldset class="fieldset">
       <legend class="fieldset-legend">Line total</legend>
-      <input class="input input-sm num w-full" name="line_total" type="number" step="0.01" inputmode="decimal" value="{{ li.line_total if li else '0.00' }}" />
+      <input class="input input-sm num w-full" name="line_total" type="number" step="0.01"
+             inputmode="decimal" value="{{ li.line_total if li else '0.00' }}" />
     </fieldset>
   </div>
 </div>

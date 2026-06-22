@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING
 from cartlog.db.models import Category, IngestionJob, JobStatus, LineItem, Receipt, Store
 from cartlog.ingest.persistence import _get_or_create
 from cartlog.products.service import resolve_product
-from cartlog.units import MeasureSource, normalize_line_item
+from cartlog.units import MeasureSource, SoldBy, compute_measure
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from sqlalchemy.orm import Session
 
     from cartlog.web.forms import ReceiptEdit
@@ -145,22 +147,26 @@ def apply_receipt_edit(session: Session, receipt: Receipt, edit: ReceiptEdit) ->
 
         item.raw_description = line.raw_description
         item.quantity = line.quantity
-        item.unit = line.unit
-        item.unit_size = line.unit_size
+        item.sold_by = line.sold_by
+        item.measure_unit = line.measure_unit
+        item.size_amount = line.size_amount
+        item.size_unit = line.size_unit
         item.unit_price = line.unit_price
         item.line_total = line.line_total
 
-        # Recompute deterministically from unit/unit_size; the edit form carries no llm_measure.
-        norm = normalize_line_item(
+        norm = compute_measure(
+            sold_by=line.sold_by,
             quantity=line.quantity,
-            unit=line.unit,
-            unit_size=line.unit_size,
+            measure_unit=line.measure_unit,
+            size_amount=line.size_amount,
+            size_unit=line.size_unit,
             line_total=line.line_total,
         )
         item.measure_quantity = norm.measure_quantity
         item.measure_dimension = norm.measure_dimension
         item.normalized_unit_price = norm.normalized_unit_price
         item.measure_status = norm.measure_status
+        item.measure_source = MeasureSource.MANUAL
 
     # Lines the operator dropped from the form are deleted (cascades via the relationship).
     for line_id, item in existing.items():
@@ -178,17 +184,16 @@ def apply_line_item_edit(  # noqa: PLR0913 - args map 1:1 to a line's editable f
     canonical_name: str,
     category_id: int | None,
     raw_description: str | None = None,
-    unit: str | None = None,
-    unit_size: str | None = None,
+    sold_by: SoldBy | None = None,
+    measure_unit: str | None = None,
+    size_amount: Decimal | None = None,
+    size_unit: str | None = None,
 ) -> None:
-    """Normalize one line: reassign its product, recategorize, fix its receipt text/size/unit.
+    """Normalize one line: reassign its product, recategorize, fix text/mode/size.
 
-    Use this from the search view to fix a single line in isolation. The line is repointed to
-    the product named `canonical_name` (get-or-created). A supplied `category_id` is written
-    back to the shared product. A supplied `raw_description` overwrites this line's receipt
-    text. When `unit` or `unit_size` changes, the measure columns are recomputed and
-    `measure_source` is pinned to MANUAL so the startup backfill never overwrites the human
-    edit. Commits on success.
+    When any measure input (sold_by, measure_unit, size_amount, size_unit) differs from the
+    stored value, the measure columns are recomputed and measure_source is pinned to MANUAL so
+    the startup backfill never overwrites the human edit. Commits on success.
 
     Args:
         session: SQLAlchemy session; this function commits on success.
@@ -196,8 +201,10 @@ def apply_line_item_edit(  # noqa: PLR0913 - args map 1:1 to a line's editable f
         canonical_name: The product name to point the line at, created if it does not exist.
         category_id: Taxonomy category to write back to the product, or None to leave it.
         raw_description: Edited receipt text for this line, or None to leave it unchanged.
-        unit: Edited unit string ("lb", "ea", ...); blank is treated as None.
-        unit_size: Edited package-size text ("2L", "12CT", ...); blank is treated as None.
+        sold_by: How the line was sold (ITEM or MEASURE), or None to leave unchanged.
+        measure_unit: Weight/volume unit for MEASURE lines, or None to leave unchanged.
+        size_amount: Per-item size amount for ITEM lines, or None to leave unchanged.
+        size_unit: Per-item size unit for ITEM lines, or None to leave unchanged.
 
     Raises:
         ValueError: If `category_id` is given but no such category exists.
@@ -214,17 +221,34 @@ def apply_line_item_edit(  # noqa: PLR0913 - args map 1:1 to a line's editable f
         product.category = category
     line_item.product = product
 
-    new_unit = unit.strip() or None if unit is not None else line_item.unit
-    new_size = unit_size.strip() or None if unit_size is not None else line_item.unit_size
+    # All four measure inputs are gated together on sold_by, not each on its own: when the
+    # caller supplies a mode (the search editor always does), the submitted measure is taken
+    # whole, so clearing a field (e.g. blanking measure_unit on an ITEM edit) actually clears
+    # it rather than falling back to the stale stored value. The sold_by-None branch is an
+    # unreachable defensive no-op for the current callers; do not split it into per-field
+    # fallbacks, which would reintroduce the stale-measure_unit hazard.
+    new_mode = sold_by if sold_by is not None else SoldBy(line_item.sold_by)
+    new_munit = measure_unit if sold_by is not None else line_item.measure_unit
+    new_amount = size_amount if sold_by is not None else line_item.size_amount
+    new_sunit = size_unit if sold_by is not None else line_item.size_unit
     # Only recompute (and pin MANUAL) when the human actually changed the measure inputs;
     # a product-only edit must leave inferred/printed provenance intact.
-    if new_unit != line_item.unit or new_size != line_item.unit_size:
-        line_item.unit = new_unit
-        line_item.unit_size = new_size
-        norm = normalize_line_item(
+    if (
+        new_mode != line_item.sold_by
+        or new_munit != line_item.measure_unit
+        or new_amount != line_item.size_amount
+        or new_sunit != line_item.size_unit
+    ):
+        line_item.sold_by = new_mode
+        line_item.measure_unit = new_munit
+        line_item.size_amount = new_amount
+        line_item.size_unit = new_sunit
+        norm = compute_measure(
+            sold_by=new_mode,
             quantity=line_item.quantity,
-            unit=new_unit,
-            unit_size=new_size,
+            measure_unit=new_munit,
+            size_amount=new_amount,
+            size_unit=new_sunit,
             line_total=line_item.line_total,
         )
         line_item.measure_quantity = norm.measure_quantity

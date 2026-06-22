@@ -53,7 +53,7 @@
           <td data-label="Description">{{ li.raw_description }}</td>
           <td data-label="Product">{{ li.product.canonical_name }}</td>
           <td data-label="Category">{{ li.product.category.name if li.product.category else "" }}</td>
-          <td class="num text-right" data-label="Qty">{{ li.quantity }}{% if li.unit %} {{ li.unit }}{% endif %}</td>
+          <td class="num text-right" data-label="Qty">{% set m = format_measure(sold_by=li.sold_by, quantity=li.quantity, measure_unit=li.measure_unit, size_amount=li.size_amount, size_unit=li.size_unit) %}{{ m if m else li.quantity }}</td>
           <td class="num text-right" data-label="Unit price">{{ li.unit_price }}</td>
           <td class="num text-right" data-label="Norm $/unit">{{ li.normalized_unit_price | normalized_price(li.measure_dimension, li.measure_status, unit_system) }}{% if can_edit and li.measure_status == "needs_review" %} <span class="badge badge-warning badge-xs">review</span>{% endif %}</td>
           <td class="num text-right" data-label="Line total">{{ li.line_total }}</td>

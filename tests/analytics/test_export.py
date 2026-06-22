@@ -105,8 +105,10 @@ def _sample_row() -> LineItemExportRow:
         canonical_name="eggs",
         category="dairy",
         quantity=Decimal(1),
-        unit=None,
-        unit_size="12CT",
+        sold_by="item",
+        measure_unit=None,
+        size_amount=Decimal(12),
+        size_unit="ct",
         unit_price=Decimal("3.00"),
         line_total=Decimal("3.00"),
         measure_quantity=None,
@@ -131,7 +133,7 @@ def test_render_export_csv_has_header_and_rows():
     assert len(parsed) == 1
     assert parsed[0]["canonical_name"] == "eggs"
     assert parsed[0]["unit_price"] == "3.00"  # Decimal preserved as string
-    assert parsed[0]["unit"] == ""  # None rendered blank
+    assert parsed[0]["sold_by"] == "item"
     assert parsed[0]["quantity"] == "1"
 
 
@@ -149,7 +151,7 @@ def test_render_export_json_shape():
     assert ext == "json"
     assert len(payload) == 1
     assert payload[0]["unit_price"] == "3.00"
-    assert payload[0]["unit"] is None
+    assert payload[0]["sold_by"] == "item"
     assert payload[0]["quantity"] == "1"
 
 

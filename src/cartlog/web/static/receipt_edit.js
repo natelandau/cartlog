@@ -1,11 +1,43 @@
 // Helpers for the receipt edit form. Loaded on the detail page so they are defined before
 // the edit partial is swapped in via HTMX.
 
+// Show only the field group matching the line's "sold by" mode; the other stays in the DOM
+// (empty) so the strictly-zipped form columns remain aligned on submit.
+function syncSoldBy(select) {
+  const card = select.closest(".line-item");
+  const mode = select.value;
+  card.querySelectorAll("[data-sold-by-group]").forEach(function (group) {
+    const active = group.dataset.soldByGroup === mode;
+    group.hidden = !active;
+    // Clear the inactive group's inputs so a value left over from a prior mode (e.g. a
+    // measure unit kept after toggling to item mode) is never submitted and rejected by
+    // the form validator. The fields stay in the DOM so the strict-zip columns stay aligned.
+    if (!active) {
+      group.querySelectorAll("input, select").forEach(function (field) {
+        field.value = "";
+      });
+    }
+  });
+}
+
+// Initialize every card on load and after htmx swaps.
+function syncAllSoldBy() {
+  document.querySelectorAll("select.sold-by").forEach(syncSoldBy);
+}
+document.addEventListener("DOMContentLoaded", syncAllSoldBy);
+document.body.addEventListener("htmx:afterSwap", syncAllSoldBy);
+
 function addLineRow() {
   const template = document.getElementById("line-row-template");
   const tbody = document.getElementById("line-rows");
   if (!template || !tbody) return;
   tbody.appendChild(template.content.cloneNode(true));
+  // Sync the sold-by toggle on the newly cloned row so the ITEM group starts visible.
+  const lastCard = tbody.lastElementChild;
+  if (lastCard) {
+    const soldBySelect = lastCard.querySelector("select.sold-by");
+    if (soldBySelect) syncSoldBy(soldBySelect);
+  }
   updateReconcileHint(); // a new item changes the line-total sum
 }
 

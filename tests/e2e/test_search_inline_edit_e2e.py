@@ -68,8 +68,9 @@ def test_search_panel_edits_size_and_saves_desktop(page: Page, live_server: str)
     line_id = _open_first_panel(page, live_server)
     panel = page.locator(f"#search-edit-{line_id}")
 
-    # When the editor sets a new size and saves
-    panel.get_by_role("textbox", name="Package size").fill("2L")
+    # When the editor fills in size_amount and selects a size_unit and saves
+    panel.locator("input[name='size_amount']").fill("2")
+    panel.locator("select[name='size_unit']").select_option("l")
     panel.get_by_role("button", name="Save").click()
 
     # Then the panel closes and the read row is back with its Edit button
@@ -128,7 +129,7 @@ def test_search_panel_escape_closes(page: Page, live_server: str) -> None:
 
     # Given an open edit panel
     line_id = _open_first_panel(page, live_server)
-    size_field = page.locator(f"#search-edit-{line_id}").get_by_role("textbox", name="Package size")
+    size_field = page.locator(f"#search-edit-{line_id}").locator("input[name='size_amount']")
 
     # When an Escape keydown is raised inside the panel. We dispatch a real bubbling
     # KeyboardEvent rather than page.keyboard.press(): headless Chromium does not reliably
@@ -158,17 +159,18 @@ def test_search_panel_usable_on_mobile(mobile_page: Page, live_server: str) -> N
     line_id = _open_first_panel(mobile_page, live_server)
     panel = mobile_page.locator(f"#search-edit-{line_id}")
 
-    # Then the size field is visible and spans most of the 390px viewport width. With the CSS
+    # Then the size_amount field is visible and spans most of the 390px viewport width. With the CSS
     # specificity fix, .data-table .search-edit-panel td (0,2,1) beats .data-table tbody td
     # (0,1,2), so the panel renders as a full-width block instead of a flex card cell.
-    size_field = panel.get_by_role("textbox", name="Package size")
+    size_field = panel.locator("input[name='size_amount']")
     expect(size_field).to_be_visible()
     box = size_field.bounding_box()
-    assert box is not None, "Size field has no bounding box"
-    assert box["width"] > 280, f"Size field appears collapsed: width={box['width']:.0f}px"
+    assert box is not None, "Size amount field has no bounding box"
+    assert box["width"] > 100, f"Size amount field appears collapsed: width={box['width']:.0f}px"
 
     # And saving works on mobile too
-    size_field.fill("500ml")
+    size_field.fill("500")
+    panel.locator("select[name='size_unit']").select_option("ml")  # lowercase canonical token
     panel.get_by_role("button", name="Save").click()
     expect(mobile_page.locator(f"#search-edit-{line_id}")).to_have_count(0)
 

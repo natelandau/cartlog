@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date  # noqa: TC003  # used at runtime by FastAPI for query-param coercion
+from datetime import date  # noqa: TC003
+from decimal import Decimal  # used at runtime for Decimal() parsing
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
@@ -26,11 +27,12 @@ from cartlog.constants import ALLOWED_UNIT_TOKENS
 from cartlog.db.models import LineItem
 from cartlog.db.sort import SortDir
 from cartlog.receipts.service import apply_line_item_edit
+from cartlog.units import SoldBy
 from cartlog.web.dependencies import get_analytics_service, get_session
-from cartlog.web.forms import clean_required_text
+from cartlog.web.forms import clean_required_text, measure_mode_error
 from cartlog.web.guards import RequireEditor, require_read
 from cartlog.web.templating import templates
-from cartlog.web.units_display import read_unit_system
+from cartlog.web.units_display import measure_unit_options, read_unit_system, size_unit_options
 
 # All analytics routes require at least read access (anonymous allowed when public read is on).
 router = APIRouter(dependencies=[Depends(require_read)])
@@ -182,6 +184,8 @@ def search_item_edit(
             "colspan": _SEARCH_COLSPAN,
             "open": True,
             "unit_system": read_unit_system(request),
+            "measure_units": measure_unit_options(),
+            "size_units": size_unit_options(),
         },
     )
 
@@ -205,7 +209,7 @@ def search_item_cancel(
 
 
 @router.post("/search/items/{line_item_id}", response_class=HTMLResponse)
-def search_item_save(  # noqa: PLR0913 - form fields map 1:1 to panel inputs
+def search_item_save(  # noqa: PLR0913, C901, PLR0912 - form fields map 1:1 to panel inputs; complexity from validation branches
     line_item_id: int,
     request: Request,
     service: ServiceDep,
@@ -214,16 +218,18 @@ def search_item_save(  # noqa: PLR0913 - form fields map 1:1 to panel inputs
     canonical_name: Annotated[str, Form()],
     category_id: Annotated[str, Form()] = "",
     raw_description: Annotated[str, Form()] = "",
-    unit: Annotated[str, Form()] = "",
-    unit_size: Annotated[str, Form()] = "",
+    sold_by: Annotated[str, Form()] = "item",
+    measure_unit: Annotated[str, Form()] = "",
+    size_amount: Annotated[str, Form()] = "",
+    size_unit: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     """Save the inline edit panel, returning the closed panel + OOB read row, or a 422 panel.
 
     A blank canonical name, blank receipt text, or a bad category id re-renders the open panel
     with a 422 and an error message; base.html opts 422 responses into an htmx swap for
-    search-edit panels. An empty category_id means 'leave the category unchanged'. unit/unit_size
-    recompute the measure when they change. The receipt text is validated by the same
-    clean_required_text rule the receipt review form uses.
+    search-edit panels. An empty category_id means 'leave the category unchanged'. The
+    sold_by/measure_unit/size_amount/size_unit fields recompute the measure when they change.
+    The receipt text is validated by the same clean_required_text rule the receipt review form uses.
     """
     # 404 when the line is missing OR not something search would surface (failed receipt):
     # line_item_row applies search()'s counted-status filter, so it guards both at once. The
@@ -236,12 +242,41 @@ def search_item_save(  # noqa: PLR0913 - form fields map 1:1 to panel inputs
     error: str | None = None
     cat_id: int | None = None
     text: str | None = None
+    parsed_sold_by: SoldBy = SoldBy.ITEM
+    parsed_size_amount: Decimal | None = None
     # Parse the picker value defensively: a non-numeric category_id reaches us only via a
     # tampered POST, but it must surface as an inline 422 rather than an unhandled 500.
     try:
         cat_id = int(category_id) if category_id.strip() else None
     except ValueError:
         error = "Invalid category selection."
+
+    # Parse sold_by: an unknown enum value is a tampered POST, surface as inline 422.
+    if error is None:
+        try:
+            parsed_sold_by = SoldBy(sold_by)
+        except ValueError:
+            error = "Invalid sold_by value."
+
+    # Parse size_amount: blank means None, a non-numeric string is a tampered POST.
+    if error is None:
+        raw_amount = size_amount.strip()
+        if raw_amount:
+            try:
+                parsed_size_amount = Decimal(raw_amount)
+            except Exception:  # noqa: BLE001  # any non-numeric string -> inline 422
+                error = "Invalid size amount."
+
+    # Enforce the same measure-mode rules the receipt review form applies, so the two edit
+    # paths cannot diverge (e.g. a MEASURE line saved with no unit, or an item size given as
+    # only an amount or only a unit, which would silently resolve to per-each).
+    if error is None:
+        error = measure_mode_error(
+            sold_by=parsed_sold_by,
+            measure_unit=measure_unit.strip() or None,
+            size_amount=parsed_size_amount,
+            size_unit=size_unit.strip() or None,
+        )
 
     if error is None and not name:
         error = "Product name is required."
@@ -261,8 +296,10 @@ def search_item_save(  # noqa: PLR0913 - form fields map 1:1 to panel inputs
                 canonical_name=name,
                 category_id=cat_id,
                 raw_description=text,
-                unit=unit,
-                unit_size=unit_size,
+                sold_by=parsed_sold_by,
+                measure_unit=measure_unit.strip() or None,
+                size_amount=parsed_size_amount,
+                size_unit=size_unit.strip() or None,
             )
         except ValueError as exc:
             session.rollback()
@@ -284,8 +321,10 @@ def search_item_save(  # noqa: PLR0913 - form fields map 1:1 to panel inputs
             update={
                 "raw_description": raw_description,
                 "canonical_name": name,
-                "unit": unit.strip() or None,
-                "unit_size": unit_size.strip() or None,
+                "sold_by": sold_by,
+                "measure_unit": measure_unit.strip() or None,
+                "size_amount": parsed_size_amount,
+                "size_unit": size_unit.strip() or None,
             }
         )
         return templates.TemplateResponse(
@@ -297,6 +336,8 @@ def search_item_save(  # noqa: PLR0913 - form fields map 1:1 to panel inputs
                 "colspan": _SEARCH_COLSPAN,
                 "errors": error,
                 "unit_system": read_unit_system(request),
+                "measure_units": measure_unit_options(),
+                "size_units": size_unit_options(),
             },
             status_code=422,
         )

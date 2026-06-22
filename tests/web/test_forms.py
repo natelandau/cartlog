@@ -5,8 +5,10 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 
-from cartlog.web.forms import parse_review_form
+from cartlog.units import SoldBy
+from cartlog.web.forms import LineEdit, parse_review_form
 
 BASE_HEADER = {
     "chain_name": ["Safeway"],
@@ -31,8 +33,10 @@ def test_parse_review_form_blank_line_id_is_none() -> None:
         canonical_name=["bread"],
         category_id=["5"],
         quantity=["1"],
-        unit=[""],
-        unit_size=[""],
+        sold_by=["item"],
+        measure_unit=[""],
+        size_amount=[""],
+        size_unit=[""],
         unit_price=["2.00"],
         line_total=["2.00"],
     )
@@ -54,8 +58,10 @@ def test_parse_review_form_trims_receipt_text() -> None:
         raw_description=["  EGGS  "],
         canonical_name=["eggs"],
         quantity=["1"],
-        unit=[""],
-        unit_size=[""],
+        sold_by=["item"],
+        measure_unit=[""],
+        size_amount=[""],
+        size_unit=[""],
         unit_price=["3.00"],
         line_total=["3.00"],
     )
@@ -75,8 +81,10 @@ def test_parse_review_form_blank_receipt_text_rejected() -> None:
         raw_description=["   "],
         canonical_name=["eggs"],
         quantity=["1"],
-        unit=[""],
-        unit_size=[""],
+        sold_by=["item"],
+        measure_unit=[""],
+        size_amount=[""],
+        size_unit=[""],
         unit_price=["3.00"],
         line_total=["3.00"],
     )
@@ -94,8 +102,10 @@ def test_parse_review_form_category_id_optional_when_absent() -> None:
         raw_description=["EGGS"],
         canonical_name=["eggs"],
         quantity=["1"],
-        unit=[""],
-        unit_size=[""],
+        sold_by=["item"],
+        measure_unit=[""],
+        size_amount=[""],
+        size_unit=[""],
         unit_price=["3.00"],
         line_total=["3.00"],
     )
@@ -117,8 +127,10 @@ def test_parse_review_form_ragged_core_columns_raises() -> None:
         canonical_name=["eggs", "milk"],
         category_id=["1", "2"],
         quantity=["1", "1"],
-        unit=["", ""],
-        unit_size=["", ""],
+        sold_by=["item", "item"],
+        measure_unit=["", ""],
+        size_amount=["", ""],
+        size_unit=["", ""],
         unit_price=["3.00"],
         line_total=["3.00", "2.00"],
     )
@@ -137,8 +149,10 @@ def test_parse_review_form_ragged_category_raises() -> None:
         canonical_name=["eggs", "milk"],
         category_id=["1", "2", "3"],
         quantity=["1", "1"],
-        unit=["", ""],
-        unit_size=["", ""],
+        sold_by=["item", "item"],
+        measure_unit=["", ""],
+        size_amount=["", ""],
+        size_unit=["", ""],
         unit_price=["3.00", "2.00"],
         line_total=["3.00", "2.00"],
     )
@@ -161,8 +175,10 @@ def test_parse_review_form_reads_category_id() -> None:
         "canonical_name": ["x"],
         "category_id": ["3"],
         "quantity": ["1"],
-        "unit": [""],
-        "unit_size": [""],
+        "sold_by": ["item"],
+        "measure_unit": [""],
+        "size_amount": [""],
+        "size_unit": [""],
         "unit_price": ["1.00"],
         "line_total": ["1.00"],
     }
@@ -170,3 +186,86 @@ def test_parse_review_form_reads_category_id() -> None:
     edit = parse_review_form(form)
     # Then the line carries the integer category_id
     assert edit.lines[0].category_id == 3
+
+
+def test_line_edit_measure_mode_requires_unit() -> None:
+    """Verify a MEASURE line with no measure_unit fails validation."""
+    # When constructing a MEASURE LineEdit without a measure_unit
+    with pytest.raises(ValidationError):
+        LineEdit(
+            line_id=None,
+            raw_description="x",
+            canonical_name="x",
+            category_id=None,
+            quantity=Decimal(1),
+            sold_by=SoldBy.MEASURE,
+            measure_unit=None,
+            size_amount=None,
+            size_unit=None,
+            unit_price=Decimal(1),
+            line_total=Decimal(1),
+        )
+
+
+def test_line_edit_item_partial_size_rejected() -> None:
+    """Verify an item line with a size amount but no size unit fails validation."""
+    # When constructing an ITEM LineEdit with size_amount set but size_unit blank
+    with pytest.raises(ValidationError):
+        LineEdit(
+            line_id=None,
+            raw_description="x",
+            canonical_name="x",
+            category_id=None,
+            quantity=Decimal(1),
+            sold_by=SoldBy.ITEM,
+            measure_unit=None,
+            size_amount=Decimal(16),
+            size_unit=None,
+            unit_price=Decimal(1),
+            line_total=Decimal(1),
+        )
+    # Then the symmetric case (unit without amount) is rejected too
+    with pytest.raises(ValidationError):
+        LineEdit(
+            line_id=None,
+            raw_description="x",
+            canonical_name="x",
+            category_id=None,
+            quantity=Decimal(1),
+            sold_by=SoldBy.ITEM,
+            measure_unit=None,
+            size_amount=None,
+            size_unit="oz",
+            unit_price=Decimal(1),
+            line_total=Decimal(1),
+        )
+
+
+def test_parse_review_form_reads_structured_columns() -> None:
+    """Verify parse_review_form maps sold_by/size_amount/size_unit into the LineEdit."""
+    # Given a form with structured measure fields
+    form = {
+        "chain_name": ["Store"],
+        "location": [""],
+        "purchase_date": ["2026-01-01"],
+        "total": ["20.60"],
+        "currency": ["USD"],
+        "line_id": [""],
+        "raw_description": ["Beef 16oz"],
+        "canonical_name": ["beef"],
+        "quantity": ["2"],
+        "sold_by": ["item"],
+        "measure_unit": [""],
+        "size_amount": ["16"],
+        "size_unit": ["oz"],
+        "unit_price": ["10.30"],
+        "line_total": ["20.60"],
+    }
+
+    # When parsing it
+    edit = parse_review_form(form)
+    line = edit.lines[0]
+
+    # Then the structured fields are populated correctly
+    assert line.sold_by == SoldBy.ITEM
+    assert (line.size_amount, line.size_unit) == (Decimal(16), "oz")

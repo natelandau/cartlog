@@ -116,3 +116,24 @@ UNIT_ALIASES: dict[str, str] = {
     "packs": "ct",
     "pkg": "ct",
 }
+
+# Human-friendly singular labels shown in edit-form unit dropdowns. The option VALUE stays the
+# canonical token (so parsing and storage are unchanged); only the visible text is spelled out,
+# e.g. "l" reads as "Liter" and "ct" as "Count". Keep one entry per UNIT_FACTORS token.
+UNIT_LABELS: dict[str, str] = {
+    "oz": "Ounce",
+    "lb": "Pound",
+    "g": "Gram",
+    "kg": "Kilogram",
+    "mg": "Milligram",
+    "floz": "Fluid ounce",
+    "cup": "Cup",
+    "pt": "Pint",
+    "qt": "Quart",
+    "gal": "Gallon",
+    "ml": "Milliliter",
+    "l": "Liter",
+    "ea": "Each",
+    "ct": "Count",
+    "each": "Each",
+}

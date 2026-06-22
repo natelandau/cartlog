@@ -5,9 +5,11 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from cartlog.db.backfill import normalize_existing_measures, recompute_product_typical_sizes
-from cartlog.db.models import Category, LineItem, Product, Receipt, Store
-from cartlog.units import MeasureSource, MeasureStatus
+from cartlog.db.models import LineItem, Product, Receipt, Store
+from cartlog.units import MeasureSource, MeasureStatus, SoldBy
 
 
 def _attach_to_receipt(session, line: LineItem) -> None:
@@ -27,54 +29,111 @@ def _attach_to_receipt(session, line: LineItem) -> None:
     session.add(receipt)
 
 
-def _seed(session, *, unit, unit_size):
-    product = Product(canonical_name="milk", category=Category(name="dairy"))
-    store = Store(chain_name="Safeway", location="Main St")
-    receipt = Receipt(
-        store=store,
-        purchase_date=date(2026, 3, 1),
-        total=Decimal("4.50"),
-        currency="USD",
-        image_path="/tmp/x.png",  # noqa: S108
-        raw_parser_json="{}",
-        source="cli",
-        status="parsed",
-    )
-    receipt.line_items.append(
-        LineItem(
-            product=product,
-            raw_description="MILK",
-            quantity=Decimal(1),
-            unit=unit,
-            unit_size=unit_size,
-            unit_price=Decimal("4.50"),
-            line_total=Decimal("4.50"),
+@pytest.fixture
+def product_factory(session):
+    """Return a factory that creates and flushes a Product with a given canonical_name."""
+
+    def make(canonical_name: str = "test product") -> Product:
+        product = Product(canonical_name=canonical_name)
+        session.add(product)
+        session.flush()
+        return product
+
+    return make
+
+
+@pytest.fixture
+def line_factory(session):
+    """Return a factory that creates a LineItem attached to a fresh receipt.
+
+    Accepts the structured measure kwargs (sold_by, measure_unit, size_amount, size_unit,
+    raw_description, measure_source) plus quantity, unit_price, and line_total. Creates a
+    Product and Store/Receipt if not provided.
+    """
+
+    def make(
+        *,
+        product: Product | None = None,
+        raw_description: str = "Test Item",
+        quantity: Decimal = Decimal(1),
+        unit_price: Decimal = Decimal("5.00"),
+        line_total: Decimal = Decimal("5.00"),
+        sold_by: SoldBy = SoldBy.ITEM,
+        measure_unit: str | None = None,
+        size_amount: Decimal | None = None,
+        size_unit: str | None = None,
+        measure_source: MeasureSource = MeasureSource.NONE,
+        measure_status: MeasureStatus = MeasureStatus.NOT_APPLICABLE,
+    ) -> LineItem:
+        if product is None:
+            product = Product(canonical_name=raw_description.lower())
+            session.add(product)
+        store = Store(chain_name="TestMart", location="Anywhere")
+        receipt = Receipt(
+            store=store,
+            purchase_date=date(2026, 1, 1),
+            total=line_total,
+            currency="USD",
+            image_path="/tmp/receipt.png",  # noqa: S108
+            raw_parser_json="{}",
+            source="cli",
+            status="parsed",
         )
+        line = LineItem(
+            product=product,
+            raw_description=raw_description,
+            quantity=quantity,
+            unit_price=unit_price,
+            line_total=line_total,
+            sold_by=sold_by,
+            measure_unit=measure_unit,
+            size_amount=size_amount,
+            size_unit=size_unit,
+            measure_source=measure_source,
+            measure_status=measure_status,
+        )
+        receipt.line_items.append(line)
+        session.add(receipt)
+        session.flush()
+        return line
+
+    return make
+
+
+def test_backfill_resolves_structured_size(session, line_factory):
+    """Verify backfill recomputes derived columns from existing structured size fields."""
+    # Given a line with structured size but no derived columns filled yet
+    line = line_factory(
+        raw_description="MILK",
+        size_amount=Decimal("1.5"),
+        size_unit="l",
+        measure_source=MeasureSource.PRINTED,
+        unit_price=Decimal("4.50"),
+        line_total=Decimal("4.50"),
     )
-    session.add(receipt)
-    session.commit()
-    return receipt.line_items[0]
-
-
-def test_backfill_resolves_from_unit_size(session):
-    """Verify backfill computes normalized columns from stored unit_size."""
-    # Given a line item with a measurable unit_size but no normalization yet
-    line = _seed(session, unit="ea", unit_size="1.5L")
 
     # When the backfill runs
     updated = normalize_existing_measures(session)
     session.refresh(line)
 
-    # Then the normalization columns are populated and the count is correct
+    # Then derived normalization columns are populated correctly
     assert updated == 1
-    assert line.measure_status == "resolved"
+    assert line.measure_status == MeasureStatus.RESOLVED
+    # 1.5 L = 1500 ml; $4.50 / 1500 = $0.003000
     assert line.normalized_unit_price == Decimal("0.003000")
 
 
-def test_backfill_is_idempotent(session):
-    """Verify a second backfill run detects no further changes."""
-    # Given a line item that has already been normalized
-    _seed(session, unit="ea", unit_size="1.5L")
+def test_backfill_is_idempotent(session, line_factory):
+    """Verify a second backfill run on an already-normalized line changes nothing."""
+    # Given a line that has already been normalized
+    line_factory(
+        raw_description="MILK",
+        size_amount=Decimal("1.5"),
+        size_unit="l",
+        measure_source=MeasureSource.PRINTED,
+        unit_price=Decimal("4.50"),
+        line_total=Decimal("4.50"),
+    )
     normalize_existing_measures(session)
 
     # When the backfill runs a second time
@@ -238,7 +297,9 @@ def test_backfill_is_idempotent_with_extracted_and_inferred_mix(session):
     lines = session.query(LineItem).order_by(LineItem.id).all()
     extracted = next(line for line in lines if line.measure_source == MeasureSource.EXTRACTED)
     inferred = next(line for line in lines if line.measure_source == MeasureSource.INFERRED)
-    assert extracted.unit_size == "16oz"  # the recovered size is persisted
+    # The recovered size is persisted into structured columns (size_amount + size_unit).
+    assert extracted.size_amount == Decimal(16)
+    assert extracted.size_unit == "oz"
 
     # When the backfill runs twice more
     first = normalize_existing_measures(session)
@@ -304,11 +365,11 @@ def test_backfill_pass2_extractor_error_does_not_crash(session):
     session.refresh(deterministic)
     session.refresh(sizeless)
 
-    # Then it did not raise, the deterministic pass still resolved its line, and the size-less
-    # line is simply left unresolved rather than crashing the backfill
+    # Then it did not raise, the deterministic pass still resolved its line. The size-less line
+    # has no per-item size (size_amount stays None) rather than crashing the backfill.
     assert deterministic.measure_status == MeasureStatus.RESOLVED
     assert deterministic.measure_source == MeasureSource.EXTRACTED
-    assert sizeless.measure_status != MeasureStatus.RESOLVED
+    assert sizeless.size_amount is None
 
 
 def test_recompute_excludes_sold_by_weight_lines(session):
@@ -334,7 +395,8 @@ def test_recompute_excludes_sold_by_weight_lines(session):
             product=product,
             raw_description="HAM",
             quantity=quantity,
-            unit="lb",
+            sold_by=SoldBy.MEASURE,
+            measure_unit="lb",
             unit_price=Decimal(8),
             line_total=Decimal(8) * quantity,
             # measure_quantity is quantity * grams-per-lb, so per_package would be the constant
@@ -357,3 +419,87 @@ def test_recompute_excludes_sold_by_weight_lines(session):
     # Then no typical size is learned from the conversion-factor per_package values
     assert product.typical_measure_value is None
     assert product.typical_measure_dimension is None
+
+
+def test_backfill_fills_structured_size_from_text(session, line_factory):
+    """Verify pass 1 extracts size_amount/size_unit from raw_description into structured columns."""
+    # Given a blank ITEM line with the size embedded in the description
+    line = line_factory(
+        raw_description="Soda 2L",
+        sold_by=SoldBy.ITEM,
+        size_amount=None,
+        size_unit=None,
+        measure_source=MeasureSource.NONE,
+    )
+
+    # When the backfill runs
+    normalize_existing_measures(session)
+    session.refresh(line)
+
+    # Then structured size columns are populated from the description text
+    assert (line.size_amount, line.size_unit) == (Decimal(2), "l")
+    assert line.measure_source == MeasureSource.EXTRACTED
+
+
+def test_backfill_skips_manual_lines(session, line_factory):
+    """Verify backfill never modifies a MANUAL line even when it lacks a size."""
+    # Given a MANUAL blank line with a size-bearing description
+    line = line_factory(
+        raw_description="Soda 2L",
+        sold_by=SoldBy.ITEM,
+        size_amount=None,
+        size_unit=None,
+        measure_source=MeasureSource.MANUAL,
+    )
+
+    # When the backfill runs
+    normalize_existing_measures(session)
+    session.refresh(line)
+
+    # Then the line is untouched; MANUAL is never overwritten
+    assert line.size_amount is None
+    assert line.measure_source == MeasureSource.MANUAL
+
+
+def test_typical_inference_fills_per_each_only_line(session):
+    """Verify a blank line infers its size once two siblings establish a dominant typical."""
+    # Given a product with two blank lines whose size is recoverable from text (500 g per item)
+    product = Product(canonical_name="oatmeal")
+    store = Store(chain_name="TestMart", location="Anywhere")
+    receipt = Receipt(
+        store=store,
+        purchase_date=date(2026, 1, 1),
+        total=Decimal("15.00"),
+        currency="USD",
+        image_path="/tmp/r.png",  # noqa: S108
+        raw_parser_json="{}",
+        source="cli",
+        status="parsed",
+    )
+
+    def blank_line(desc: str) -> LineItem:
+        return LineItem(
+            product=product,
+            raw_description=desc,
+            quantity=Decimal(1),
+            unit_price=Decimal(5),
+            line_total=Decimal(5),
+            measure_status=MeasureStatus.NOT_APPLICABLE,
+            measure_source=MeasureSource.NONE,
+        )
+
+    # Two lines with "500g" in the description; a third with no size clue at all
+    first = blank_line("Oatmeal 500g")
+    second = blank_line("Oatmeal 500g")
+    third = blank_line("Oatmeal")
+    receipt.line_items.extend([first, second, third])
+    session.add(receipt)
+    session.commit()
+
+    # When the backfill runs (pass 1 extracts from text, pass 3 learns typical, pass 4 infers)
+    normalize_existing_measures(session)
+    session.refresh(third)
+
+    # Then the third line has its dimension inferred from the learned typical size
+    assert third.measure_dimension == "weight"
+    assert third.measure_source == MeasureSource.INFERRED

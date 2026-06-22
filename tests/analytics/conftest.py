@@ -42,7 +42,7 @@ def analytics_service(session: Session):
 
 @pytest.fixture
 def seeded_line_with_size(session: Session) -> LineItem:
-    """Seed a counted line item with a known unit and unit_size, then return it."""
+    """Seed a counted line item with known structured measure fields, then return it."""
     product = Product(canonical_name="oat milk")
     store = Store(chain_name="Trader Joes", location=None)
     receipt = Receipt(
@@ -61,8 +61,9 @@ def seeded_line_with_size(session: Session) -> LineItem:
         quantity=Decimal(1),
         unit_price=Decimal("3.99"),
         line_total=Decimal("3.99"),
-        unit="fl oz",
-        unit_size="32",
+        sold_by="item",
+        size_amount=Decimal(32),
+        size_unit="fl oz",
     )
     receipt.line_items.append(line)
     session.add_all([product, store, receipt])

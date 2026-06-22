@@ -60,8 +60,11 @@ class SearchResult(BaseModel):
     canonical_name: str
     category: str | None
     category_id: int | None
-    unit: str | None = None
-    unit_size: str | None = None
+    sold_by: str = "item"
+    measure_unit: str | None = None
+    size_amount: Decimal | None = None
+    size_unit: str | None = None
+    quantity: Decimal | None = None
     store_chain: str
     purchase_date: date
     unit_price: Decimal
@@ -264,8 +267,10 @@ class LineItemExportRow(BaseModel):
     canonical_name: str
     category: str | None
     quantity: Decimal
-    unit: str | None
-    unit_size: str | None
+    sold_by: str
+    measure_unit: str | None
+    size_amount: Decimal | None
+    size_unit: str | None
     unit_price: Decimal
     line_total: Decimal
     measure_quantity: Decimal | None

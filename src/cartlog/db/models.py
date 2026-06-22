@@ -22,7 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cartlog.db.base import Base
-from cartlog.units import MeasureSource, MeasureStatus
+from cartlog.units import MeasureSource, MeasureStatus, SoldBy
 
 
 class Role(StrEnum):
@@ -278,8 +278,6 @@ class LineItem(Base):
     # Product is (re)categorized; the queryable surface for diagnosing miscategorization.
     original_category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(10, 3))
-    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    unit_size: Mapped[str | None] = mapped_column(String(50), nullable=True)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     # Normalized measure derived at ingest/edit by cartlog.units; see measure_status.
@@ -303,6 +301,15 @@ class LineItem(Base):
     # Per-line cap on LLM size-extraction calls; mirrors Product.reclassify_attempts so a line
     # whose size is genuinely absent is retried at most max_size_extract_attempts times.
     size_extract_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
+    # Structured measure replacement for overloaded unit/unit_size (see units.SoldBy).
+    sold_by: Mapped[str] = mapped_column(
+        String(8), default=SoldBy.ITEM, server_default=SoldBy.ITEM.value
+    )
+    # MEASURE mode only: the weight/volume unit `quantity` is expressed in.
+    measure_unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # ITEM mode only: the size of a single item, structured as amount + unit token.
+    size_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    size_unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     receipt: Mapped[Receipt] = relationship(back_populates="line_items")
     product: Mapped[Product] = relationship(back_populates="line_items")

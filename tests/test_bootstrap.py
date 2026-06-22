@@ -68,8 +68,9 @@ def test_prepare_runtime_normalizes_existing_measures(tmp_path, monkeypatch):
                     product=Product(canonical_name="milk", category=Category(name="dairy")),
                     raw_description="MILK",
                     quantity=Decimal(1),
-                    unit="ea",
-                    unit_size="1.5L",
+                    sold_by="item",
+                    size_amount=Decimal("1.5"),
+                    size_unit="L",
                     unit_price=Decimal("4.50"),
                     line_total=Decimal("4.50"),
                 )
