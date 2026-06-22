@@ -33,6 +33,7 @@ from cartlog.receipts.service import (
     image_file_available,
     reparse_receipt,
 )
+from cartlog.units import MeasureSource, MeasureStatus
 from cartlog.web.forms import LineEdit, ReceiptEdit
 from tests.factories import seed_receipts
 
@@ -503,6 +504,167 @@ def test_apply_line_item_edit_unknown_category_raises(session) -> None:
     # Then nothing was committed for this line
     session.rollback()
     assert session.get(LineItem, eggs.id).product_id == original_product_id
+
+
+# ---------------------------------------------------------------------------
+# line_item_factory fixture and measure-recompute tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def line_item_factory(session):
+    """Return a factory that creates and commits a persisted LineItem attached to a Product."""
+
+    def factory(
+        *,
+        quantity: Decimal,
+        unit: str | None,
+        unit_size: str | None,
+        line_total: Decimal,
+        measure_source: MeasureSource = MeasureSource.NONE,
+        measure_dimension: str | None = None,
+    ) -> LineItem:
+        product = Product(canonical_name="test product")
+        store = Store(chain_name="TestMart", location="Test St")
+        receipt = Receipt(
+            store=store,
+            purchase_date=date(2026, 1, 1),
+            total=line_total,
+            currency="USD",
+            image_path="/tmp/test.png",  # noqa: S108
+            raw_parser_json="{}",
+            source="cli",
+            status="parsed",
+        )
+        line = LineItem(
+            product=product,
+            raw_description="TEST ITEM",
+            quantity=quantity,
+            unit=unit,
+            unit_size=unit_size,
+            unit_price=line_total,
+            line_total=line_total,
+            measure_source=measure_source,
+            measure_dimension=measure_dimension,
+        )
+        receipt.line_items.append(line)
+        session.add(receipt)
+        session.commit()
+        return line
+
+    return factory
+
+
+def test_apply_line_item_edit_recomputes_measure_on_size_change(session, line_item_factory) -> None:
+    """Verify editing unit_size recomputes the measure and stamps it MANUAL."""
+    # Given a line with no resolved size
+    line = line_item_factory(quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal(4))
+
+    # When the size is edited to a parseable value
+    apply_line_item_edit(
+        session,
+        line,
+        canonical_name=line.product.canonical_name,
+        category_id=None,
+        unit=None,
+        unit_size="2L",
+    )
+
+    # Then the measure columns are recomputed and provenance is MANUAL
+    assert line.unit_size == "2L"
+    assert line.measure_dimension == "volume"
+    assert line.measure_quantity == Decimal("2000.0000")
+    assert line.normalized_unit_price == Decimal("0.002000")
+    assert line.measure_status == MeasureStatus.RESOLVED
+    assert line.measure_source == MeasureSource.MANUAL
+
+
+def test_apply_line_item_edit_blank_size_normalizes_to_none(session, line_item_factory) -> None:
+    """Verify blank unit/unit_size strings are stored as None."""
+    # Given a line with a size
+    line = line_item_factory(quantity=Decimal(1), unit="lb", unit_size="2L", line_total=Decimal(4))
+
+    # When cleared with blank strings
+    apply_line_item_edit(
+        session,
+        line,
+        canonical_name=line.product.canonical_name,
+        category_id=None,
+        unit="  ",
+        unit_size="",
+    )
+
+    # Then both are None
+    assert line.unit is None
+    assert line.unit_size is None
+
+
+def test_apply_line_item_edit_product_only_leaves_measure_untouched(
+    session, line_item_factory
+) -> None:
+    """Verify a product-only edit does not touch measure fields or stamp MANUAL."""
+    # Given a line whose measure was inferred
+    line = line_item_factory(
+        quantity=Decimal(1),
+        unit="lb",
+        unit_size="2L",
+        line_total=Decimal(4),
+        measure_source=MeasureSource.INFERRED,
+        measure_dimension="volume",
+    )
+    before_dimension = line.measure_dimension
+    before_quantity = line.measure_quantity
+    before_normalized_unit_price = line.normalized_unit_price
+
+    # When only the product name changes (unit/unit_size passed unchanged)
+    apply_line_item_edit(
+        session,
+        line,
+        canonical_name="Renamed Product",
+        category_id=None,
+        unit="lb",
+        unit_size="2L",
+    )
+
+    # Then measure provenance and all recomputed measure columns are unchanged
+    assert line.measure_source == MeasureSource.INFERRED
+    assert line.measure_dimension == before_dimension
+    assert line.measure_quantity == before_quantity
+    assert line.normalized_unit_price == before_normalized_unit_price
+
+
+def test_apply_line_item_edit_updates_receipt_text(session, line_item_factory) -> None:
+    """Verify a supplied raw_description overwrites the line's receipt text."""
+    # Given a line with the seeded receipt text
+    line = line_item_factory(quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal(4))
+
+    # When the receipt text is edited
+    apply_line_item_edit(
+        session,
+        line,
+        canonical_name=line.product.canonical_name,
+        category_id=None,
+        raw_description="CORRECTED TEXT",
+    )
+
+    # Then the line carries the new text
+    assert line.raw_description == "CORRECTED TEXT"
+
+
+def test_apply_line_item_edit_none_receipt_text_leaves_it_unchanged(
+    session, line_item_factory
+) -> None:
+    """Verify omitting raw_description (None) leaves the existing receipt text intact."""
+    # Given a line with existing receipt text
+    line = line_item_factory(quantity=Decimal(1), unit=None, unit_size=None, line_total=Decimal(4))
+
+    # When editing without supplying raw_description
+    apply_line_item_edit(
+        session, line, canonical_name=line.product.canonical_name, category_id=None
+    )
+
+    # Then the original receipt text is preserved
+    assert line.raw_description == "TEST ITEM"
 
 
 # ---------------------------------------------------------------------------

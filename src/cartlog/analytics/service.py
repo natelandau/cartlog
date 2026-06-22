@@ -1122,6 +1122,8 @@ class AnalyticsService:
             canonical_name=product.canonical_name,
             category=category.name if category is not None else None,
             category_id=product.category_id,
+            unit=line.unit,
+            unit_size=line.unit_size,
             store_chain=store_row.chain_name,
             purchase_date=receipt.purchase_date,
             unit_price=line.unit_price,

@@ -23,8 +23,26 @@ def _blank_int_to_none(value: str | int | None) -> str | int | None:
     return value
 
 
+def clean_required_text(value: str | None) -> str:
+    """Strip a required text field and reject it when blank, so the column never goes empty.
+
+    Shared by the receipt review form (via the RequiredText type) and the search inline editor
+    so the receipt text is validated identically wherever it is edited.
+
+    Raises:
+        ValueError: If the field is missing or whitespace-only.
+    """
+    cleaned = value.strip() if value is not None else ""
+    if not cleaned:
+        msg = "Receipt text is required"
+        raise ValueError(msg)
+    return cleaned
+
+
 # Optional text columns arrive as empty strings from HTML inputs; coerce those to None.
 OptionalText = Annotated[str | None, BeforeValidator(_blank_to_none)]
+# Required text columns (e.g. the receipt text) are trimmed and rejected when blank.
+RequiredText = Annotated[str, BeforeValidator(clean_required_text)]
 # A new, unsaved row posts an empty line_id; an edited row posts its integer id.
 OptionalLineId = Annotated[int | None, BeforeValidator(_blank_int_to_none)]
 # A blank/absent category_id means "no change"; a present value is the taxonomy category pk.
@@ -39,7 +57,7 @@ class LineEdit(BaseModel):
     """One edited line item from the review form."""
 
     line_id: OptionalLineId
-    raw_description: str
+    raw_description: RequiredText
     canonical_name: str
     # Optional: written back to the shared Product by taxonomy id, recategorizing every receipt using it.
     category_id: OptionalCategoryId

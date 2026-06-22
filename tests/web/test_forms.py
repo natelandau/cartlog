@@ -46,6 +46,46 @@ def test_parse_review_form_blank_line_id_is_none() -> None:
     assert edit.lines[0].line_total == Decimal("2.00")
 
 
+def test_parse_review_form_trims_receipt_text() -> None:
+    """Verify the shared required-text validator strips surrounding whitespace on save."""
+    # Given a line whose receipt text has leading/trailing whitespace
+    form = _form(
+        line_id=["7"],
+        raw_description=["  EGGS  "],
+        canonical_name=["eggs"],
+        quantity=["1"],
+        unit=[""],
+        unit_size=[""],
+        unit_price=["3.00"],
+        line_total=["3.00"],
+    )
+
+    # When parsing it
+    edit = parse_review_form(form)
+
+    # Then the stored receipt text is trimmed
+    assert edit.lines[0].raw_description == "EGGS"
+
+
+def test_parse_review_form_blank_receipt_text_rejected() -> None:
+    """Verify a blank receipt text on a receipt line is rejected, matching the search editor."""
+    # Given a line whose receipt text is whitespace-only
+    form = _form(
+        line_id=["7"],
+        raw_description=["   "],
+        canonical_name=["eggs"],
+        quantity=["1"],
+        unit=[""],
+        unit_size=[""],
+        unit_price=["3.00"],
+        line_total=["3.00"],
+    )
+
+    # When parsing it, then it fails with the shared required-text message
+    with pytest.raises(ValueError, match="Receipt text is required"):
+        parse_review_form(form)
+
+
 def test_parse_review_form_category_id_optional_when_absent() -> None:
     """Verify a post with no category_id column still parses, leaving each line uncategorized."""
     # Given a line row with no category_id column at all (absent picker or new row)

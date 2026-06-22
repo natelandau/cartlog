@@ -60,6 +60,8 @@ class SearchResult(BaseModel):
     canonical_name: str
     category: str | None
     category_id: int | None
+    unit: str | None = None
+    unit_size: str | None = None
     store_chain: str
     purchase_date: date
     unit_price: Decimal

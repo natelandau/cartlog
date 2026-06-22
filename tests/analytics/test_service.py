@@ -435,3 +435,17 @@ def test_product_names_are_alphabetical(analytics_session):
     # Then they are the canonical names, alphabetically
     assert names == sorted(names, key=str.lower)
     assert "eggs" in names
+
+
+def test_line_item_row_exposes_unit_and_size(analytics_service, seeded_line_with_size):
+    """Verify the search projection carries the editable unit and size."""
+    # Given a line item with a known unit and size (see fixture)
+    line_id = seeded_line_with_size.id
+
+    # When projecting it for the row editor
+    row = analytics_service.line_item_row(line_id)
+
+    # Then unit and size are available to prefill the panel
+    assert row is not None
+    assert row.unit == seeded_line_with_size.unit
+    assert row.unit_size == seeded_line_with_size.unit_size
