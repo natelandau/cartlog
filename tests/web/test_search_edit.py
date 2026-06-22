@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
 
 from cartlog.db.models import Category, LineItem, Product
+from cartlog.units import MeasureSource, SoldBy
 from tests.web.helpers import first_line_item_id, unit_prices_in_order
 
 if TYPE_CHECKING:
@@ -104,6 +106,37 @@ def test_search_item_save_reassigns_product(app_client) -> None:
     factory = app_client.app.state.session_factory
     with factory() as session:
         assert session.get(LineItem, line_id).product.canonical_name == "duck eggs"
+
+
+def test_search_item_save_persists_item_size(app_client) -> None:
+    """Verify a successful item-mode save stores the size and renders it on the read row."""
+    # Given a known line
+    line_id = first_line_item_id(app_client)
+
+    # When saving it as an item with a 2 L size
+    response = app_client.post(
+        f"/search/items/{line_id}",
+        data={
+            "canonical_name": "eggs",
+            "category_id": "",
+            "raw_description": "LRG EGGS 12CT",
+            "sold_by": "item",
+            "measure_unit": "",
+            "size_amount": "2",
+            "size_unit": "l",
+        },
+    )
+
+    # Then the OOB read row renders the saved measure and the DB persists the structured size
+    assert response.status_code == 200
+    assert "2 l" in response.text
+    factory = app_client.app.state.session_factory
+    with factory() as session:
+        line = session.get(LineItem, line_id)
+        assert line.sold_by == SoldBy.ITEM
+        assert line.size_amount == Decimal(2)
+        assert line.size_unit == "l"
+        assert line.measure_source == MeasureSource.MANUAL
 
 
 def test_search_item_save_recategorizes_shared_product(app_client) -> None:

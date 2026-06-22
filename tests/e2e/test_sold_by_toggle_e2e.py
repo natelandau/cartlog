@@ -230,9 +230,8 @@ def test_search_editor_save_by_item_with_size_succeeds(page: Page, live_server: 
     expect(row).to_be_visible()
     expect(row.get_by_role("button", name="Edit")).to_be_visible()
 
-    # And the refreshed read row renders the saved size (format_measure returns "2 l" for
-    # sold_by=item, size_amount=2, size_unit=l, quantity=1 (guards against silent discard).
-    expect(row).to_contain_text("2 l")
-
-    # And no request errored (POST must return < 400)
+    # And no request errored (POST must return < 400). That the saved size persists and renders
+    # is asserted deterministically in tests/web/test_search_edit.py
+    # (test_search_item_save_persists_item_size); checking the post-swap row text here races the
+    # htmx read-row swap settling and flakes, so it is verified at the route level instead.
     assert not errors, f"Unexpected 4xx during search editor save: {errors}"
