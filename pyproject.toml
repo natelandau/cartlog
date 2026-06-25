@@ -1,9 +1,9 @@
 [project]
     authors = [{ name = "Nathaniel Landau", email = "github@natelandau.com" }]
     dependencies = [
-        "alembic>=1.18.4,<2",
-        "fastapi>=0.138.0,<1",
-        "genai-prices>=0.0.66,<0.1",
+        "alembic>=1.18.5,<2",
+        "fastapi>=0.138.1,<1",
+        "genai-prices>=0.0.67,<0.1",
         "inflect>=7.5.0,<8",
         "itsdangerous>=2.2.0,<3",
         "jinja2>=3.1.6,<4",
@@ -43,10 +43,10 @@
 
 [dependency-groups]
     dev = [
-        "commitizen>=4.16.3",
-        "coverage>=7.14.2",
+        "commitizen>=4.16.4",
+        "coverage>=7.14.3",
         "duty>=1.9.0",
-        "httpx2>=2.4.0",
+        "httpx2>=2.5.0",
         "playwright>=1.60.0",
         "prek>=0.4.5",
         "pytest-clarity>=1.0.1",
@@ -57,8 +57,8 @@
         "pytest-pretty-terminal>=1.1.0",
         "pytest-sugar>=1.1.1",
         "pytest>=9.1.1",
-        "ruff>=0.15.18",
-        "ty>=0.0.51",
+        "ruff>=0.15.20",
+        "ty>=0.0.54",
         "typos>=1.47.2",
         "yamllint>=1.38.0",
 ]

@@ -70,7 +70,7 @@ def test_parse_wraps_model_failure_as_value_error(tmp_path):
     image = tmp_path / "receipt.png"
     image.write_bytes(b"\x89PNG fake bytes")
     parser = LLMReceiptParser(model=TestModel())
-    parser._agent.run_sync = MagicMock(side_effect=UnexpectedModelBehavior("boom"))  # type: ignore[invalid-assignment]  # ty:ignore[invalid-assignment]
+    parser._agent.run_sync = MagicMock(side_effect=UnexpectedModelBehavior("boom"))  # type: ignore[invalid-assignment]
 
     # When parsing, then the failure surfaces as the expected ValueError
     with pytest.raises(ValueError, match="no structured"):

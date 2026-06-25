@@ -44,7 +44,7 @@ def test_classify_empty_input_makes_no_call():
     # Given a classifier with a spy on its agent
     classifier = _classifier_returning([])
     mock_run_sync = MagicMock()
-    classifier._agent.run_sync = mock_run_sync  # ty:ignore[invalid-assignment]
+    classifier._agent.run_sync = mock_run_sync
 
     # When classifying an empty batch
     result = classifier.classify([])
@@ -58,7 +58,7 @@ def test_classify_wraps_model_failure_as_value_error():
     """Verify a model failure is re-raised as the no-structured-output ValueError."""
     # Given a classifier whose agent raises a model-behavior error
     classifier = _classifier_returning([])
-    classifier._agent.run_sync = MagicMock(side_effect=UnexpectedModelBehavior("boom"))  # ty:ignore[invalid-assignment]
+    classifier._agent.run_sync = MagicMock(side_effect=UnexpectedModelBehavior("boom"))
 
     # When classifying, then the failure surfaces as the expected ValueError
     with pytest.raises(ValueError, match="no structured output"):
