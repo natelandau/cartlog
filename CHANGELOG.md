@@ -1,3 +1,9 @@
+## v0.5.1 (2026-06-25)
+
+### Fix
+
+- **backup**: create the backup directory when it is missing
+
 ## v0.5.0 (2026-06-25)
 
 ### Feat
