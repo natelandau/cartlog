@@ -1,3 +1,14 @@
+## v0.5.0 (2026-06-25)
+
+### Feat
+
+- **measure**: structured sold-by model for line items (#23)
+- **search**: inline-edit line item fields from search results (#22)
+- **sizes**: capture, repair, and infer item sizes for comparison (#21)
+- **insights**: two-store normalized price comparison page (#20)
+- **insights**: replace charts page with extensible insights page (#19)
+- **backup**: download backups from the web UI and set a default dir
+
 ## v0.4.0 (2026-06-20)
 
 ### Feat
