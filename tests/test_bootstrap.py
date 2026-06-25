@@ -13,12 +13,14 @@ from cartlog.db.session import create_session_factory
 
 def test_prepare_runtime_creates_storage_and_schema(tmp_path, monkeypatch):
     """Verify prepare_runtime creates the storage dir and migrates a fresh database."""
-    # Given settings pointing at a not-yet-existing db parent dir and storage dir
+    # Given settings pointing at a not-yet-existing db parent dir, storage dir, and backup dir
     db_path = tmp_path / "data" / "cartlog.db"
     storage_dir = tmp_path / "imgs"
+    backup_dir = tmp_path / "data" / "backups"
     settings = Settings(
         database_url=f"sqlite:///{db_path}",
         image_storage_dir=storage_dir,
+        backup_dir=backup_dir,
     )
     # alembic/env.py calls get_settings() itself; point it at the same temp settings
     monkeypatch.setattr("cartlog.config.get_settings", lambda: settings)
@@ -26,8 +28,9 @@ def test_prepare_runtime_creates_storage_and_schema(tmp_path, monkeypatch):
     # When preparing the runtime
     prepare_runtime(settings)
 
-    # Then the storage dir exists and the database has the migrated schema
+    # Then the storage and backup dirs exist and the database has the migrated schema
     assert storage_dir.is_dir()
+    assert backup_dir.is_dir()
     assert db_path.is_file()
     engine = create_engine(f"sqlite:///{db_path}")
     assert "ingestion_jobs" in inspect(engine).get_table_names()

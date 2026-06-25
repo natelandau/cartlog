@@ -96,27 +96,25 @@ class Settings(BaseSettings):
 
     @field_validator("backup_dir", mode="after")
     @classmethod
-    def _require_existing_backup_dir(cls, value: Path | None) -> Path | None:
-        """Reject startup when CARTLOG_BACKUP_DIR points at a missing or non-directory path.
+    def _resolve_backup_dir(cls, value: Path | None) -> Path | None:
+        """Resolve CARTLOG_BACKUP_DIR, rejecting only a path that exists but is not a directory.
 
-        Failing fast at config load (as database_url does) keeps a scheduled backup from
-        silently landing in the wrong place, or failing only at the moment a backup is run.
-        An unset value is left as None so the CLI falls back to the working directory.
+        A missing directory is allowed: it is provisioned on demand at startup and before a
+        backup is written, exactly like image_storage_dir, so a fresh volume mount (e.g.
+        Docker's /data/backups) needs no manual mkdir. An unset value is left as None so the
+        CLI falls back to the working directory.
 
         Raises:
-            ValueError: If the configured path does not exist or is not a directory.
+            ValueError: If the configured path exists but is not a directory.
         """
         if value is None:
             return None
         path = value.expanduser()
-        # Anchor a relative path to the current working directory now, so the validated
+        # Anchor a relative path to the current working directory now, so the resolved
         # destination cannot drift if the process's cwd changes before a backup runs.
         if not path.is_absolute():
             path = Path.cwd() / path
-        if not path.exists():
-            msg = f"CARTLOG_BACKUP_DIR is '{value}', but that directory does not exist."
-            raise ValueError(msg)
-        if not path.is_dir():
+        if path.exists() and not path.is_dir():
             msg = f"CARTLOG_BACKUP_DIR is '{value}', but that path is not a directory."
             raise ValueError(msg)
         return path

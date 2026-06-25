@@ -113,6 +113,11 @@ def create_backup(settings: Settings, output: Path | None = None) -> BackupResul
     when configured; otherwise the archive lands in the current working directory.
     """
     source_db = _source_db_path(settings.database_url)
+    # Provision a configured backup_dir on demand (like image_storage_dir) so the standalone
+    # `cartlog backup` command works on a fresh volume mount without prepare_runtime having
+    # run, and _resolve_output_path treats it as a directory rather than an exact file target.
+    if settings.backup_dir is not None:
+        settings.backup_dir.mkdir(parents=True, exist_ok=True)
     target = _resolve_output_path(output if output is not None else settings.backup_dir)
 
     staging = Path(tempfile.mkdtemp(prefix="cartlog-backup-"))

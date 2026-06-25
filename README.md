@@ -213,6 +213,7 @@ cartlog is provider-agnostic. For how to point it at Anthropic, OpenAI, Gemini, 
 | `CARTLOG_ASSIST_MODEL`                       | `anthropic:claude-haiku-4-5` | Cheaper secondary model for text-only passes (structured output, no vision)    |
 | `CARTLOG_DATABASE_URL`                       | `cartlog.db`                 | Where to store your data file (the folder must exist)                          |
 | `CARTLOG_IMAGE_STORAGE_DIR`                  | `receipt_images`             | Where to keep copies of your receipt images                                    |
+| `CARTLOG_BACKUP_DIR`                         | (none, optional)             | Default `cartlog backup` destination; created if missing. Unset uses the cwd   |
 | `CARTLOG_REVIEW_CONFIDENCE_THRESHOLD`        | `0.7`                        | Receipts cartlog is unsure about are flagged for you to review                 |
 
 For `CARTLOG_DATABASE_URL`, give a plain path to where you want the data file, such as `cartlog.db` or `/app/data.db`. cartlog checks the folder exists when it starts and handles the rest, so most people never need to change the default.

@@ -23,9 +23,15 @@ def prepare_runtime(settings: Settings) -> None:
 
     Idempotent and safe to call on every startup: it creates the image storage directory,
     pre-creates the SQLite database's parent directory (Alembic creates the file but not
-    missing parents), and runs Alembic migrations to head.
+    missing parents), provisions a configured backup directory, and runs Alembic migrations
+    to head.
     """
     settings.image_storage_dir.mkdir(parents=True, exist_ok=True)
+
+    # Provision a configured backup_dir on demand so a fresh volume mount (e.g. Docker's
+    # /data/backups) is ready before the first scheduled or web-triggered backup runs.
+    if settings.backup_dir is not None:
+        settings.backup_dir.mkdir(parents=True, exist_ok=True)
 
     if settings.database_url.startswith("sqlite:///"):
         db_path = Path(settings.database_url.removeprefix("sqlite:///"))

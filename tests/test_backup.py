@@ -143,6 +143,21 @@ def test_create_backup_falls_back_to_configured_backup_dir(tmp_path):
     assert _NAME_RE.match(result.path.name)
 
 
+def test_create_backup_creates_missing_backup_dir(tmp_path):
+    """Provision a configured backup_dir that does not exist yet before writing the archive."""
+    # Given a backup_dir that has not been created (e.g. a fresh Docker volume mount)
+    settings = _settings_for(tmp_path)
+    backup_dir = tmp_path / "data" / "backups"
+    settings.backup_dir = backup_dir
+
+    # When creating a backup
+    result = create_backup(settings)
+
+    # Then the directory is created and the archive lands inside it
+    assert backup_dir.is_dir()
+    assert result.path.parent == backup_dir
+
+
 def test_create_backup_explicit_output_overrides_backup_dir(tmp_path):
     """Prefer an explicit output over the configured backup_dir."""
     settings = _settings_for(tmp_path)

@@ -184,15 +184,17 @@ def test_settings_backup_dir_accepts_existing_directory(tmp_path, monkeypatch):
     assert settings.backup_dir == tmp_path
 
 
-def test_settings_backup_dir_missing_directory_raises(tmp_path, monkeypatch):
-    """Verify a backup_dir that does not exist fails fast with a clear error."""
+def test_settings_backup_dir_missing_directory_accepted(tmp_path, monkeypatch):
+    """Verify a backup_dir that does not exist yet is accepted and provisioned on demand."""
     # Given a path to a directory that does not exist
     missing = tmp_path / "nope"
     monkeypatch.setenv("CARTLOG_BACKUP_DIR", str(missing))
 
-    # When loading settings, then validation rejects the unavailable directory
-    with pytest.raises(ValidationError, match="does not exist"):
-        Settings()
+    # When loading settings
+    settings = Settings()
+
+    # Then the resolved path is kept without requiring it to exist at config load
+    assert settings.backup_dir == missing
 
 
 def test_settings_backup_dir_rejects_non_directory(tmp_path, monkeypatch):
