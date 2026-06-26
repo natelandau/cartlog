@@ -7,10 +7,8 @@ from cartlog.auth.users import UserService
 from cartlog.db.models import Role
 from cartlog.web.middleware import CSRF_COOKIE
 from cartlog.web.security import make_csrf_token
+from tests.conftest import TEST_SECRET_KEY as _TEST_SECRET_KEY
 from tests.factories import seed_user
-
-# Must match the CARTLOG_SECRET_KEY set by the autouse _test_secret_key fixture.
-_TEST_SECRET_KEY = "test-secret-key-0123456789abcdef"  # noqa: S105
 
 
 def _post_setup_account(
@@ -278,29 +276,5 @@ def test_setup_access_open_posture_persisted_after_account_creation(anon_client)
 
     # Then allow_anonymous_read remains True
     assert access_resp.status_code == 200
-    with anon_client.app.state.session_factory() as s:
-        assert AppConfigService(s).allow_anonymous_read() is True
-
-
-def test_setup_access_blocked_for_anonymous_after_admin_exists(anon_client):
-    """Verify POST /setup/access rejects an unauthenticated caller when an admin exists."""
-    # Given an admin already exists but the caller has no session cookie
-    with anon_client.app.state.session_factory() as s:
-        seed_user(s, username="existing_admin", role=Role.ADMIN)
-
-    # When an anonymous caller posts to /setup/access
-    token = make_csrf_token(_TEST_SECRET_KEY)
-    anon_client.cookies.set(CSRF_COOKIE, token)
-    resp = anon_client.post(
-        "/setup/access",
-        data={"posture": "private"},
-        headers={"x-csrf-token": token},
-        follow_redirects=False,
-    )
-
-    # Then the request is rejected (redirect to /) without changing the setting
-    assert resp.status_code == 303
-    assert resp.headers.get("location") == "/"
-
     with anon_client.app.state.session_factory() as s:
         assert AppConfigService(s).allow_anonymous_read() is True

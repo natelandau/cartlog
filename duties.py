@@ -176,8 +176,10 @@ def e2e(ctx: Context, *cli_args: str) -> None:
     """
     ctx.run(["uv", "run", "playwright", "install", "chromium"], title="install chromium")
     ctx.run(
+        # -n0 forces serial execution: the addopts default is -n auto, but the e2e tests share a
+        # session-scoped live server, so parallel workers would each spin up a redundant server.
         tools.pytest("tests/e2e", config_file="pyproject.toml", color="yes").add_args(
-            "-m", "e2e", *cli_args
+            "-m", "e2e", "-n0", *cli_args
         ),
         title=pyprefix("Running browser e2e tests"),
         capture=CI,

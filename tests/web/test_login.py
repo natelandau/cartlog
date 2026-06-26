@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cartlog.db.models import Role
 from cartlog.web.middleware import CSRF_COOKIE
 from cartlog.web.routers.auth_routes import _safe_next
 from cartlog.web.security import make_csrf_token
+from tests.conftest import TEST_SECRET_KEY as _TEST_SECRET_KEY
 from tests.factories import seed_user
-
-# Must match the test-secret-key fixture in tests/conftest.py
-_TEST_SECRET_KEY = "test-secret-key-0123456789abcdef"  # noqa: S105
 
 
 def _login(client, *, username: str, password: str, follow_redirects: bool = True):
@@ -80,32 +80,26 @@ def test_logout_clears_session(admin_client):
     assert resp.status_code == 303
 
 
-def test_safe_next_rejects_absolute_url():
-    """Verify _safe_next rejects external URLs and returns '/'."""
-    # Given an absolute external URL as the next value
-    assert _safe_next("https://evil.com") == "/"
-    assert _safe_next("http://evil.com/steal") == "/"
-
-
-def test_safe_next_rejects_protocol_relative_url():
-    """Verify _safe_next rejects protocol-relative URLs and returns '/'."""
-    # Given a protocol-relative URL (open redirect via //)
-    assert _safe_next("//evil.com") == "/"
-    assert _safe_next("//evil.com/path") == "/"
-
-
-def test_safe_next_accepts_local_paths():
-    """Verify _safe_next accepts valid local paths unchanged."""
-    # Given a valid local path
-    assert _safe_next("/dashboard") == "/dashboard"
-    assert _safe_next("/receipts?page=2") == "/receipts?page=2"
-    assert _safe_next("/") == "/"
-
-
-def test_safe_next_rejects_backslash_path():
-    r"""Verify _safe_next rejects paths that start with /\ to block Windows-style redirects."""
-    # Given a path starting with a backslash (Windows open-redirect vector)
-    assert _safe_next("/\\evil.com") == "/"
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        # absolute external URLs are rejected
+        ("https://evil.com", "/"),
+        ("http://evil.com/steal", "/"),
+        # protocol-relative URLs (open redirect via //) are rejected
+        ("//evil.com", "/"),
+        ("//evil.com/path", "/"),
+        # valid local paths pass through unchanged
+        ("/dashboard", "/dashboard"),
+        ("/receipts?page=2", "/receipts?page=2"),
+        ("/", "/"),
+        # backslash-prefixed paths (Windows open-redirect vector) are rejected
+        ("/\\evil.com", "/"),
+    ],
+)
+def test_safe_next(value, expected):
+    """Verify _safe_next keeps safe local paths and rejects open-redirect vectors to '/'."""
+    assert _safe_next(value) == expected
 
 
 def test_login_browser_form_post_without_header(anon_client):

@@ -21,6 +21,7 @@ from cartlog.web.app import create_app
 from cartlog.web.dependencies import get_session
 from cartlog.web.middleware import CSRF_COOKIE
 from cartlog.web.security import make_csrf_token
+from tests.conftest import TEST_SECRET_KEY as _TEST_KEY
 from tests.factories import seed_receipts
 from tests.web.helpers import get_session_factory
 
@@ -29,9 +30,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from sqlalchemy.engine import Engine
-
-# Must match the CARTLOG_SECRET_KEY set by the autouse _test_secret_key fixture.
-_TEST_KEY = "test-secret-key-0123456789abcdef"
 
 
 class _CsrfClient(TestClient):

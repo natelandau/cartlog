@@ -5,24 +5,27 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from cartlog.analytics.ranges import RangePreset, prior_range, range_label, resolve_range
 
 TODAY = date(2026, 6, 14)
 
 
-def test_resolve_all_time_is_open_ended():
-    """Verify ALL_TIME resolves to (None, None) so date filters are skipped."""
-    assert resolve_range(RangePreset.ALL_TIME, today=TODAY) == (None, None)
-
-
-def test_resolve_this_year_starts_january_first():
-    """Verify THIS_YEAR spans Jan 1 to today."""
-    assert resolve_range(RangePreset.THIS_YEAR, today=TODAY) == (date(2026, 1, 1), TODAY)
-
-
-def test_resolve_last_12_months_is_trailing_365_days():
-    """Verify LAST_12_MONTHS is a trailing 365-day window ending today."""
-    assert resolve_range(RangePreset.LAST_12_MONTHS, today=TODAY) == (date(2025, 6, 14), TODAY)
+@pytest.mark.parametrize(
+    ("preset", "expected"),
+    [
+        # ALL_TIME is open-ended so date filters are skipped
+        (RangePreset.ALL_TIME, (None, None)),
+        # THIS_YEAR spans Jan 1 to today
+        (RangePreset.THIS_YEAR, (date(2026, 1, 1), TODAY)),
+        # LAST_12_MONTHS is a trailing 365-day window ending today
+        (RangePreset.LAST_12_MONTHS, (date(2025, 6, 14), TODAY)),
+    ],
+)
+def test_resolve_range(preset, expected):
+    """Verify each preset resolves to its (start, end) date window."""
+    assert resolve_range(preset, today=TODAY) == expected
 
 
 def test_prior_range_is_the_equal_length_window_before_start():

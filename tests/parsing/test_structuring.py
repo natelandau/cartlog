@@ -17,26 +17,10 @@ from cartlog.parsing.structuring import (
 from cartlog.units import MeasureSource, SoldBy
 
 
-def test_parse_size_multipack():
-    """Verify parse_size multiplies out a multipack notation like 6x330ml."""
-    assert parse_size("6x330ml") == (Decimal(1980), "ml")
-
-
-def test_extract_size_embedded_with_ocr_repair():
-    """Verify extract_size finds a size embedded in free text after OCR repair."""
-    assert extract_size("Granola 11.150z Bob's") == (Decimal("11.15"), "oz")
-
-
 def test_format_size_text_roundtrips_through_parse_size():
     """Verify format_size_text produces text that parse_size can recover exactly."""
     text = format_size_text(Decimal(330), "ml")
     assert parse_size(text) == (Decimal(330), "ml")
-
-
-def test_detect_count_sale():
-    """Verify detect_count_sale recognizes per-each phrasing and rejects weight-sold lines."""
-    assert detect_count_sale("Bananas Per Each") is True
-    assert detect_count_sale("Bananas 1.5kg") is False
 
 
 def test_repair_size_token():
@@ -66,6 +50,7 @@ def test_parse_size_comprehensive(text, expected):
     ("text", "expected"),
     [
         ("Granola, Maple Sea Salt, 11oz, Bob's", (Decimal(11), "oz")),
+        ("Granola 11.150z Bob's", (Decimal("11.15"), "oz")),  # embedded size after 0z -> oz repair
         ("Milk, Whole, 64oz, Ithaca", (Decimal(64), "oz")),
         ("Jerky, Venison, S&P, 1.150z., Chomps", (Decimal("1.15"), "oz")),  # repaired 0z -> oz
         ("1602", None),  # bare trailing "02" is NOT fabricated into oz (LLM layer recovers it)
@@ -87,8 +72,10 @@ def test_extract_size_comprehensive(text, expected):
     [
         ("2 Avocados, Organic, Per Count", True),
         ("Peaches, OG, Per Each", True),
+        ("Bananas Per Each", True),
         ("Plums Per count 1.45 each", True),
         ("Granola 11oz", False),
+        ("Bananas 1.5kg", False),  # a weight-sold line is not a count sale
     ],
 )
 def test_detect_count_sale_comprehensive(text, expected):

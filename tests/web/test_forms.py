@@ -118,44 +118,32 @@ def test_parse_review_form_category_id_optional_when_absent() -> None:
     assert edit.lines[0].category_id is None
 
 
-def test_parse_review_form_ragged_core_columns_raises() -> None:
-    """Verify mismatched core column lengths are rejected rather than silently truncated."""
-    # Given two ids but only one unit_price (a tampered / malformed post)
-    form = _form(
-        line_id=["1", "2"],
-        raw_description=["EGGS", "MILK"],
-        canonical_name=["eggs", "milk"],
-        category_id=["1", "2"],
-        quantity=["1", "1"],
-        sold_by=["item", "item"],
-        measure_unit=["", ""],
-        size_amount=["", ""],
-        size_unit=["", ""],
-        unit_price=["3.00"],
-        line_total=["3.00", "2.00"],
-    )
-
-    # When parsing it, Then a ValueError is raised
-    with pytest.raises(ValueError, match="Invalid form input"):
-        parse_review_form(form)
-
-
-def test_parse_review_form_ragged_category_raises() -> None:
-    """Verify a category_id column that does not align with the rows is rejected."""
-    # Given two line rows but three category_id values (a tampered / malformed post)
-    form = _form(
-        line_id=["1", "2"],
-        raw_description=["EGGS", "MILK"],
-        canonical_name=["eggs", "milk"],
-        category_id=["1", "2", "3"],
-        quantity=["1", "1"],
-        sold_by=["item", "item"],
-        measure_unit=["", ""],
-        size_amount=["", ""],
-        size_unit=["", ""],
-        unit_price=["3.00", "2.00"],
-        line_total=["3.00", "2.00"],
-    )
+@pytest.mark.parametrize(
+    "ragged_override",
+    [
+        # two ids but only one unit_price (a short core column)
+        {"unit_price": ["3.00"]},
+        # two line rows but three category_id values (a long category column)
+        {"category_id": ["1", "2", "3"]},
+    ],
+)
+def test_parse_review_form_ragged_columns_raises(ragged_override) -> None:
+    """Verify a column whose length does not align with the rows is rejected, not truncated."""
+    # Given an otherwise well-formed two-row post with one ragged column (a tampered post)
+    columns = {
+        "line_id": ["1", "2"],
+        "raw_description": ["EGGS", "MILK"],
+        "canonical_name": ["eggs", "milk"],
+        "category_id": ["1", "2"],
+        "quantity": ["1", "1"],
+        "sold_by": ["item", "item"],
+        "measure_unit": ["", ""],
+        "size_amount": ["", ""],
+        "size_unit": ["", ""],
+        "unit_price": ["3.00", "2.00"],
+        "line_total": ["3.00", "2.00"],
+    }
+    form = _form(**{**columns, **ragged_override})
 
     # When parsing it, Then a ValueError is raised
     with pytest.raises(ValueError, match="Invalid form input"):

@@ -1,6 +1,11 @@
 """Tests for stateless auth security primitives."""
 
+import pytest
+
 from cartlog.auth import security
+
+# Exercise the real production Argon2id parameters, not the fast test hasher.
+pytestmark = pytest.mark.real_hashing
 
 
 def test_password_round_trip():

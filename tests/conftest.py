@@ -6,6 +6,8 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 import pytest
+from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -18,6 +20,10 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
+# Single source of truth for the deterministic test secret key. The web client fixtures and the
+# CSRF-signing test helpers import this so the middleware and the test client share one key.
+TEST_SECRET_KEY = "test-secret-key-0123456789abcdef"  # noqa: S105 # gitleaks:allow
+
 
 @pytest.fixture(autouse=True)
 def _isolate_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -28,7 +34,7 @@ def _isolate_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 @pytest.fixture(autouse=True)
 def _test_secret_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide a deterministic secret key so Settings construction succeeds in tests."""
-    monkeypatch.setenv("CARTLOG_SECRET_KEY", "test-secret-key-0123456789abcdef")
+    monkeypatch.setenv("CARTLOG_SECRET_KEY", TEST_SECRET_KEY)
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +46,21 @@ def _dummy_provider_key(monkeypatch: pytest.MonkeyPatch) -> None:
     missing-key path delete this var themselves.
     """
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+
+@pytest.fixture(autouse=True)
+def _fast_password_hashing(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Swap the production Argon2id hasher for a low-cost one so hashing doesn't dominate runtime.
+
+    Hundreds of tests create or authenticate a user purely to obtain a logged-in session and do
+    not care about the hash parameters; real Argon2id costs ~23ms per hash. A minimal-cost Argon2
+    keeps the genuine hash/verify code path while running ~290x faster. Tests that assert the
+    production parameters opt out with `@pytest.mark.real_hashing`.
+    """
+    if request.node.get_closest_marker("real_hashing"):
+        return
+    fast = PasswordHash((Argon2Hasher(time_cost=1, memory_cost=8, parallelism=1),))
+    monkeypatch.setattr("cartlog.auth.security._password_hash", fast)
 
 
 @pytest.fixture(autouse=True)

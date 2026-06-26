@@ -36,7 +36,7 @@ The LLM provider is selected via `CARTLOG_PARSE_MODEL` and `CARTLOG_ASSIST_MODEL
 
 The web UI uses Tailwind CSS v4 and daisyUI v5. `cartlog serve` compiles `web/static/app.css` at startup, which needs the Node toolchain, so run `npm install` first. Pass `serve --skip-css-build` to serve a prebuilt stylesheet without Node (the Docker image does this). `app.css` is gitignored.
 
-**Always verify front-end changes by driving the running app with Playwright** (do not rely on reading the template alone): confirm the rendered result, htmx interactions (form swaps, dropdowns, pills), and that no request returns a 4xx. The reusable harness lives in `tests/e2e/` — its `live_server` fixture stands up the app factory against a temp seeded DB (no LLM keys needed) and builds the CSS, and the `page` fixture yields a browser page. Add a browser test there and run it with `uv run duty e2e` (installs the Chromium binary, then runs `pytest -m e2e`). The `e2e` marker is deselected by default, so these stay out of `duty test`, `duty lint`, and the pre-commit hooks; a dedicated CI job runs them. For quick one-off exploration you can still `uv run --with playwright python <script>` against `uvicorn.run("cartlog.web.app:create_app", factory=True, ...)`.
+**Always verify front-end changes by driving the running app with Playwright** (do not rely on reading the template alone): confirm the rendered result, htmx interactions (form swaps, dropdowns, pills), and that no request returns a 4xx. The reusable harness lives in `tests/e2e/` — its `live_server` fixture stands up the app factory against a temp seeded DB (no LLM keys needed) and builds the CSS, and the `page` fixture yields a browser page. Add a browser test there and run it with `uv run duty e2e` (installs the Chromium binary, then runs `pytest -m e2e -n0` — serial, since the session-scoped `live_server` must not be duplicated per xdist worker). The `e2e` marker is deselected by default, so these stay out of `duty test`, `duty lint`, and the pre-commit hooks; a dedicated CI job runs them. For quick one-off exploration you can still `uv run --with playwright python <script>` against `uvicorn.run("cartlog.web.app:create_app", factory=True, ...)`.
 
 ## Development tooling
 
@@ -50,10 +50,12 @@ The web UI uses Tailwind CSS v4 and daisyUI v5. `cartlog serve` compiles `web/st
     uv run ruff format --config pyproject.toml src/ tests/
     ```
 - **Imports go at the top of the file, never inside a function or test body.** CI runs `uv run duty lint`, whose `ruff` step is `ruff check --no-fix src tests duties.py scripts` and enforces `PLC0415` more strictly than the prek pre-commit hook, so a function-local import that passes prek locally still fails CI. Run `uv run duty lint` before pushing front-end or test changes. The **only** acceptable `# noqa: PLC0415` is a genuine, documented need: breaking a circular import, or lazily loading a heavy/optional dependency with a measurable startup cost. Convenience or scoping is not a reason.
-- Run the test suite with pytest:
+- Run the test suite with pytest. It runs in parallel across all cores by default via pytest-xdist (`-n auto` is in `addopts`); pass `-n0` to force serial execution when debugging a single test with `-s` or a breakpoint:
     ```bash
     uv run pytest
+    uv run pytest -n0 -s tests/path/to/test.py   # serial, for debugging
     ```
+- Password hashing is stubbed with a low-cost Argon2 hasher in tests via an autouse fixture; a test that must assert the production Argon2id parameters opts out with `@pytest.mark.real_hashing`.
 
 ## Python 3.14 syntax notes
 

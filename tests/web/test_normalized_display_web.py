@@ -13,28 +13,9 @@ from decimal import Decimal
 import pytest
 
 from cartlog.db.models import Category, LineItem, Product, Receipt, ReceiptStatus, Store
-from cartlog.web.units_display import format_normalized
 
-# ---------------------------------------------------------------------------
-# Filter contract guard: ensures the template's filter call produces the
-# value the rendering assertions look for. If this breaks, the column is
-# guaranteed to render wrong before we even touch the HTTP layer.
-# ---------------------------------------------------------------------------
-
-
-def test_format_normalized_volume_imperial_matches_expected_cell():
-    """Verify the filter produces the exact string the receipt/search cells will show."""
-    # Given a resolved volume line priced at $0.003/ml (milk 1.5 L)
-    result = format_normalized(Decimal("0.003000"), "volume", "resolved", "imperial")
-
-    # Then the display value matches the rendered cell
-    assert result == "$0.089/fl oz"
-
-
-def test_format_normalized_not_applicable_returns_na():
-    """Verify lines without normalization render 'n/a' rather than crashing."""
-    assert format_normalized(None, None, "not_applicable", "imperial") == "n/a"
-
+# The format_normalized contract (imperial/metric conversion, n/a fallback) is unit-tested in
+# test_units_display.py; these tests exercise the HTTP rendering of that value end to end.
 
 # ---------------------------------------------------------------------------
 # Fixtures

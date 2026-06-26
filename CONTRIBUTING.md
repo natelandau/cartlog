@@ -94,11 +94,18 @@ linter, the [ty](https://github.com/astral-sh/ty) type checker, and a spell
 check. Fix anything it reports. The project treats type errors and lint
 warnings as failures, so a clean run is required before your change can merge.
 
+The test suite runs in parallel across all cores by default (via
+[pytest-xdist](https://pytest-xdist.readthedocs.io/)), so `duty test` and a bare
+`uv run pytest` finish in a few seconds. When debugging a single test, pass
+`-n0` to force serial execution so `-s`, breakpoints, and ordered output behave
+normally: `uv run pytest -n0 -s tests/path/to/test.py`.
+
 `uv run duty e2e` exercises the web UI in a real browser via Playwright. It
-installs the Chromium binary on first run, then runs `pytest -m e2e`. The `e2e`
-marker is deselected by default, so these stay out of `duty test`, `duty lint`,
-and the pre-commit hooks; a dedicated CI job runs them. Run it when you change
-templates, CSS, or other front-end behavior.
+installs the Chromium binary on first run, then runs `pytest -m e2e -n0` (serial,
+because the e2e suite shares a session-scoped live server). The `e2e` marker is
+deselected by default, so these stay out of `duty test`, `duty lint`, and the
+pre-commit hooks; a dedicated CI job runs them. Run it when you change templates,
+CSS, or other front-end behavior.
 
 ## Commit your work
 
