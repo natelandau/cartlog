@@ -113,6 +113,12 @@ def extract_size(text: str | None) -> tuple[Decimal, str] | None:
         token = normalize_unit_token(match.group(3))
         if token is None:
             continue
+        # "each"/"ea" glued to a number is per-each *pricing* ("$1.39 each"), never a package
+        # size, so skip it; otherwise compute_measure would square the price into the base and
+        # report $1.00/ea. A genuine count size uses "ct"/"count" instead. The per-each count
+        # sale is recovered downstream by detect_count_sale (size-less $/each).
+        if token in {"each", "ea"}:
+            continue
         multiplier = Decimal(match.group(1)) if match.group(1) else Decimal(1)
         value = multiplier * Decimal(match.group(2))
         dimension = UNIT_FACTORS[token][0]

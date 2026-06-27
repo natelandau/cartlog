@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from fastapi.templating import Jinja2Templates
 
 from cartlog.analytics.ranges import range_label
-from cartlog.web.units_display import format_measure, format_normalized
+from cartlog.web.units_display import format_measure, format_normalized, format_quantity
 from cartlog.web.viz import bar_percents, heatmap_intensity, sparkline_points
 
 if TYPE_CHECKING:
@@ -75,6 +75,7 @@ _globals["heatmap_intensity"] = heatmap_intensity
 _globals["range_label"] = range_label
 
 _globals["format_measure"] = format_measure
+_globals["format_quantity"] = format_quantity
 
 _filters: dict[str, Any] = cast("dict[str, Any]", templates.env.filters)
 # Templates call `value | normalized_price(dimension, status, unit_system)`.

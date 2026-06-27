@@ -112,6 +112,58 @@ def test_receipt_items_partial_metric_cookie_renders_metric(app_client, receipt_
     assert "100ml" in response.text
 
 
+@pytest.fixture
+def receipt_with_count_line(app_client) -> int:
+    """Seed one receipt with a size-less count line whose quantity round-trips as 2.000.
+
+    A count sale carries no per-item size, so the Qty cell falls back to the plain quantity;
+    the Numeric(10,3) column stores Decimal(2) as 2.000, which must render trimmed as "2".
+    """
+    with app_client.app.state.session_factory() as session:
+        produce = Category(name="count_produce")
+        grapefruit = Product(canonical_name="count_grapefruit", category=produce)
+        store = Store(chain_name="CountMart", location="Test Blvd")
+        receipt = Receipt(
+            store=store,
+            purchase_date=date(2026, 6, 2),
+            total=Decimal("5.86"),
+            currency="USD",
+            image_path="/tmp/count_test.png",  # noqa: S108
+            raw_parser_json="{}",
+            source="cli",
+            status=ReceiptStatus.PARSED,
+        )
+        line = LineItem(
+            product=grapefruit,
+            raw_description="2 Grapefruit, OG, Per Count $2.93 each",
+            quantity=Decimal(2),
+            sold_by="item",
+            size_amount=None,
+            size_unit=None,
+            unit_price=Decimal("2.93"),
+            line_total=Decimal("5.86"),
+            measure_quantity=Decimal("2.0000"),
+            measure_dimension="count",
+            normalized_unit_price=Decimal("2.930000"),
+            measure_status="resolved",
+        )
+        receipt.line_items.append(line)
+        session.add(receipt)
+        session.commit()
+        return receipt.id
+
+
+def test_receipt_detail_trims_whole_quantity(app_client, receipt_with_count_line):
+    """Verify a whole count quantity renders as an integer, not a fixed-decimal value."""
+    # When loading the detail page for a receipt whose count line has quantity 2
+    response = app_client.get(f"/receipts/{receipt_with_count_line}")
+
+    # Then the Qty cell shows "2", never the stored "2.000"
+    assert response.status_code == 200
+    assert 'data-label="Qty">2</td>' in response.text
+    assert "2.000" not in response.text
+
+
 # ---------------------------------------------------------------------------
 # Search results route
 # ---------------------------------------------------------------------------

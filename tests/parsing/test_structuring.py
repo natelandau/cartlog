@@ -60,6 +60,12 @@ def test_parse_size_comprehensive(text, expected):
         ("Whole Milk 2%", None),  # percentage is not a size
         ("Avocados, Organic", None),  # no unit token
         ("Receipt 2024", None),  # four-digit year is not a size
+        ("Eggs 12ct Bob's", (Decimal(12), "ct")),  # a real count size is still extracted
+        # "each"/"ea" attached to a number is per-each pricing, not a package size; never extract it
+        ("2 Avocados, OG, Per Count $1.39 each", None),
+        ("Grapefruit, OG, Per Count $2.93 each", None),
+        ("Plums Per count 1.45 each", None),
+        ("Lemons $0.50 ea", None),
     ],
 )
 def test_extract_size_comprehensive(text, expected):
@@ -133,6 +139,14 @@ def test_ocr_repaired_embedded_size_is_repaired_source():
 def test_count_sale_is_item_without_size():
     """Verify a per-each count sale produces ITEM mode with no size and EXTRACTED source."""
     out = _s(quantity=Decimal(4), raw_description="Avocado Per Each")
+    assert out == StructuredMeasure(SoldBy.ITEM, None, None, None, MeasureSource.EXTRACTED)
+
+
+def test_per_each_priced_count_sale_is_item_without_size():
+    """Verify a per-count line priced per-each is size-less, not sized by the per-each price."""
+    # Given a produce line sold by count and priced per-each (the price is in the text)
+    out = _s(quantity=Decimal(2), raw_description="2 Avocados, OG, Per Count $1.39 each")
+    # Then the per-each price is not read as a size, so it stays a size-less count sale
     assert out == StructuredMeasure(SoldBy.ITEM, None, None, None, MeasureSource.EXTRACTED)
 
 
