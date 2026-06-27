@@ -121,3 +121,55 @@ def test_migration_corrects_each_size_and_leaves_others_untouched(tmp_path, monk
     assert Decimal(str(rows[manual_id]["size_amount"])) == Decimal(2)
     assert rows[inferred_id]["size_unit"] == "ea"
     assert Decimal(str(rows[inferred_id]["size_amount"])) == Decimal("1.5")
+
+
+def test_reclean_migration_corrects_llm_reinjected_each_size(tmp_path, monkeypatch):
+    """Verify the follow-up fix re-cleans a '1 ea' size the LLM pass re-injected after the first fix."""
+    # Given a database at the first fix revision, where the LLM size pass re-corrupted a count
+    # sale back to a "1 each" size (size_amount=1, size_unit=ea) on the same startup
+    db = tmp_path / "m.db"
+    settings = Settings(
+        database_url=f"sqlite:///{db}",
+        image_storage_dir=tmp_path / "imgs",
+        secret_key="x" * 32,
+    )
+    monkeypatch.setattr("cartlog.config.get_settings", lambda: settings)
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "6991acadaeb4")
+
+    engine = sa.create_engine(f"sqlite:///{db}")
+    with engine.begin() as conn:
+        conn.execute(sa.text("INSERT INTO products (id, canonical_name) VALUES (1, 'grapefruit')"))
+        reinjected_id = _seed_row(
+            conn,
+            raw_description="2 Grapefruit, OG, Per Count $2.93 each",
+            quantity=Decimal(2),
+            line_total=Decimal("5.86"),
+            size_amount=Decimal(1),
+            size_unit="ea",
+            measure_quantity=Decimal(2),
+            measure_dimension="count",
+            normalized_unit_price=Decimal("2.93"),
+            measure_source="extracted",
+        )
+
+    # When the follow-up re-clean migration runs
+    command.upgrade(cfg, "head")
+
+    # Then the bogus per-each size is removed, leaving a size-less $/each count sale
+    with engine.connect() as conn:
+        row = (
+            conn.execute(
+                sa.text(
+                    "SELECT size_amount, size_unit, normalized_unit_price FROM line_items WHERE id = :id"
+                ),
+                {"id": reinjected_id},
+            )
+            .mappings()
+            .one()
+        )
+    engine.dispose()
+
+    assert row["size_amount"] is None
+    assert row["size_unit"] is None
+    assert Decimal(str(row["normalized_unit_price"])) == Decimal("2.93")  # 5.86 / 2

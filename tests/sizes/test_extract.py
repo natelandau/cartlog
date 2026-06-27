@@ -44,6 +44,13 @@ class _RoundSizeExtractor:
         return out
 
 
+class _PerEachExtractor:
+    """Mimics the model misreading a per-each price as a '1 each' package size for every line."""
+
+    def extract(self, lines, *, usage=None):
+        return {line.key: ParsedSize(value=1.0, unit="ea") for line in lines}
+
+
 @pytest.fixture
 def receipt(session) -> Receipt:
     """Return a minimal persisted receipt that line items can be attached to."""
@@ -112,6 +119,26 @@ def test_sweep_skips_lines_at_attempt_cap(session, receipt):
     assert resolved == 0
     assert extractor.calls == 0  # capped line never reaches the model
     assert capped.measure_status == MeasureStatus.NOT_APPLICABLE
+
+
+def test_sweep_does_not_reinject_per_each_size_on_count_sale(session, receipt):
+    """Verify the sweep never stores a '1 ea' size when the model misreads a per-each price."""
+    # Given a per-count produce line the sweep will ask the model to size
+    product = Product(canonical_name="grapefruit")
+    line = _blank_line(receipt, product, "2 Grapefruit, OG, Per Count $2.93 each")
+    line.quantity = Decimal(2)
+    line.line_total = Decimal("5.86")
+    session.add_all([product, line])
+    session.flush()
+
+    # When the model answers with a bogus "1 each" size
+    extract_sizes_for_lines(session, [line], _PerEachExtractor(), max_attempts=2)
+
+    # Then the each answer is rejected, so the line stays a size-less $/each measure
+    assert line.size_amount is None
+    assert line.size_unit is None
+    assert line.measure_status == MeasureStatus.RESOLVED
+    assert line.normalized_unit_price == Decimal("2.93")
 
 
 def test_round_number_size_survives_backfill(session, receipt):

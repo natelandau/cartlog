@@ -176,9 +176,12 @@ def structure_line(  # noqa: PLR0911, PLR0913
         return StructuredMeasure(SoldBy.MEASURE, measure_token, None, None, MeasureSource.EXTRACTED)
 
     # 2. An LLM-recovered size is a per-item size (treated as printed-grade by the parser path).
+    # Reject an each/ea answer exactly as extract_size does: "1 each" is per-each *pricing*, not a
+    # package size, so applying it would re-introduce the "2 x 1 ea" misread. Falling through lets
+    # detect_count_sale resolve the line to a size-less $/each measure instead.
     if llm_measure is not None:
         token = normalize_unit_token(llm_measure[1])
-        if token is not None:
+        if token is not None and token not in {"each", "ea"}:
             return _item(Decimal(str(llm_measure[0])), token, MeasureSource.EXTRACTED)
 
     # 3. A size printed in the unit_size field.

@@ -128,6 +128,19 @@ def test_llm_measure_is_extracted_item_size():
     assert out == StructuredMeasure(SoldBy.ITEM, None, Decimal("1.5"), "l", MeasureSource.EXTRACTED)
 
 
+@pytest.mark.parametrize("token", ["ea", "each"])
+def test_llm_measure_each_is_not_a_size(token):
+    """Verify an LLM each/ea answer is rejected as a size, leaving the count sale size-less."""
+    # Given the size extractor reads a per-each price as a "1 each" size on a count-sale line
+    out = _s(
+        quantity=Decimal(2),
+        raw_description="2 Grapefruit, OG, Per Count $2.93 each",
+        llm_measure=(1, token),
+    )
+    # Then the each/ea answer is not applied, so detect_count_sale keeps it a size-less $/each line
+    assert out == StructuredMeasure(SoldBy.ITEM, None, None, None, MeasureSource.EXTRACTED)
+
+
 def test_ocr_repaired_embedded_size_is_repaired_source():
     """Verify an OCR-repaired embedded size produces ITEM mode with REPAIRED source."""
     out = _s(raw_description="Granola 11.150z Bob's")
