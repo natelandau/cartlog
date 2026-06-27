@@ -54,7 +54,23 @@ def format_normalized(
 
 def _trim(value: Decimal) -> str:
     """Render a Decimal without trailing zeros (1.50 -> '1.5', 16.0 -> '16')."""
+    # normalize() emits scientific notation for round powers of ten (200 -> '2E+2'); the
+    # explicit "f" format keeps it fixed-point so the displayed number stays human-readable.
     return format(value.normalize(), "f")
+
+
+def format_quantity(quantity: Decimal | None) -> str:
+    """Render a purchased quantity without trailing zeros, so a whole count reads as an integer.
+
+    Use for the plain quantity column where a count line stores quantity as a fixed-decimal
+    value (2.000): show '2' rather than '2.000', while keeping real fractions like '1.5'.
+
+    Returns:
+        The trimmed quantity, or '' when the quantity is missing.
+    """
+    if quantity is None:
+        return ""
+    return _trim(quantity)
 
 
 def format_measure(

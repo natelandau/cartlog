@@ -46,7 +46,7 @@
     <fieldset class="fieldset">
       <legend class="fieldset-legend">Quantity</legend>
       <input class="input input-sm num w-full" name="quantity" type="number" step="0.001"
-             inputmode="decimal" value="{{ li.quantity if li else '1' }}" />
+             inputmode="decimal" value="{{ format_quantity(li.quantity) if li else '1' }}" />
     </fieldset>
     {# ITEM-only: size each. Keep hidden, not disabled, so the strict-zip POST stays aligned #}
     <fieldset class="fieldset sold-by-group" data-sold-by-group="item">

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from cartlog.web.units_display import format_measure, format_normalized
+from cartlog.web.units_display import format_measure, format_normalized, format_quantity
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
@@ -64,6 +64,21 @@ def test_toggle_unit_system_flips_back_to_imperial(app_client: TestClient):
     # Then the cookie is set back to imperial
     assert response.status_code == 204
     assert response.cookies.get("unit_system") == "imperial"
+
+
+@pytest.mark.parametrize(
+    ("quantity", "expected"),
+    [
+        (Decimal("2.000"), "2"),  # a whole count shows as an integer, not 2.000
+        (Decimal("1.50"), "1.5"),  # a real fraction keeps its significant digits
+        (Decimal("1.470"), "1.47"),  # a weighed quantity trims only trailing zeros
+        (Decimal(200), "200"),  # round powers of ten stay fixed-point, not 2E+2
+        (None, ""),  # a missing quantity renders empty
+    ],
+)
+def test_format_quantity(quantity, expected):
+    """Verify quantities render without trailing zeros so whole counts read as integers."""
+    assert format_quantity(quantity) == expected
 
 
 @pytest.mark.parametrize(
