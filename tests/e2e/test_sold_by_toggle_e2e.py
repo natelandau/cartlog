@@ -235,3 +235,33 @@ def test_search_editor_save_by_item_with_size_succeeds(page: Page, live_server: 
     # (test_search_item_save_persists_item_size); checking the post-swap row text here races the
     # htmx read-row swap settling and flakes, so it is verified at the route level instead.
     assert not errors, f"Unexpected 4xx during search editor save: {errors}"
+
+
+def test_search_editor_save_gram_size_renders_rounded_ounces(page: Page, live_server: str) -> None:
+    """Verify a saved gram size renders to a US reader as rounded ounces, not raw grams."""
+    errors: list[tuple[int, str]] = []
+    # Exclude /image 404s: seeded test receipts have no image file on disk in the e2e fixture.
+    page.on(
+        "response",
+        lambda r: (
+            errors.append((r.status, r.url)) if r.status >= 400 and "/image" not in r.url else None
+        ),
+    )
+
+    # Given an open search edit panel in item mode (imperial is the default unit system)
+    line_id = _open_search_panel(page, live_server)
+    panel = page.locator(f"#search-edit-{line_id}")
+
+    # When saving a cereal-box gram size with the long precision that the bug report showed
+    panel.locator("select[name='sold_by']").select_option("item")
+    panel.locator("input[name='size_amount']").fill("382.7183")
+    panel.locator("select[name='size_unit']").select_option("g")
+    panel.get_by_role("button", name="Save").click()
+
+    # Then the restored read row shows the size converted to ounces and rounded (382.7183 g ->
+    # 13.5 oz), never the raw "382.7183 g". expect() polls, so it rides out the htmx row swap.
+    row = page.locator(f"#search-row-{line_id}")
+    expect(row).to_contain_text("13.5 oz")
+    expect(row).not_to_contain_text("382.7183")
+
+    assert not errors, f"Unexpected 4xx during gram-size save: {errors}"

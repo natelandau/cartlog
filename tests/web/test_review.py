@@ -48,6 +48,30 @@ def test_edit_partial_renders_editable_fields(app_client) -> None:
     assert 'name="category_id"' in response.text
 
 
+def test_edit_partial_keeps_full_quantity_precision(app_client) -> None:
+    """Verify the quantity input pre-fills the full 3-decimal value, never a rounded one.
+
+    The input is step="0.001" and re-saves its own value, so rounding the displayed quantity
+    would silently truncate a weighed quantity (1.475 -> 1.48) on the next save.
+    """
+    # Given a line whose stored quantity carries three decimals (a weighed amount)
+    rid = _needs_review_id(app_client)
+    line_id = _line_ids(app_client, rid)[0]
+    state = app_client.app.state
+    with state.session_factory() as session:
+        line = session.get(LineItem, line_id)
+        line.quantity = Decimal("1.475")
+        session.commit()
+
+    # When loading the edit partial
+    response = app_client.get(f"/receipts/{rid}/edit")
+
+    # Then the quantity input shows all three decimals, not a 2-decimal rounding
+    assert response.status_code == 200
+    assert 'value="1.475"' in response.text
+    assert 'value="1.48"' not in response.text
+
+
 def test_review_save_updates_header_and_reassigns_product(app_client) -> None:
     """Verify POST /receipts/{id} updates fields and get-or-creates a reassigned product."""
     # Given the needs_review receipt (seeded with two lines: eggs + milk)

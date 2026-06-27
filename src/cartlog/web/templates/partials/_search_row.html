@@ -4,7 +4,7 @@
    hx-swap-oob="true" so htmx restores it out of band while the panel's primary target is
    emptied. #}
 <tr id="search-row-{{ r.line_item_id }}"{% if editing %} class="search-row-active"{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>
-  <td data-label="Description">{{ r.raw_description }}{% set m = format_measure(sold_by=r.sold_by, quantity=r.quantity, measure_unit=r.measure_unit, size_amount=r.size_amount, size_unit=r.size_unit) %}{% if m %} <span class="text-base-content/50 text-xs num">{{ m }}</span>{% endif %}</td>
+  <td data-label="Description">{{ r.raw_description }}{% set m = format_measure(sold_by=r.sold_by, quantity=r.quantity, measure_unit=r.measure_unit, size_amount=r.size_amount, size_unit=r.size_unit, system=unit_system) %}{% if m %} <span class="text-base-content/50 text-xs num">{{ m }}</span>{% endif %}</td>
   <td data-label="Product">{{ r.canonical_name }}</td>
   <td data-label="Category">{{ r.category or "" }}</td>
   <td data-label="Store">{{ r.store_chain }}</td>

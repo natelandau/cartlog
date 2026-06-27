@@ -19,6 +19,7 @@ cartlog takes a receipt photo and gives you back spending you can search and cha
 - Keep using the app while your receipts are read in the background
 - Chart a product's price history, compare prices across stores by normalized unit price, and total your spending by category
 - Capture each item's size and unit so unit-price comparisons stay honest, repairing garbled sizes from the receipt text and, when a size is missing, inferring it from the same product on other receipts (gap-filling can use the assist model, a billable pass)
+- See sizes and unit prices in your preferred measurement system, switchable between imperial and metric with the in-app units toggle
 - Export your line items to CSV or JSON, filtered by date, store, or category, from the browser or the command line
 - See what each receipt cost to read, so your LLM spend stays visible
 - Keep all your data in a single file, with no separate database to install or maintain

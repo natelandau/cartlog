@@ -127,9 +127,10 @@ def test_search_item_save_persists_item_size(app_client) -> None:
         },
     )
 
-    # Then the OOB read row renders the saved measure and the DB persists the structured size
+    # Then the OOB read row renders the saved measure in the reader's units (imperial default,
+    # so the 2 L size shows as fluid ounces) and the DB persists the structured size as entered
     assert response.status_code == 200
-    assert "2 l" in response.text
+    assert "67.63 floz" in response.text
     factory = app_client.app.state.session_factory
     with factory() as session:
         line = session.get(LineItem, line_id)

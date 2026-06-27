@@ -73,29 +73,46 @@ def test_toggle_unit_system_flips_back_to_imperial(app_client: TestClient):
         (Decimal("1.50"), "1.5"),  # a real fraction keeps its significant digits
         (Decimal("1.470"), "1.47"),  # a weighed quantity trims only trailing zeros
         (Decimal(200), "200"),  # round powers of ten stay fixed-point, not 2E+2
+        # Lossless: the receipt-editor quantity input re-saves this value, so a 3-decimal
+        # weighed quantity must keep all places rather than truncating to 1.48.
+        (Decimal("1.475"), "1.475"),
         (None, ""),  # a missing quantity renders empty
     ],
 )
 def test_format_quantity(quantity, expected):
-    """Verify quantities render without trailing zeros so whole counts read as integers."""
+    """Verify quantities render without trailing zeros and keep full precision for edit fields."""
     assert format_quantity(quantity) == expected
 
 
 @pytest.mark.parametrize(
-    ("sold_by", "quantity", "measure_unit", "size_amount", "size_unit", "expected"),
+    ("sold_by", "quantity", "measure_unit", "size_amount", "size_unit", "system", "expected"),
     [
-        # MEASURE mode returns quantity + measure_unit as a trimmed string
-        ("measure", Decimal("1.47"), "lb", None, None, "1.47 lb"),
-        # ITEM mode with quantity > 1 returns 'N x size unit'
-        ("item", Decimal(2), None, Decimal(16), "oz", "2 x 16 oz"),
+        # MEASURE mode in the reader's own system keeps its unit, only trimming zeros
+        ("measure", Decimal("1.47"), "lb", None, None, "imperial", "1.47 lb"),
+        # MEASURE mode converts a wrong-system unit to the reader's (lb -> g for metric)
+        ("measure", Decimal("1.47"), "lb", None, None, "metric", "666.78 g"),
+        # A large wrong-system weight rebases to the bigger unit (2 kg -> lb, not 70.55 oz)
+        ("measure", Decimal(2), "kg", None, None, "imperial", "4.41 lb"),
+        # A large wrong-system weight for a metric reader rebases lb -> kg
+        ("measure", Decimal(5), "lb", None, None, "metric", "2.27 kg"),
+        # A large wrong-system volume rebases floz -> gal once it fills a gallon
+        ("measure", Decimal(4), "l", None, None, "imperial", "1.06 gal"),
+        # ITEM mode with quantity > 1 returns 'N x size unit', unit already in system
+        ("item", Decimal(2), None, Decimal(16), "oz", "imperial", "2 x 16 oz"),
         # ITEM mode with quantity == 1 drops the count prefix
-        ("item", Decimal(1), None, Decimal(12), "ct", "12 ct"),
+        ("item", Decimal(1), None, Decimal(12), "ct", "imperial", "12 ct"),
+        # An inferred base-unit gram size is shown to a US reader in ounces, rounded
+        ("item", Decimal(1), None, Decimal("382.7183"), "g", "imperial", "13.5 oz"),
+        # The same inferred gram size stays grams for a metric reader, only rounded
+        ("item", Decimal(1), None, Decimal("382.7183"), "g", "metric", "382.72 g"),
+        # A tiny cross-system size keeps finer precision rather than collapsing to "0 oz"
+        ("item", Decimal(1), None, Decimal(100), "mg", "imperial", "0.0035 oz"),
         # ITEM mode without a size returns empty so callers can fall back
-        ("item", Decimal(3), None, None, None, ""),
+        ("item", Decimal(3), None, None, None, "imperial", ""),
     ],
 )
-def test_format_measure(sold_by, quantity, measure_unit, size_amount, size_unit, expected):
-    """Verify the human-readable measure string per sold-by mode, quantity, and size."""
+def test_format_measure(sold_by, quantity, measure_unit, size_amount, size_unit, system, expected):
+    """Verify the measure string converts to the reader's unit system and rounds to two decimals."""
     assert (
         format_measure(
             sold_by=sold_by,
@@ -103,6 +120,7 @@ def test_format_measure(sold_by, quantity, measure_unit, size_amount, size_unit,
             measure_unit=measure_unit,
             size_amount=size_amount,
             size_unit=size_unit,
+            system=system,
         )
         == expected
     )
