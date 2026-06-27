@@ -1,3 +1,9 @@
+## v0.5.3 (2026-06-27)
+
+### Fix
+
+- **receipts**: show a plain count for per-each grocery items
+
 ## v0.5.2 (2026-06-27)
 
 ### Fix
