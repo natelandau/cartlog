@@ -1,3 +1,9 @@
+## v0.5.2 (2026-06-27)
+
+### Fix
+
+- correct per-each unit price and quantity display (#24)
+
 ## v0.5.1 (2026-06-25)
 
 ### Fix
