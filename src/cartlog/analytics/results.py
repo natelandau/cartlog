@@ -295,3 +295,52 @@ class DashboardData(BaseModel):
     price_movers: list[PriceTrendRow]
     price_watch: list[PriceTrendRow]
     month_comparison: MonthComparison
+
+
+class SpendGranularity(StrEnum):
+    """Time bucket width for the spend-over-time analysis."""
+
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
+
+
+class SpendSeries(StrEnum):
+    """Which measure the spend-over-time chart plots."""
+
+    TOTAL = "total"  # total itemized spend per bucket
+    BY_CATEGORY = "category"  # spend per bucket stacked by category
+    TRIPS = "trips"  # distinct receipt count per bucket
+    AVG_BASKET = "avg"  # total spend / trips per bucket
+
+
+class SpendBucket(BaseModel):
+    """One time bucket of spend, with every measure precomputed so the renderer just picks one."""
+
+    start: date  # bucket start; drives the date x-axis
+    label: str  # human label for the axis/hover ("Jan 2026" or "Jan 5")
+    total: Decimal  # summed line_total in the bucket
+    trips: int  # distinct counted receipts in the bucket
+    avg_basket: Decimal  # total / trips, or 0 when there were no trips
+
+
+class SpendCategorySeries(BaseModel):
+    """One category's spend across every bucket, aligned to the bucket order for stacking."""
+
+    category: str
+    values: list[Decimal]
+
+
+class SpendOverTime(BaseModel):
+    """Spend bucketed over time, with the toolbar's option lists and the stacked-category series."""
+
+    granularity: SpendGranularity
+    series: SpendSeries
+    store_id: int | None
+    store_label: str | None
+    buckets: list[SpendBucket]
+    category_series: list[SpendCategorySeries]  # populated only for the by-category series
+    category_options: list[tuple[int, str]]  # (id, name) for the toolbar pills
+    other_category_count: int  # categories folded into the "Other" stack, for an honest caption
+    total_spend: Decimal
+    uncategorized_spend: Decimal  # spend the by-category stack omits, disclosed so it still adds up

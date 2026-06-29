@@ -31,6 +31,11 @@ from cartlog.analytics.results import (
     PriceTrendRow,
     ScaleMode,
     SearchResult,
+    SpendBucket,
+    SpendCategorySeries,
+    SpendGranularity,
+    SpendOverTime,
+    SpendSeries,
     StoreOption,
     StorePairComparison,
     StorePairRow,
@@ -64,6 +69,13 @@ COUNTED_STATUSES = (ReceiptStatus.PARSED, ReceiptStatus.NEEDS_REVIEW)
 
 # Minimum number of price points required to draw a meaningful trend line or half-split.
 _MIN_PRICE_POINTS = 2
+
+# How many categories the by-category stack shows individually; the rest fold into "Other".
+# Six matches the theme palette so every stacked band gets a distinct on-brand color.
+_SPEND_TOP_CATEGORIES = 6
+
+# December: the month after which a monthly bucket rolls into the next year.
+_DECEMBER = 12
 
 
 def _price_stats(prices: list[Decimal]) -> tuple[Decimal, Decimal, Decimal]:
@@ -131,6 +143,58 @@ def _sort_comparable(rows: list[StorePairRow], *, sort: StorePairSort) -> None:
 def _month_key(day: date) -> str:
     """Return the 'YYYY-MM' bucket key for a date."""
     return f"{day.year:04d}-{day.month:02d}"
+
+
+def _bucket_start(day: date, granularity: SpendGranularity) -> date:
+    """Return the start date of the time bucket `day` falls in.
+
+    Weekly buckets start on Monday (weekday()==0); monthly on the first of the month; yearly
+    on January 1st.
+    """
+    if granularity == SpendGranularity.WEEKLY:
+        return day - timedelta(days=day.weekday())
+    if granularity == SpendGranularity.YEARLY:
+        return date(day.year, 1, 1)
+    return date(day.year, day.month, 1)
+
+
+def _bucket_label(start: date, granularity: SpendGranularity) -> str:
+    """Render a bucket's axis/hover label, year-qualified so labels are unique across years.
+
+    The chart uses these labels as categorical x-values, so two buckets sharing a label would
+    collapse onto one bar; the year keeps every weekly/monthly/yearly bucket distinct.
+    """
+    if granularity == SpendGranularity.WEEKLY:
+        return f"{start:%b} {start.day}, {start.year}"
+    if granularity == SpendGranularity.YEARLY:
+        return f"{start.year}"
+    return f"{start:%b %Y}"
+
+
+def _next_bucket(start: date, granularity: SpendGranularity) -> date:
+    """Advance one bucket: seven days for weekly, one calendar month for monthly, a year for yearly."""
+    if granularity == SpendGranularity.WEEKLY:
+        return start + timedelta(days=7)
+    if granularity == SpendGranularity.YEARLY:
+        return date(start.year + 1, 1, 1)
+    if start.month == _DECEMBER:
+        return date(start.year + 1, 1, 1)
+    return date(start.year, start.month + 1, 1)
+
+
+def _bucket_sequence(lo: date, hi: date, granularity: SpendGranularity) -> list[date]:
+    """Return every bucket start from `lo`'s bucket through `hi`'s, inclusive and gap-free.
+
+    Empty in-between buckets are kept (not collapsed) so the chart shows a zero month/week
+    rather than silently skipping it, which would distort the trend line and the time axis.
+    """
+    cur = _bucket_start(lo, granularity)
+    end = _bucket_start(hi, granularity)
+    out: list[date] = []
+    while cur <= end:
+        out.append(cur)
+        cur = _next_bucket(cur, granularity)
+    return out
 
 
 def _pct_change(old: Decimal, new: Decimal) -> float | None:
@@ -244,6 +308,176 @@ class AnalyticsService:
         """
         rows = self._counted_receipts(start=start, end=end).all()
         return self._bucket_monthly(rows)
+
+    def _spend_rows(self, *, start: date | None, end: date | None, store_id: int | None) -> list:
+        """Return labeled (receipt, date, line_total, category) rows for the spend-over-time view.
+
+        One row per counted line item so every measure (total, trips, by-category) derives from
+        the same itemized universe, which keeps the store and category filters well-defined.
+        The category filter is applied by the caller in Python so the toolbar's option list can
+        still reflect every category in the store/date window regardless of the active filter.
+        """
+        query = (
+            self._session.query(
+                Receipt.id.label("receipt_id"),
+                Receipt.purchase_date.label("purchase_date"),
+                LineItem.line_total.label("line_total"),
+                Product.category_id.label("category_id"),
+                Category.name.label("category_name"),
+            )
+            .join(Receipt, LineItem.receipt_id == Receipt.id)
+            .join(Product, LineItem.product_id == Product.id)
+            .outerjoin(Category, Product.category_id == Category.id)
+            .filter(Receipt.status.in_(COUNTED_STATUSES))
+        )
+        query = _apply_date_range(query, start=start, end=end)
+        if store_id is not None:
+            query = query.filter(Receipt.store_id == store_id)
+        return query.all()
+
+    def spend_over_time(
+        self,
+        *,
+        start: date | None = None,
+        end: date | None = None,
+        store_id: int | None = None,
+        category_ids: list[int] | None = None,
+        granularity: SpendGranularity = SpendGranularity.MONTHLY,
+        series: SpendSeries = SpendSeries.TOTAL,
+    ) -> SpendOverTime:
+        """Bucket itemized spend over time, ready for a bar chart with an optional category stack.
+
+        Use this to answer "how is my grocery spending trending, and what's driving it?". Spend is
+        summed from line items (so it excludes tax/fees and is filterable by store and category);
+        each bucket also carries trip count and average basket so the renderer can switch measures
+        without a re-query. Empty buckets in the span are kept as zeros so the trend is not
+        distorted. The by-category series keeps the top categories and folds the rest into "Other".
+
+        Args:
+            start: Optional earliest purchase date (inclusive).
+            end: Optional latest purchase date (inclusive).
+            store_id: Optional store to restrict to; None spans every store.
+            category_ids: Optional categories to restrict the spend to; None spans every category.
+            granularity: Bucket width: weekly, monthly, or yearly.
+            series: Which measure the caller intends to plot (only affects whether the
+                by-category stack is computed).
+
+        Returns:
+            SpendOverTime: Gap-free buckets, the stacked-category series, and the toolbar options.
+        """
+        universe = self._spend_rows(start=start, end=end, store_id=store_id)
+        category_options = sorted(
+            {
+                (r.category_id, r.category_name)
+                for r in universe
+                if r.category_id is not None and r.category_name != UNCATEGORIZED_NAME
+            },
+            key=lambda c: c[1].lower(),
+        )
+        cat_filter = set(category_ids) if category_ids else None
+        rows = [r for r in universe if cat_filter is None or r.category_id in cat_filter]
+
+        store_label = self._store_label_for(store_id) if store_id is not None else None
+        if not rows:
+            return SpendOverTime(
+                granularity=granularity,
+                series=series,
+                store_id=store_id,
+                store_label=store_label,
+                buckets=[],
+                category_series=[],
+                category_options=category_options,
+                other_category_count=0,
+                total_spend=Decimal(0),
+                uncategorized_spend=Decimal(0),
+            )
+
+        days = [r.purchase_date for r in rows]
+        lo = start if start is not None else min(days)
+        hi = end if end is not None else max(days)
+        sequence = _bucket_sequence(lo, hi, granularity)
+        index = {bucket_start: i for i, bucket_start in enumerate(sequence)}
+
+        totals = [Decimal(0)] * len(sequence)
+        receipts_seen: list[set[int]] = [set() for _ in sequence]
+        for r in rows:
+            i = index[_bucket_start(r.purchase_date, granularity)]
+            totals[i] += r.line_total
+            receipts_seen[i].add(r.receipt_id)
+
+        buckets = [
+            SpendBucket(
+                start=bucket_start,
+                label=_bucket_label(bucket_start, granularity),
+                total=totals[i],
+                trips=len(receipts_seen[i]),
+                avg_basket=(totals[i] / len(receipts_seen[i])) if receipts_seen[i] else Decimal(0),
+            )
+            for i, bucket_start in enumerate(sequence)
+        ]
+
+        category_series, other_count = (
+            self._stack_categories(rows, sequence, index, granularity)
+            if series == SpendSeries.BY_CATEGORY
+            else ([], 0)
+        )
+
+        # Spend the by-category stack drops (no category, or the reserved Uncategorized bucket),
+        # surfaced so the template can disclose why the stack sums below the headline total.
+        uncategorized = sum(
+            (
+                r.line_total
+                for r in rows
+                if r.category_id is None or r.category_name == UNCATEGORIZED_NAME
+            ),
+            Decimal(0),
+        )
+
+        return SpendOverTime(
+            granularity=granularity,
+            series=series,
+            store_id=store_id,
+            store_label=store_label,
+            buckets=buckets,
+            category_series=category_series,
+            category_options=category_options,
+            other_category_count=other_count,
+            total_spend=sum(totals, Decimal(0)),
+            uncategorized_spend=uncategorized,
+        )
+
+    @staticmethod
+    def _stack_categories(
+        rows: list,
+        sequence: list[date],
+        index: dict[date, int],
+        granularity: SpendGranularity,
+    ) -> tuple[list[SpendCategorySeries], int]:
+        """Build the per-bucket spend stack: the top categories, then a folded "Other" band.
+
+        Uncategorized and unclassified lines are excluded (they are a review to-do, not a real
+        category), matching `category_spend`. Returns the ordered series plus the count of
+        categories rolled into "Other" so the template can disclose what was folded.
+        """
+        per_bucket: dict[str, list[Decimal]] = {}
+        for r in rows:
+            if r.category_id is None or r.category_name == UNCATEGORIZED_NAME:
+                continue
+            vec = per_bucket.setdefault(r.category_name, [Decimal(0)] * len(sequence))
+            vec[index[_bucket_start(r.purchase_date, granularity)]] += r.line_total
+        # Rank by each category's total, derived from its bucket vector (no parallel running sum).
+        ranked = sorted(per_bucket, key=lambda n: sum(per_bucket[n]), reverse=True)
+        top = ranked[:_SPEND_TOP_CATEGORIES]
+        rest = ranked[_SPEND_TOP_CATEGORIES:]
+
+        series = [SpendCategorySeries(category=name, values=per_bucket[name]) for name in top]
+        if rest:
+            other = [Decimal(0)] * len(sequence)
+            for name in rest:
+                for i, value in enumerate(per_bucket[name]):
+                    other[i] += value
+            series.append(SpendCategorySeries(category="Other", values=other))
+        return series, len(rest)
 
     def month_comparison(self, *, today: date | None = None) -> MonthComparison:
         """Contrast the current calendar month with the previous one.

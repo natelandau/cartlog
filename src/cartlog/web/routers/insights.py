@@ -16,7 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BeforeValidator
 
-from cartlog.analytics.results import PriceBasis, ScaleMode, StorePairSort
+from cartlog.analytics.results import (
+    PriceBasis,
+    ScaleMode,
+    SpendGranularity,
+    SpendSeries,
+    StorePairSort,
+)
 from cartlog.analytics.service import AnalyticsService
 from cartlog.web.dependencies import get_analytics_service
 from cartlog.web.guards import require_read
@@ -47,6 +53,10 @@ def _blank_to_none(value: str | None) -> str | None:
 # Optional date query params that tolerate an empty string (unfilled date input) as "absent".
 OptionalDate = Annotated[date | None, BeforeValidator(_blank_to_none)]
 
+# Optional int query param that tolerates an empty string (the "All stores" option) as "absent",
+# so FastAPI does not reject the toolbar's empty store value with a 422.
+OptionalInt = Annotated[int | None, BeforeValidator(_blank_to_none)]
+
 
 @router.get("/charts")
 def charts_redirect() -> RedirectResponse:
@@ -67,6 +77,7 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
     service: ServiceDep,
     store_a: Annotated[int | None, Query()] = None,
     store_b: Annotated[int | None, Query()] = None,
+    store: Annotated[OptionalInt, Query()] = None,
     product: Annotated[list[str] | None, Query()] = None,
     category: Annotated[list[int] | None, Query()] = None,
     from_: Annotated[OptionalDate, Query(alias="from")] = None,
@@ -74,6 +85,8 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
     scale: ScaleMode = ScaleMode.PERCENT,
     basis: PriceBasis = PriceBasis.TYPICAL,
     sort: StorePairSort = StorePairSort.ALPHABETICAL,
+    granularity: SpendGranularity = SpendGranularity.MONTHLY,
+    series: SpendSeries = SpendSeries.TOTAL,
 ) -> HTMLResponse:
     """Render one analysis: the bare fragment for htmx, the full shell otherwise.
 
@@ -97,6 +110,16 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
             scale=scale,
             basis=basis,
             sort=sort,
+        )
+    elif selected.key == "spend-over-time":
+        context = _spend_over_time_context(
+            service,
+            store=store,
+            categories=category,
+            start=from_,
+            end=to,
+            granularity=granularity,
+            series=series,
         )
     if wants_partial(request):
         return templates.TemplateResponse(request, selected.template, context)
@@ -156,3 +179,63 @@ def _store_comparison_context(  # noqa: PLR0913 - each kwarg is a distinct filte
         sort=sort,
     )
     return {"sc": sc, **base}
+
+
+def _spend_over_time_context(  # noqa: PLR0913 - each kwarg is a distinct toolbar filter
+    service: AnalyticsService,
+    *,
+    store: int | None,
+    categories: list[int] | None,
+    start: date | None,
+    end: date | None,
+    granularity: SpendGranularity,
+    series: SpendSeries,
+) -> dict[str, object]:
+    """Assemble the spend-over-time template context, including the chart's JSON payload.
+
+    Validates the store filter against the known stores (an unknown id falls back to all
+    stores) and serializes the bucket series into a plain dict the inline renderer reads from a
+    <script type="application/json"> block. Decimals go out as strings so SQLite float drift
+    never reaches the axis; the renderer coerces them with Number().
+    """
+    stores = service.stores_by_frequency()
+    valid_ids = {s.id for s in stores}
+    store_id = store if store in valid_ids else None
+    sot = service.spend_over_time(
+        start=start,
+        end=end,
+        store_id=store_id,
+        category_ids=categories or None,
+        granularity=granularity,
+        series=series,
+    )
+    payload: dict[str, object] = {
+        "series": sot.series.value,
+        "granularity": sot.granularity.value,
+        "buckets": [
+            {
+                "start": b.start.isoformat(),
+                "label": b.label,
+                "total": str(b.total),
+                "trips": b.trips,
+                "avg": str(b.avg_basket),
+            }
+            for b in sot.buckets
+        ],
+        "categorySeries": [
+            {"category": c.category, "values": [str(v) for v in c.values]}
+            for c in sot.category_series
+        ],
+        "otherCount": sot.other_category_count,
+    }
+    return {
+        "sot": sot,
+        "spend_payload": payload,
+        "store_options": stores,
+        "selected_store": store_id,
+        "selected_categories": categories or [],
+        "date_from": start,
+        "date_to": end,
+        "granularity": sot.granularity.value,
+        "series": sot.series.value,
+    }

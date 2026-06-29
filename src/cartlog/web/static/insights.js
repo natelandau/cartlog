@@ -3,7 +3,10 @@
 // and after each htmx panel swap. Plotly is lazy-loaded so non-chart/no-JS views pay nothing.
 // Decimal fields serialize as strings, so numeric axes are coerced via Number(...) in renderers.
 
-const Insights = (function () {
+// Idempotent: htmx caches the insights page body (which includes this script tag) and re-runs it
+// on a history-restore, so guard against a second `const Insights` redeclaration and against
+// double-wiring the listeners below. The renderers Map then survives across restores intact.
+window.Insights = window.Insights || (function () {
   const renderers = new Map();
   let plotlyPromise = null;
 
@@ -58,35 +61,80 @@ const Insights = (function () {
     if (fn) fn(root);
   }
 
-  // Resolve a CSS custom property (oklch theme tokens) to a concrete rgb string so Plotly
-  // renders on-brand in both light and dark mode. Plotly cannot parse oklch and browsers keep
-  // computed colors in oklch form, so paint the value onto a 1x1 canvas and read the pixel back.
+  // Resolve any CSS color (oklch theme tokens included) to a concrete [r,g,b] so Plotly renders
+  // on-brand in both themes. Plotly cannot parse oklch and browsers keep computed colors in oklch
+  // form, so paint the value onto a 1x1 canvas and read the pixel back.
   const colorProbe = document.createElement("canvas").getContext("2d");
-  function themeColor(varName, fallback) {
-    if (!colorProbe) return fallback;
-    const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-    if (!raw) return fallback;
-    colorProbe.fillStyle = fallback;
-    colorProbe.fillStyle = raw;
+  function cssToRgb(css, fallback) {
+    if (!colorProbe || !css) return null;
+    colorProbe.fillStyle = fallback; // a valid color so an unparseable css leaves a known value
+    colorProbe.fillStyle = css;
     colorProbe.fillRect(0, 0, 1, 1);
     const [r, g, b] = colorProbe.getImageData(0, 0, 1, 1).data;
-    return `rgb(${r}, ${g}, ${b})`;
+    return [r, g, b];
+  }
+  function probe(varName, fallback) {
+    if (!colorProbe) return null;
+    return cssToRgb(getComputedStyle(document.documentElement).getPropertyValue(varName).trim(), fallback);
+  }
+  function themeColor(varName, fallback) {
+    const rgb = probe(varName, fallback);
+    return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : fallback;
+  }
+  // Same resolution but with an alpha channel, for theme-aware gridlines/axis lines that should
+  // be a faint tint of the foreground ink rather than a fixed gray that ignores the theme.
+  function themeAlpha(varName, alpha, fallback) {
+    const rgb = probe(varName, fallback);
+    return rgb ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})` : fallback;
   }
 
-  // Categorical palette for multi-slice charts, drawn from the theme tokens.
-  function cartlogPalette() {
-    return ["--color-primary", "--color-accent", "--color-info", "--color-success", "--color-secondary", "--color-warning"].map(
-      (v, i) => themeColor(v, ["#3a7d5d", "#c08a3e", "#4a90c2", "#4f9e6a", "#6b8f86", "#c2952e"][i])
-    );
+  // A categorical palette generated in the theme's own OKLCH system: the lightness and chroma are
+  // matched to the brand (so the hues read as muted and on-brand, not generic primaries) while the
+  // hue rotates for distinctness. Lightness lifts in dark mode to stay legible on a dark surface.
+  // Anchored at the brand green (165), then evenly around the wheel.
+  const CATEGORY_HUES = [165, 225, 285, 345, 45, 105, 195, 15];
+  const PALETTE_FALLBACK = ["#3a7d5d", "#3f6fa3", "#7a5aa6", "#b0506a", "#c08a3e", "#7e9145"];
+  // Detect a dark theme from the actual surface lightness, not a hardcoded theme name, so the
+  // palette tracks any current or future theme instead of silently falling back to the light ramp.
+  function isDarkSurface() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--color-base-100").trim();
+    const rgb = cssToRgb(raw, "#ffffff");
+    if (!rgb) return false;
+    return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2] < 128; // Rec. 601 luma
   }
+  function paletteParams() {
+    return isDarkSurface() ? { l: 70, c: 0.11 } : { l: 52, c: 0.105 };
+  }
+  function categoryColor(i) {
+    const { l, c } = paletteParams();
+    const hue = CATEGORY_HUES[i % CATEGORY_HUES.length];
+    const rgb = cssToRgb(`oklch(${l}% ${c} ${hue})`, PALETTE_FALLBACK[i % PALETTE_FALLBACK.length]);
+    return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : PALETTE_FALLBACK[i % PALETTE_FALLBACK.length];
+  }
+  function categoryPalette(count) {
+    return Array.from({ length: count }, (_, i) => categoryColor(i));
+  }
+  // The residual "Other" band: a near-neutral with the brand's faint green tint so it recedes
+  // while still belonging to the palette, lifted in dark mode like the rest.
+  function categoryMuted() {
+    const { l } = paletteParams();
+    const rgb = cssToRgb(`oklch(${l + 6}% 0.012 160)`, "#9ca3af");
+    return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#9ca3af";
+  }
+
+  // The site's typefaces (declared as @font-face in app.css): Public Sans for body/UI text and
+  // Fraunces for display headings. Plotly renders SVG <text> with these once the page has loaded
+  // the fonts, so the charts match the rest of the site instead of Plotly's default sans.
+  const BODY_FONT = '"Public Sans", system-ui, -apple-system, sans-serif';
+  const DISPLAY_FONT = '"Fraunces", Georgia, "Times New Roman", serif';
 
   // Shared layout: transparent background so the card surface shows through, text colored with
-  // the theme ink so titles/ticks stay legible in both light and dark mode.
+  // the theme ink so titles/ticks stay legible in both light and dark mode, and the site fonts.
   function baseLayout(title) {
     const ink = themeColor("--color-base-content", "#333");
     return {
-      title: { text: title, font: { size: 16, color: ink } },
-      font: { color: ink },
+      title: { text: title, font: { size: 18, color: ink, family: DISPLAY_FONT } },
+      font: { color: ink, family: BODY_FONT, size: 13 },
       margin: { t: 44, r: 16, b: 44, l: 56 },
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
@@ -94,6 +142,9 @@ const Insights = (function () {
   }
 
   const PLOT_CONFIG = { displayModeBar: false, responsive: true };
+  // Shared fill opacity for chart marks (bars, pie slices), standardized across every chart so the
+  // muted look is consistent and tweaked in one place.
+  const MARK_OPACITY = 0.6;
   const DAY_MS = 86400000;
 
   // Build an x-axis windowed to the data's real span (no empty pre-data years that Plotly
@@ -138,17 +189,32 @@ const Insights = (function () {
     };
   }
 
-  return { register, ensurePlotly, renderActive, getJSON, showEmpty, themeColor, cartlogPalette, baseLayout, priceHistoryTimeAxis, PLOT_CONFIG };
+  return { register, ensurePlotly, renderActive, getJSON, showEmpty, themeColor, themeAlpha, categoryPalette, categoryMuted, baseLayout, priceHistoryTimeAxis, PLOT_CONFIG, MARK_OPACITY };
 })();
 
-// Render the server-embedded initial fragment once the DOM is ready.
-document.addEventListener("DOMContentLoaded", Insights.renderActive);
-// Render the freshly swapped fragment after each select-driven htmx swap. htmx fires afterSettle
-// on each inserted node (the analysis root carries data-insight-view), not on #insights-panel, so
-// match the root element; it matches exactly once per swap, avoiding a double render.
-document.body.addEventListener("htmx:afterSettle", function (e) {
-  if (e.target.matches && e.target.matches("[data-insight-view]")) Insights.renderActive();
-});
-// Back/forward restores the panel from htmx's history cache, which fires historyRestore on the
-// body rather than afterSettle on the panel, so re-render the restored analysis here too.
-document.body.addEventListener("htmx:historyRestore", Insights.renderActive);
+// Wire the page-level listeners exactly once, even if this script re-runs on a history restore.
+if (!window.__insightsWired) {
+  window.__insightsWired = true;
+
+  // Render the server-embedded initial fragment once the DOM is ready.
+  document.addEventListener("DOMContentLoaded", Insights.renderActive);
+  // Render the freshly swapped fragment after each htmx swap. Every analysis swap (the dropdown's
+  // htmx.ajax and the per-view toolbar forms) targets #insights-panel with innerHTML, so htmx
+  // settles on the panel itself; re-render the active chart when it does. afterSettle fires once
+  // per swap, so this never double-renders.
+  document.body.addEventListener("htmx:afterSettle", function (e) {
+    if (e.target && e.target.id === "insights-panel") Insights.renderActive();
+  });
+  // Back/forward restores the panel from htmx's history cache, which fires historyRestore on the
+  // body rather than afterSettle on the panel, so re-render the restored analysis here too.
+  document.body.addEventListener("htmx:historyRestore", Insights.renderActive);
+
+  // Charts resolve their colors from CSS theme tokens at draw time, so a theme switch leaves the
+  // already-drawn chart with stale (e.g. dark-on-dark, unreadable) colors. The theme toggle flips
+  // the data-theme attribute on <html> with no CSS event to listen for, so observe that attribute
+  // and re-render the active chart with the freshly resolved palette.
+  new MutationObserver(Insights.renderActive).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+}

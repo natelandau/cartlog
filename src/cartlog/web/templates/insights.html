@@ -12,9 +12,11 @@
   <div class="max-w-xs">
     <label for="insight-select" class="sr-only">Choose an analysis</label>
     {# Path-based htmx navigation: htmx.ajax issues GET /insights/<key>, swaps the panel, and
-       pushes the canonical deep-link URL so back/forward and "open in new tab" work. #}
+       pushes the canonical deep-link URL so back/forward and "open in new tab" work. The htmx.ajax
+       context `push` is the URL string to push, NOT a boolean: `push: true` literally pushes the
+       string "true" (yielding /insights/true), so pass the path explicitly. #}
     <select id="insight-select" class="select w-full"
-            onchange="htmx.ajax('GET', '/insights/' + this.value, {target: '#insights-panel', swap: 'innerHTML', push: true})">
+            onchange="var u = '/insights/' + this.value; htmx.ajax('GET', u, {target: '#insights-panel', swap: 'innerHTML', push: u})">
       {% for v in views %}
       <option value="{{ v.key }}" {% if v.key == selected.key %}selected{% endif %}>{{ v.label }}</option>
       {% endfor %}

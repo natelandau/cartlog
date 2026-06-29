@@ -31,6 +31,7 @@ class InsightView:
 # Ordered; the first entry is the default landing analysis.
 INSIGHT_VIEWS: tuple[InsightView, ...] = (
     InsightView("price-history", "Price history", "insights/_price_history.html"),
+    InsightView("spend-over-time", "Spend over time", "insights/_spend_over_time.html"),
     InsightView("store-comparison", "Store comparison", "insights/_store_comparison.html"),
     InsightView("category-spend", "Category spend", "insights/_category_spend.html"),
 )

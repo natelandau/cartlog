@@ -1,0 +1,267 @@
+{# Spend over time: a server-rendered toolbar (like store-comparison) driving a Plotly bar chart
+   (like price-history). The form re-fetches this fragment into #insights-panel on any change, so
+   the selected control state is re-rendered by the server; the bucket series travels with it as a
+   JSON blob the inline renderer reads, avoiding a second round trip. #}
+{% import "macros/forms.html" as forms with context %}
+
+<div data-insight-view="spend-over-time" class="flex flex-col gap-4">
+  {# Live-updates on any control change; the explicit submit covers the date range, where the user
+     sets two fields before wanting one refresh. Mirrors the store-comparison toolbar. #}
+  <form id="sot-controls"
+        hx-get="/insights/spend-over-time"
+        hx-target="#insights-panel"
+        hx-swap="innerHTML"
+        hx-trigger="change, submit"
+        hx-push-url="true"
+        class="space-y-4">
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Measure</legend>
+        <select name="series" class="select w-full">
+          <option value="total" {% if series == "total" %}selected{% endif %}>Total spend</option>
+          <option value="category" {% if series == "category" %}selected{% endif %}>Spend by category</option>
+          <option value="trips" {% if series == "trips" %}selected{% endif %}>Trips</option>
+          <option value="avg" {% if series == "avg" %}selected{% endif %}>Avg basket</option>
+        </select>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Granularity</legend>
+        <select name="granularity" class="select w-full">
+          <option value="weekly" {% if granularity == "weekly" %}selected{% endif %}>Weekly</option>
+          <option value="monthly" {% if granularity == "monthly" %}selected{% endif %}>Monthly</option>
+          <option value="yearly" {% if granularity == "yearly" %}selected{% endif %}>Yearly</option>
+        </select>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Store</legend>
+        <select name="store" class="select w-full">
+          <option value="" {% if selected_store is none %}selected{% endif %}>All stores</option>
+          {% for s in store_options %}
+          <option value="{{ s.id }}" {% if s.id == selected_store %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </fieldset>
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {# Category pills filter the itemized spend in every measure, not just the stack. #}
+      {{ forms.multiselect_pills("category", "Categories", sot.category_options, selected_categories, "sot-cat") }}
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">From</legend>
+        <input type="date" name="from" class="input w-full"
+               value="{{ date_from.isoformat() if date_from else '' }}" />
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">To</legend>
+        <input type="date" name="to" class="input w-full"
+               value="{{ date_to.isoformat() if date_to else '' }}" />
+      </fieldset>
+    </div>
+
+    <div class="flex justify-end">
+      <button type="submit" class="btn btn-primary btn-sm">Update chart</button>
+    </div>
+  </form>
+
+  {# At-a-glance context for the selected range: itemized total, trips, and average basket.
+     Derived from the same buckets the chart draws, so it always matches the filtered view. #}
+  {% if sot.buckets %}
+  {% set trip_total = sot.buckets | sum(attribute="trips") %}
+  <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-base-content/60">Total spend</dt>
+      <dd class="num font-semibold">${{ "%.2f"|format(sot.total_spend) }}</dd>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-base-content/60">Trips</dt>
+      <dd class="num font-semibold">{{ trip_total }}</dd>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-base-content/60">Avg basket</dt>
+      <dd class="num font-semibold">${{ "%.2f"|format(sot.total_spend / trip_total if trip_total else 0) }}</dd>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <dt class="num font-semibold">{{ sot.buckets | length }}</dt>
+      <dd class="text-base-content/60">{{ {"weekly": "weeks", "yearly": "years"}.get(sot.granularity, "months") }}</dd>
+    </div>
+  </dl>
+  {% endif %}
+
+  {# Chart heading rendered as real HTML so it uses the site's display font (Fraunces) and frees
+     the Plotly canvas top for the legend. The fragment is re-fetched on every control change, so
+     this server-rendered title always matches the drawn chart. #}
+  {% set measure_label = {"total": "Total spend", "category": "Spend by category", "trips": "Trips", "avg": "Avg basket"}.get(series, "Spend") %}
+  {% set gran_label = {"weekly": "Weekly", "yearly": "Yearly"}.get(granularity, "Monthly") %}
+  <h3 class="font-display text-base-content text-center text-lg font-semibold">{{ measure_label }} · {{ gran_label }}</h3>
+
+  <div id="spend-over-time-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+
+  {# Tufte: describe the evidence. Spend is itemized (so store/category filters are well-defined),
+     which means it omits tax and fees and so reads slightly below a receipt grand total. The note
+     is about spend, so it is shown for every measure except the pure trip count. #}
+  {% if sot.series != "trips" %}
+  <p class="text-base-content/60 text-xs">
+    Spend is summed from itemized lines, so it excludes tax and fees.
+    {%- if sot.series == "category" and sot.other_category_count > 0 %}
+    {% if sot.other_category_count == 1 %}The smallest category is{% else %}The {{ sot.other_category_count }} smallest categories are{% endif %}
+    grouped as <span class="font-medium">Other</span>.
+    {%- endif %}
+    {%- if sot.series == "category" and sot.uncategorized_spend > 0 %}
+    A further <span class="num">${{ "%.2f"|format(sot.uncategorized_spend) }}</span> of uncategorized spend is not shown in the stack.
+    {%- endif %}
+  </p>
+  {% endif %}
+
+  {# The bucket series for the renderer. tojson html-escapes < > & so this is safe in a script tag;
+     Decimals arrive as strings and are coerced with Number() in the renderer. #}
+  <script type="application/json" id="spend-data">{{ spend_payload | tojson }}</script>
+</div>
+<script>
+  (function () {
+    const SERIES_NAME = { total: "Total spend", category: "Spend", trips: "Trips", avg: "Avg basket" };
+    const ROLLING_UNIT = { weekly: "wk", monthly: "mo", yearly: "yr" };
+    // Cap how many tick labels print so a long span (e.g. 120 months) does not overlap into mush.
+    const MAX_TICKS = 14;
+
+    // Re-query root on each render so a renderer invoked after an htmx history-restore acts on the
+    // live node, not a stale closure over the pre-navigation element.
+    function root() {
+      return document.querySelector('[data-insight-view="spend-over-time"]');
+    }
+
+    // Trailing N-period mean over the present values in the window. The first N-1 buckets are null
+    // (no full window yet), and gaps (null y-values, e.g. an empty average-basket bucket) are
+    // skipped rather than counted as zero so they do not drag the trend down.
+    function rollingAverage(values, window) {
+      return values.map((_, i) => {
+        if (i < window - 1) return null;
+        const present = [];
+        for (let k = i - window + 1; k <= i; k++) {
+          if (values[k] != null) present.push(values[k]);
+        }
+        if (!present.length) return null;
+        return present.reduce((sum, v) => sum + v, 0) / present.length;
+      });
+    }
+
+    // Choose which category labels to print so at most MAX_TICKS show, evenly spaced across the
+    // full span and always anchored at the first and last bucket, so the ends never crowd.
+    function tickValues(labels) {
+      const n = labels.length;
+      if (n <= MAX_TICKS) return labels;
+      const step = (n - 1) / (MAX_TICKS - 1);
+      const indices = new Set();
+      for (let k = 0; k < MAX_TICKS; k++) indices.add(Math.round(k * step));
+      return [...indices].map((i) => labels[i]);
+    }
+
+    async function render() {
+      await Insights.ensurePlotly();
+      const el = root().querySelector("#spend-over-time-chart");
+      const data = JSON.parse(root().querySelector("#spend-data").textContent);
+      if (!data.buckets.length) {
+        Insights.showEmpty(el, "No spend recorded for this selection.");
+        return;
+      }
+
+      // Discrete time buckets, so the x-axis is categorical: one bar per bucket, labels thinned to
+      // a readable count. Empty buckets are zero-filled server-side, so bars stay evenly spaced.
+      const labels = data.buckets.map((b) => b.label);
+      const money = data.series !== "trips";
+      const traces = [];
+
+      if (data.series === "category") {
+        const palette = Insights.categoryPalette(data.categorySeries.length);
+        const muted = Insights.categoryMuted();
+        data.categorySeries.forEach((s, i) => {
+          const other = s.category === "Other";
+          traces.push({
+            x: labels,
+            y: s.values.map(Number),
+            name: s.category,
+            type: "bar",
+            marker: { color: other ? muted : palette[i], opacity: Insights.MARK_OPACITY },
+            hovertemplate: `%{x}<br>${s.category}<br>$%{y:.2f}<extra></extra>`,
+          });
+        });
+        if (!traces.length) {
+          Insights.showEmpty(el, "No categorized spend for this selection.");
+          return;
+        }
+      } else {
+        // The non-category measures map 1:1 to a bucket field of the same name.
+        const key = data.series;
+        // An empty bucket has no basket, so plot a gap (null) for the average rather than a
+        // misleading $0 bar; spend and trips are legitimately zero in an empty bucket and stay 0.
+        const values = data.buckets.map((b) =>
+          data.series === "avg" && b.trips === 0 ? null : Number(b[key])
+        );
+        const primary = Insights.themeColor("--color-primary", "#3a7d5d");
+        const yfmt = money ? "$%{y:.2f}" : "%{y:d}";
+        traces.push({
+          x: labels,
+          y: values,
+          name: SERIES_NAME[data.series],
+          type: "bar",
+          // Lightened so the high-contrast trend line reads clearly over the bars.
+          marker: { color: primary, opacity: Insights.MARK_OPACITY },
+          hovertemplate: `%{x}<br>${yfmt}<extra></extra>`,
+        });
+        // Trend line: trailing 3-period average, layered over the bars so the trend reads through
+        // the noise. Skipped for trips (a count needs no smoothing) and when there are too few
+        // buckets for a window. A saturated red is the strongest contrast to the green bars.
+        if (money && values.length >= 3) {
+          const unit = ROLLING_UNIT[data.granularity] || "mo";
+          // The themeable error token is a strong red in both themes, so it stays high-contrast
+          // against the green bars whichever theme is active.
+          const line = Insights.themeColor("--color-error", "#d62728");
+          traces.push({
+            x: labels,
+            y: rollingAverage(values, 3),
+            name: `3-${unit} avg`,
+            type: "scatter",
+            mode: "lines",
+            line: { color: line, width: 3, shape: "spline" },
+            hovertemplate: `%{x}<br>avg $%{y:.2f}<extra></extra>`,
+            connectgaps: false,
+          });
+        }
+      }
+
+      // Title lives in the HTML heading above (real site font), so the canvas top is free for the
+      // legend. A top legend never collides with the rotated x-axis labels at the bottom.
+      const layout = {
+        ...Insights.baseLayout(""),
+        margin: { t: 44, r: 24, b: 52, l: 78 },
+        xaxis: {
+          type: "category",
+          ticks: "outside",
+          showgrid: false, // vertical gridlines are redundant with the bars
+          automargin: true, // keep rotated/long labels from clipping
+          tickangle: "auto", // horizontal when labels fit, rotated when narrow
+          tickmode: "array",
+          tickvals: tickValues(labels),
+        },
+        yaxis: {
+          title: { text: money ? "Spend" : "Trips", standoff: 14 }, // standoff clears the $ ticks
+          tickprefix: money ? "$" : "",
+          rangemode: "tozero", // bars must sit on a zero baseline (Tufte: honest magnitude)
+          gridcolor: Insights.themeAlpha("--color-base-content", 0.12, "rgba(128,128,128,0.15)"),
+          zeroline: true,
+          zerolinecolor: Insights.themeAlpha("--color-base-content", 0.35, "rgba(128,128,128,0.4)"),
+          ticks: "outside",
+          // A trip count is integer-valued, so force whole-number ticks (no "0.6 trips").
+          ...(money ? {} : { dtick: 1, tickformat: "d" }),
+        },
+        barmode: data.series === "category" ? "stack" : "group",
+        bargap: 0.2,
+        showlegend: data.series === "category" || traces.length > 1,
+        legend: { orientation: "h", yanchor: "bottom", y: 1.0, xanchor: "left", x: 0 },
+      };
+      Plotly.newPlot(el, traces, layout, Insights.PLOT_CONFIG);
+    }
+
+    Insights.register("spend-over-time", render);
+  })();
+</script>

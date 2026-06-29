@@ -22,7 +22,8 @@
         labels: data.rows.map((r) => r.category),
         values: data.rows.map((r) => Number(r.total_spend)),
         type: "pie",
-        marker: { colors: Insights.cartlogPalette() },
+        opacity: Insights.MARK_OPACITY,
+        marker: { colors: Insights.categoryPalette(data.rows.length) },
       };
       Plotly.newPlot(el, [trace], Insights.baseLayout("Spend by category"), Insights.PLOT_CONFIG);
     }
