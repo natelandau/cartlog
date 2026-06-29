@@ -1,7 +1,11 @@
 {# Category spend analysis fragment. Self-registers its Plotly renderer with the Insights shell.
    Renders immediately on mount (no product input), so no Show button is needed. #}
+{% import "macros/ui.html" as ui with context %}
 <div data-insight-view="category-spend" class="flex flex-col gap-3">
+  {{ ui.chart_heading("Spend by category") }}
   <div id="category-spend-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
+  {# Tufte: name the evidence. The pie is part-to-whole of itemized spend only. #}
+  <p class="text-base-content/60 text-xs">Share of itemized spend across categories. Excludes tax and fees.</p>
 </div>
 <script>
   (function () {
@@ -25,7 +29,15 @@
         opacity: Insights.MARK_OPACITY,
         marker: { colors: Insights.categoryPalette(data.rows.length) },
       };
-      Plotly.newPlot(el, [trace], Insights.baseLayout("Spend by category"), Insights.PLOT_CONFIG);
+      const layout = {
+        ...Insights.baseLayout(),
+        // A pie has no axes, so override the cartesian margin with a tight, symmetric one. Reuse
+        // MARGIN.t so the heading-to-chart gap matches the other charts.
+        margin: { ...Insights.MARGIN, r: 16, b: 16, l: 16 },
+        // Intentionally NOT Insights.legend(): a pie legend keys slices, not series, so Plotly's
+        // default vertical legend at the side reads better than a horizontal one above the canvas.
+      };
+      Plotly.newPlot(el, [trace], layout, Insights.PLOT_CONFIG);
     }
     Insights.register("category-spend", render);
   })();

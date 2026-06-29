@@ -3,6 +3,7 @@
    the selected control state is re-rendered by the server; the bucket series travels with it as a
    JSON blob the inline renderer reads, avoiding a second round trip. #}
 {% import "macros/forms.html" as forms with context %}
+{% import "macros/ui.html" as ui with context %}
 
 <div data-insight-view="spend-over-time" class="flex flex-col gap-4">
   {# Live-updates on any control change; the explicit submit covers the date range, where the user
@@ -93,7 +94,7 @@
      this server-rendered title always matches the drawn chart. #}
   {% set measure_label = {"total": "Total spend", "category": "Spend by category", "trips": "Trips", "avg": "Avg basket"}.get(series, "Spend") %}
   {% set gran_label = {"weekly": "Weekly", "yearly": "Yearly"}.get(granularity, "Monthly") %}
-  <h3 class="font-display text-base-content text-center text-lg font-semibold">{{ measure_label }} · {{ gran_label }}</h3>
+  {{ ui.chart_heading(measure_label ~ " · " ~ gran_label) }}
 
   <div id="spend-over-time-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
 
@@ -197,7 +198,7 @@
         const values = data.buckets.map((b) =>
           data.series === "avg" && b.trips === 0 ? null : Number(b[key])
         );
-        const primary = Insights.themeColor("--color-primary", "#3a7d5d");
+        const primary = Insights.brand();
         const yfmt = money ? "$%{y:.2f}" : "%{y:d}";
         traces.push({
           x: labels,
@@ -215,7 +216,7 @@
           const unit = ROLLING_UNIT[data.granularity] || "mo";
           // The themeable error token is a strong red in both themes, so it stays high-contrast
           // against the green bars whichever theme is active.
-          const line = Insights.themeColor("--color-error", "#d62728");
+          const line = Insights.accent();
           traces.push({
             x: labels,
             y: rollingAverage(values, 3),
@@ -229,35 +230,16 @@
         }
       }
 
-      // Title lives in the HTML heading above (real site font), so the canvas top is free for the
-      // legend. A top legend never collides with the rotated x-axis labels at the bottom.
+      // Title lives in the HTML heading above (site display font), so the canvas top is free for
+      // the legend. A top legend never collides with the rotated x-axis labels at the bottom.
       const layout = {
-        ...Insights.baseLayout(""),
-        margin: { t: 44, r: 24, b: 52, l: 78 },
-        xaxis: {
-          type: "category",
-          ticks: "outside",
-          showgrid: false, // vertical gridlines are redundant with the bars
-          automargin: true, // keep rotated/long labels from clipping
-          tickangle: "auto", // horizontal when labels fit, rotated when narrow
-          tickmode: "array",
-          tickvals: tickValues(labels),
-        },
-        yaxis: {
-          title: { text: money ? "Spend" : "Trips", standoff: 14 }, // standoff clears the $ ticks
-          tickprefix: money ? "$" : "",
-          rangemode: "tozero", // bars must sit on a zero baseline (Tufte: honest magnitude)
-          gridcolor: Insights.themeAlpha("--color-base-content", 0.12, "rgba(128,128,128,0.15)"),
-          zeroline: true,
-          zerolinecolor: Insights.themeAlpha("--color-base-content", 0.35, "rgba(128,128,128,0.4)"),
-          ticks: "outside",
-          // A trip count is integer-valued, so force whole-number ticks (no "0.6 trips").
-          ...(money ? {} : { dtick: 1, tickformat: "d" }),
-        },
+        ...Insights.baseLayout(),
+        xaxis: Insights.categoryAxis({ tickvals: tickValues(labels) }),
+        yaxis: Insights.numericAxis({ money, title: money ? "Spend" : "Trips" }),
         barmode: data.series === "category" ? "stack" : "group",
         bargap: 0.2,
         showlegend: data.series === "category" || traces.length > 1,
-        legend: { orientation: "h", yanchor: "bottom", y: 1.0, xanchor: "left", x: 0 },
+        legend: Insights.legend(),
       };
       Plotly.newPlot(el, traces, layout, Insights.PLOT_CONFIG);
     }

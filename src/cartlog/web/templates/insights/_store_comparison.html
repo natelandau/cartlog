@@ -2,6 +2,7 @@
    The toolbar form re-fetches this same fragment into #insights-panel on any change; selection
    state lives in the form, so the server re-renders the controls in their chosen state. #}
 {% import "macros/forms.html" as forms with context %}
+{% import "macros/ui.html" as ui with context %}
 
 {# One comparison row: name | price_a | diverging bar | delta | price_b. The bar is a half-track
    div whose width is bar_fraction of the 50% half, growing toward the pricier store.
@@ -70,6 +71,9 @@
     Add receipts from at least two stores to compare prices.
   </p>
 {% else %}
+  {# Visible heading naming the store pair (the table previously had only an aria-label), using the
+     same shared macro as the Plotly insights so all four headings stay identical. #}
+  {{ ui.chart_heading(sc.store_a ~ " vs " ~ sc.store_b) }}
   {# Live-updates on any control change; the explicit submit button covers the date range,
      where the user sets two fields before wanting a single refresh. #}
   <form id="sc-controls"

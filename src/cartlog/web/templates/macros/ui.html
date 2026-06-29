@@ -22,6 +22,13 @@
 </header>
 {% endmacro %}
 
+{# Insights chart heading: one shared <h3> so every chart title stays identical (display font,
+   size, alignment). `id` is set only for the price-history title, whose text the renderer fills
+   client-side after its data fetch. Changing the heading look here updates every chart at once. #}
+{% macro chart_heading(text="", id="") %}
+<h3{% if id %} id="{{ id }}"{% endif %} class="font-display text-base-content text-center text-lg font-semibold">{{ text }}</h3>
+{% endmacro %}
+
 {# Standard card surface. Body provided via {% call %}; optional section title. #}
 {% macro card(title="") %}
 <section class="surface-card">

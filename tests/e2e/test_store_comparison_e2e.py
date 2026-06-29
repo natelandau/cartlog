@@ -49,6 +49,13 @@ def test_store_comparison_form_reloads_and_pills_work(live_server: str, page: Pa
     # Then a removable pill appears for it (the form auto-reloaded with no 4xx)
     page.locator("span.badge", has_text=value).first.wait_for(timeout=5000)
 
+    # The check triggers an htmx reload that swaps the whole panel, including the form itself. htmx
+    # re-wires the new form's change trigger during settle, so wait for the round-trip to settle
+    # before clicking the fresh remove control. Otherwise the remove click unchecks the box and
+    # fires change into a not-yet-wired form, htmx sends no request, and the pill never detaches.
+    page.wait_for_load_state("networkidle")
+    page.wait_for_timeout(250)
+
     # And clicking its remove control takes it away
     page.locator(f'label[aria-label="Remove {value}"]').first.click()
     page.locator("span.badge", has_text=value).wait_for(state="detached", timeout=5000)
