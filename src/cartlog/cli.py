@@ -86,7 +86,8 @@ def serve(
         css_watcher = assets.build_css(watch=True) if dev and not skip_css_build else None
 
         # Pass the app instance (not an import string) so --dev flows through to create_app.
-        server = uvicorn.Server(uvicorn.Config(create_app(dev=dev), host=host, port=port))
+        web_app = create_app(dev=dev)
+        server = uvicorn.Server(uvicorn.Config(web_app, host=host, port=port))
         mode = " in dev mode" if dev else ""
         typer.echo(f"cartlog serving at http://{host}:{port} with {workers} worker(s){mode}.")
         # suppress is the inner context so a Ctrl-C raised before uvicorn installs its handler
@@ -98,10 +99,12 @@ def serve(
                 settings=settings,
                 count=workers,
                 classifier=classifier,
-            ),
+            ) as worker_threads,
             folder_watcher(session_factory, settings),
             suppress(KeyboardInterrupt),
         ):
+            # Expose the live worker threads so the /healthz probe can report pool liveness.
+            web_app.state.worker_threads = worker_threads
             server.run()
     finally:
         if css_watcher is not None:

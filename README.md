@@ -91,6 +91,33 @@ The container reads its configuration from the environment and from `.env.secret
 
 The published port is mapped in `compose.yaml`. To serve cartlog on a different host port, change the `ports` mapping (for example `"9000:8000"`).
 
+### Health check
+
+cartlog answers a health endpoint at `/healthz` so Docker, an uptime monitor, or an orchestrator can tell whether a running container actually works. A `GET /healthz` returns HTTP `200` with `{"status": "ok", ...}` when the app is healthy, and HTTP `503` with `{"status": "unhealthy", ...}` when it is not. The body also reports each check:
+
+- `database`: the SQLite database answers a query
+- `migrations`: the schema is upgraded to the latest version
+- `worker`: at least one receipt-processing worker is running
+
+The endpoint needs no authentication, so it works even before you create the first account. Check it by hand with `curl`:
+
+```bash
+curl -fsS http://localhost:8000/healthz
+```
+
+To have Docker watch the container, add a healthcheck to the `cartlog` service in `compose.yaml` (the image already ships with `curl`):
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 20s
+```
+
+`curl -f` exits non-zero on the `503` response, so Docker marks the container `unhealthy` when a check fails.
+
 ## Local install
 
 For development, or to run cartlog without Docker, install it with uv.

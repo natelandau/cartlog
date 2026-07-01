@@ -12,6 +12,7 @@ from starlette.responses import RedirectResponse, Response
 from cartlog.auth.users import UserService
 from cartlog.web.dependencies import cookie_is_secure, resolve_settings
 from cartlog.web.guards import Forbidden, load_user
+from cartlog.web.routers.health import HEALTH_PATHS
 from cartlog.web.security import make_csrf_token, verify_csrf_token
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ class SetupGateMiddleware(BaseHTTPMiddleware):
             A redirect to /setup when no users exist, or the normal response.
         """
         path = request.url.path
-        if path.startswith(_EXEMPT_PREFIXES):
+        if path in HEALTH_PATHS or path.startswith(_EXEMPT_PREFIXES):
             return await call_next(request)
         factory = request.app.state.session_factory
         with factory() as session:
@@ -79,7 +80,7 @@ class ForcePasswordChangeMiddleware(BaseHTTPMiddleware):
             or the normal response for everyone else.
         """
         path = request.url.path
-        if path.startswith(_FORCE_CHANGE_EXEMPT):
+        if path in HEALTH_PATHS or path.startswith(_FORCE_CHANGE_EXEMPT):
             return await call_next(request)
 
         factory = request.app.state.session_factory
@@ -118,7 +119,7 @@ class CsrfMiddleware(BaseHTTPMiddleware):
         Returns:
             The normal response, with the CSRF cookie set when it was absent or invalid.
         """
-        if request.url.path.startswith("/static"):
+        if request.url.path in HEALTH_PATHS or request.url.path.startswith("/static"):
             return await call_next(request)
 
         # Read settings at dispatch time so tests can override via app.state.settings.

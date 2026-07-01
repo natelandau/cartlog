@@ -30,6 +30,7 @@ from cartlog.web.routers import (
     auth_routes,
     categories,
     dashboard,
+    health,
     insights,
     integrations,
     jobs,
@@ -75,6 +76,7 @@ def create_app(*, dev: bool = False) -> FastAPI:
     # Dev re-stats templates so edits show live; production reuses the compiled cache.
     templates.env.auto_reload = dev
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+    app.include_router(health.router)
     app.include_router(setup.router)
     app.include_router(auth_routes.router)
     app.include_router(account.router)
