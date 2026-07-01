@@ -29,6 +29,9 @@ from cartlog.analytics.results import (
     PriceHistory,
     PricePoint,
     PriceTrendRow,
+    ProductPareto,
+    ProductParetoMetric,
+    ProductParetoRow,
     ScaleMode,
     SearchResult,
     SpendBucket,
@@ -310,18 +313,20 @@ class AnalyticsService:
         return self._bucket_monthly(rows)
 
     def _spend_rows(self, *, start: date | None, end: date | None, store_id: int | None) -> list:
-        """Return labeled (receipt, date, line_total, category) rows for the spend-over-time view.
+        """Return labeled counted-line-item rows for the spend-over-time and top-products views.
 
-        One row per counted line item so every measure (total, trips, by-category) derives from
-        the same itemized universe, which keeps the store and category filters well-defined.
-        The category filter is applied by the caller in Python so the toolbar's option list can
-        still reflect every category in the store/date window regardless of the active filter.
+        One row per counted line item, carrying the product name and category, so every measure
+        (total, trips, by-category, per-product ranking) derives from the same itemized universe,
+        which keeps the store and category filters well-defined. The category filter is applied
+        by the caller in Python so the toolbar's option list can still reflect every category in
+        the store/date window regardless of the active filter.
         """
         query = (
             self._session.query(
                 Receipt.id.label("receipt_id"),
                 Receipt.purchase_date.label("purchase_date"),
                 LineItem.line_total.label("line_total"),
+                Product.canonical_name.label("name"),
                 Product.category_id.label("category_id"),
                 Category.name.label("category_name"),
             )
@@ -334,6 +339,23 @@ class AnalyticsService:
         if store_id is not None:
             query = query.filter(Receipt.store_id == store_id)
         return query.all()
+
+    @staticmethod
+    def _category_options(rows: list) -> list[tuple[int, str]]:
+        """Return the sorted (id, name) categories present in `rows` for a toolbar's filter pills.
+
+        Built from the whole store/date window (before any category filter) so selecting a
+        category never empties its own option list. The reserved Uncategorized bucket is excluded
+        since it is a review to-do, not a real category to filter by.
+        """
+        return sorted(
+            {
+                (r.category_id, r.category_name)
+                for r in rows
+                if r.category_id is not None and r.category_name != UNCATEGORIZED_NAME
+            },
+            key=lambda c: c[1].lower(),
+        )
 
     def spend_over_time(
         self,
@@ -366,14 +388,7 @@ class AnalyticsService:
             SpendOverTime: Gap-free buckets, the stacked-category series, and the toolbar options.
         """
         universe = self._spend_rows(start=start, end=end, store_id=store_id)
-        category_options = sorted(
-            {
-                (r.category_id, r.category_name)
-                for r in universe
-                if r.category_id is not None and r.category_name != UNCATEGORIZED_NAME
-            },
-            key=lambda c: c[1].lower(),
-        )
+        category_options = self._category_options(universe)
         cat_filter = set(category_ids) if category_ids else None
         rows = [r for r in universe if cat_filter is None or r.category_id in cat_filter]
 
@@ -620,6 +635,117 @@ class AnalyticsService:
         key = (lambda r: r.total_spend) if by == "spend" else (lambda r: r.purchase_count)
         result.sort(key=key, reverse=True)
         return result[:limit]
+
+    def product_pareto(
+        self,
+        *,
+        metric: ProductParetoMetric = ProductParetoMetric.SPEND,
+        start: date | None = None,
+        end: date | None = None,
+        store_id: int | None = None,
+        category_ids: list[int] | None = None,
+        limit: int = 20,
+    ) -> ProductPareto:
+        """Rank products by spend or trips for a Pareto view of what drives the basket.
+
+        Use this to answer "which handful of products dominate my spending (or my trips)?".
+        Products are `Product.canonical_name`; spend is summed from itemized line totals and
+        trips count the distinct counted receipts a product appears on. The top `limit`
+        products are returned individually and the remaining tail is folded into a single
+        "Other" row so the cumulative share closes at 100%. `pareto_count` and `product_total`
+        describe the full, un-folded ranking so the caption can state how few products reach 80%.
+
+        Args:
+            metric: Rank and measure by SPEND or TRIPS.
+            start: Optional earliest purchase date (inclusive).
+            end: Optional latest purchase date (inclusive).
+            store_id: Optional store to restrict to; None spans every store.
+            category_ids: Optional categories to restrict to; None spans every category.
+            limit: How many products to list before folding the rest into "Other".
+
+        Returns:
+            ProductPareto: ranked rows (+ optional Other band), toolbar options, and headline stats.
+        """
+        # Share the spend-over-time itemized universe so the counted/date/store/category-option
+        # semantics stay identical between the two views.
+        universe = self._spend_rows(start=start, end=end, store_id=store_id)
+        category_options = self._category_options(universe)
+
+        cat_filter = set(category_ids) if category_ids else None
+        rows = [r for r in universe if cat_filter is None or r.category_id in cat_filter]
+
+        values = self._pareto_values(rows, metric)
+        # Rank by the metric descending, breaking ties by name so which products are visible vs
+        # folded into the tail is deterministic. The raw query has no ORDER BY, so a value-only
+        # sort would otherwise leave products tied on the metric (common for the trip count) in
+        # SQLite's arbitrary row order.
+        ranked = sorted(values, key=lambda n: (-values[n], n))
+        grand_total = sum(values.values(), Decimal(0))
+
+        return ProductPareto(
+            metric=metric,
+            rows=self._pareto_rows(ranked, values, grand_total, limit),
+            category_options=category_options,
+            product_total=len(ranked),
+            pareto_count=self._pareto_count(ranked, values, grand_total),
+            grand_total=grand_total,
+            total_receipts=len({r.receipt_id for r in rows}),
+        )
+
+    @staticmethod
+    def _pareto_values(rows: list, metric: ProductParetoMetric) -> dict[str, Decimal]:
+        """Aggregate each product's spend or trip count from labeled line-item rows.
+
+        Every row updates both measures unconditionally (mirroring the original loop) so the
+        two metrics always agree on which products are in play, regardless of which is active.
+        """
+        spend: dict[str, Decimal] = {}
+        trips: dict[str, set[int]] = {}
+        for r in rows:
+            spend[r.name] = spend.get(r.name, Decimal(0)) + r.line_total
+            trips.setdefault(r.name, set()).add(r.receipt_id)
+        if metric == ProductParetoMetric.TRIPS:
+            return {name: Decimal(len(ids)) for name, ids in trips.items()}
+        return spend
+
+    @staticmethod
+    def _pareto_count(ranked: list[str], values: dict[str, Decimal], grand_total: Decimal) -> int:
+        """Return the fewest top products (full, un-folded ranking) reaching 80% of the total."""
+        if grand_total <= 0:
+            return 0
+        threshold = grand_total * Decimal("0.8")
+        running = Decimal(0)
+        count = 0
+        for name in ranked:
+            running += values[name]
+            count += 1
+            if running >= threshold:
+                break
+        return count
+
+    @staticmethod
+    def _pareto_rows(
+        ranked: list[str], values: dict[str, Decimal], grand_total: Decimal, limit: int
+    ) -> list[ProductParetoRow]:
+        """Build the top `limit` ranked rows, each carrying its share of the metric total.
+
+        The long tail is dropped rather than folded into an "Other" bar: with real data that
+        band dwarfs every real product and flattens the chart. The headline still discloses how
+        many products exist and how few drive 80%.
+        """
+
+        def share(value: Decimal) -> float:
+            if not grand_total:
+                return 0.0
+            # Clamp to 0..100: a refund or coupon can make grand_total smaller than a single
+            # product's value (or a value itself negative), which would otherwise read as an
+            # impossible share above 100% or below 0%.
+            return min(100.0, max(0.0, float(value / grand_total * 100)))
+
+        return [
+            ProductParetoRow(name=name, value=values[name], share_pct=share(values[name]))
+            for name in ranked[:limit]
+        ]
 
     def store_breakdown(self, *, start: date | None, end: date | None) -> list[StoreRow]:
         """Return per-store spend, visit count, and average spend per trip, top spend first."""

@@ -8,7 +8,13 @@ from cartlog.web.insights import DEFAULT_VIEW, INSIGHT_VIEWS, get_view
 def test_registry_lists_the_registered_analyses():
     """Verify the charts are registered with stable URL keys in display order."""
     keys = [v.key for v in INSIGHT_VIEWS]
-    assert keys == ["price-history", "spend-over-time", "store-comparison", "category-spend"]
+    assert keys == [
+        "price-history",
+        "spend-over-time",
+        "store-comparison",
+        "category-spend",
+        "top-products",
+    ]
 
 
 def test_registry_keys_are_unique():

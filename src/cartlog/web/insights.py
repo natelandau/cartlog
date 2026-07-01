@@ -34,6 +34,7 @@ INSIGHT_VIEWS: tuple[InsightView, ...] = (
     InsightView("spend-over-time", "Spend over time", "insights/_spend_over_time.html"),
     InsightView("store-comparison", "Store comparison", "insights/_store_comparison.html"),
     InsightView("category-spend", "Category spend", "insights/_category_spend.html"),
+    InsightView("top-products", "Top products", "insights/_top_products.html"),
 )
 
 DEFAULT_VIEW: InsightView = INSIGHT_VIEWS[0]

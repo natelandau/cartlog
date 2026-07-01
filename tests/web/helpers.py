@@ -6,6 +6,7 @@ seeded row's id, used across the sorting, search, and delete tests.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,21 @@ def get_session_factory(client: TestClient) -> Any:  # noqa: ANN401
     across every test that needs a direct DB session.
     """
     return client.app.state.session_factory  # ty: ignore[unresolved-attribute]
+
+
+def read_json_script(html: str, element_id: str) -> dict:
+    """Parse the embedded <script type="application/json" id="..."> chart payload from a fragment.
+
+    The server-rendered insight fragments (spend-over-time, top-products) carry their chart data
+    in a JSON script tag the inline renderer reads; tests assert against the same payload.
+    """
+    match = re.search(
+        rf'<script type="application/json" id="{re.escape(element_id)}">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    assert match is not None, f"no JSON script tag with id={element_id!r}"
+    return json.loads(match.group(1))
 
 
 def totals_in_order(html: str) -> list[float]:

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.e2e
 
-PLOTLY_VIEWS = ["price-history", "spend-over-time", "category-spend"]
+PLOTLY_VIEWS = ["price-history", "spend-over-time", "category-spend", "top-products"]
 
 
 def test_every_plotly_view_renders_a_chart(page: Page, live_server: str) -> None:

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-import re
+from tests.web.helpers import read_json_script
 
 
 def test_spend_over_time_renders_toolbar_and_payload(app_client):
@@ -89,9 +88,5 @@ def test_spend_over_time_by_category_returns_stacked_series(app_client):
 
 
 def _read_payload(html: str) -> dict:
-    """Extract and parse the embedded spend-data JSON blob from the rendered fragment."""
-    match = re.search(
-        r'<script type="application/json" id="spend-data">(.*?)</script>', html, re.DOTALL
-    )
-    assert match is not None
-    return json.loads(match.group(1))
+    """Parse the embedded spend-data chart payload from the rendered fragment."""
+    return read_json_script(html, "spend-data")

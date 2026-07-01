@@ -344,3 +344,30 @@ class SpendOverTime(BaseModel):
     other_category_count: int  # categories folded into the "Other" stack, for an honest caption
     total_spend: Decimal
     uncategorized_spend: Decimal  # spend the by-category stack omits, disclosed so it still adds up
+
+
+class ProductParetoMetric(StrEnum):
+    """Which measure ranks the products in the top-products Pareto view."""
+
+    SPEND = "spend"  # total itemized spend per product
+    TRIPS = "trips"  # distinct receipts a product appears on
+
+
+class ProductParetoRow(BaseModel):
+    """One ranked product in the top-products view."""
+
+    name: str
+    value: Decimal  # the active metric; trips is carried as an integer-valued Decimal
+    share_pct: float  # this product's share of the metric total, 0..100
+
+
+class ProductPareto(BaseModel):
+    """Products ranked by spend or trips, with each product's share and the toolbar's options."""
+
+    metric: ProductParetoMetric
+    rows: list[ProductParetoRow]  # the top-N products, ranked highest first
+    category_options: list[tuple[int, str]]  # (id, name) for the toolbar pills
+    product_total: int  # distinct products in range (rows is capped at the top N)
+    pareto_count: int  # fewest products whose cumulative reaches >= 80%, for the headline
+    grand_total: Decimal  # total of the metric across all products in range
+    total_receipts: int  # distinct counted receipts in range; the real trip count for the headline

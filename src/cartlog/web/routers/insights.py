@@ -18,9 +18,11 @@ from pydantic import BeforeValidator
 
 from cartlog.analytics.results import (
     PriceBasis,
+    ProductParetoMetric,
     ScaleMode,
     SpendGranularity,
     SpendSeries,
+    StoreOption,
     StorePairSort,
 )
 from cartlog.analytics.service import AnalyticsService
@@ -87,11 +89,13 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
     sort: StorePairSort = StorePairSort.ALPHABETICAL,
     granularity: SpendGranularity = SpendGranularity.MONTHLY,
     series: SpendSeries = SpendSeries.TOTAL,
+    metric: ProductParetoMetric = ProductParetoMetric.SPEND,
 ) -> HTMLResponse:
     """Render one analysis: the bare fragment for htmx, the full shell otherwise.
 
-    The store-comparison view reads the toolbar's query params and is server-rendered;
-    the other analyses ignore them and self-fetch their JSON as before.
+    The store-comparison, spend-over-time, and top-products views read the toolbar's query
+    params and are server-rendered; price-history and category-spend ignore them and self-fetch
+    their JSON.
     """
     selected = get_view(view)
     if selected is None:
@@ -121,6 +125,15 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
             granularity=granularity,
             series=series,
         )
+    elif selected.key == "top-products":
+        context = _top_products_context(
+            service,
+            store=store,
+            categories=category,
+            start=from_,
+            end=to,
+            metric=metric,
+        )
     if wants_partial(request):
         return templates.TemplateResponse(request, selected.template, context)
     return templates.TemplateResponse(
@@ -128,6 +141,20 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
         "insights.html",
         {"views": INSIGHT_VIEWS, "selected": selected, **context},
     )
+
+
+def _resolved_stores(
+    service: AnalyticsService, store: int | None
+) -> tuple[list[StoreOption], int | None]:
+    """Return the ranked store options and the validated single-store filter.
+
+    An unknown store id (e.g. a stale bookmarked ?store=) falls back to None so the view spans
+    every store rather than erroring. Shared by the single-store toolbars (spend-over-time,
+    top-products).
+    """
+    stores = service.stores_by_frequency()
+    valid_ids = {s.id for s in stores}
+    return stores, (store if store in valid_ids else None)
 
 
 def _store_comparison_context(  # noqa: PLR0913 - each kwarg is a distinct filter forwarded to the service
@@ -198,9 +225,7 @@ def _spend_over_time_context(  # noqa: PLR0913 - each kwarg is a distinct toolba
     <script type="application/json"> block. Decimals go out as strings so SQLite float drift
     never reaches the axis; the renderer coerces them with Number().
     """
-    stores = service.stores_by_frequency()
-    valid_ids = {s.id for s in stores}
-    store_id = store if store in valid_ids else None
+    stores, store_id = _resolved_stores(service, store)
     sot = service.spend_over_time(
         start=start,
         end=end,
@@ -238,4 +263,44 @@ def _spend_over_time_context(  # noqa: PLR0913 - each kwarg is a distinct toolba
         "date_to": end,
         "granularity": sot.granularity.value,
         "series": sot.series.value,
+    }
+
+
+def _top_products_context(
+    service: AnalyticsService,
+    *,
+    store: int | None,
+    categories: list[int] | None,
+    start: date | None,
+    end: date | None,
+    metric: ProductParetoMetric,
+) -> dict[str, object]:
+    """Assemble the top-products (Pareto) template context, including the chart's JSON payload.
+
+    Validates the store filter against known stores (an unknown id falls back to all stores)
+    and serializes the ranked rows into the <script type="application/json"> block the inline
+    renderer reads. Each row value goes out as a string so SQLite float drift never reaches the
+    axis; the renderer coerces it with Number().
+    """
+    stores, store_id = _resolved_stores(service, store)
+    pp = service.product_pareto(
+        metric=metric,
+        start=start,
+        end=end,
+        store_id=store_id,
+        category_ids=categories or None,
+    )
+    payload: dict[str, object] = {
+        "metric": pp.metric.value,
+        "rows": [{"name": r.name, "value": str(r.value), "share": r.share_pct} for r in pp.rows],
+    }
+    return {
+        "pp": pp,
+        "pareto_payload": payload,
+        "store_options": stores,
+        "selected_store": store_id,
+        "selected_categories": categories or [],
+        "date_from": start,
+        "date_to": end,
+        "metric": pp.metric.value,
     }

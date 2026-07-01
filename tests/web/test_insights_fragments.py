@@ -40,3 +40,14 @@ def test_store_comparison_fragment_renders(app_client: TestClient) -> None:
     assert ("Add receipts from at least two stores" in resp.text) or (
         'class="font-display' in resp.text
     )
+
+
+def test_top_products_fragment_renders(app_client: TestClient) -> None:
+    """Verify the top-products fragment returns 200 with the shared heading or the empty state."""
+    # When loading the top-products fragment as an htmx request
+    resp = app_client.get("/insights/top-products", headers={"HX-Request": "true"})
+
+    # Then it renders with the shared heading (seeded data is non-empty)
+    assert resp.status_code == 200
+    assert 'data-insight-view="top-products"' in resp.text
+    assert 'class="font-display' in resp.text

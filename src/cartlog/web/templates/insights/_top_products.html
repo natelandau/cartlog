@@ -1,0 +1,177 @@
+{# Top products (Pareto): a server-rendered toolbar (like spend-over-time) driving a horizontal
+   Plotly bar chart. The form re-fetches this fragment into #insights-panel on any change; the
+   ranked rows travel with it as a JSON blob the inline renderer reads, avoiding a second round
+   trip. Bars are sorted by the active metric; a per-bar label carries the running cumulative
+   share (the Pareto signal) without needing a second axis. #}
+{% import "macros/forms.html" as forms with context %}
+{% import "macros/ui.html" as ui with context %}
+
+<div data-insight-view="top-products" class="flex flex-col gap-4">
+  {# Live-updates on any control change; the explicit submit covers the date range, where the user
+     sets two fields before wanting one refresh. Mirrors the spend-over-time toolbar. #}
+  <form id="tp-controls"
+        hx-get="/insights/top-products"
+        hx-target="#insights-panel"
+        hx-swap="innerHTML"
+        hx-trigger="change, submit"
+        hx-push-url="true"
+        class="space-y-4">
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Rank by</legend>
+        <select name="metric" class="select w-full">
+          <option value="spend" {% if metric == "spend" %}selected{% endif %}>Spend</option>
+          <option value="trips" {% if metric == "trips" %}selected{% endif %}>Trips</option>
+        </select>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Store</legend>
+        <select name="store" class="select w-full">
+          <option value="" {% if selected_store is none %}selected{% endif %}>All stores</option>
+          {% for s in store_options %}
+          <option value="{{ s.id }}" {% if s.id == selected_store %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </fieldset>
+      {{ forms.multiselect_pills("category", "Categories", pp.category_options, selected_categories, "tp-cat") }}
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">From</legend>
+        <input type="date" name="from" class="input w-full"
+               value="{{ date_from.isoformat() if date_from else '' }}" />
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">To</legend>
+        <input type="date" name="to" class="input w-full"
+               value="{{ date_to.isoformat() if date_to else '' }}" />
+      </fieldset>
+      <div class="flex items-end justify-end">
+        <button type="submit" class="btn btn-primary btn-sm">Update chart</button>
+      </div>
+    </div>
+  </form>
+
+  {# At-a-glance Pareto takeaway: how few products drive 80% of the selected metric. Derived from
+     the same ranking the chart draws, so it always matches the filtered view. #}
+  {% if pp.rows %}
+  {% set metric_noun = "trips" if metric == "trips" else "spend" %}
+  <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+    <div class="flex items-baseline gap-1.5">
+      <dt class="num font-semibold">{{ pp.pareto_count }}</dt>
+      <dd class="text-base-content/60">of {{ pp.product_total }} products drive 80% of {{ metric_noun }}</dd>
+    </div>
+    <div class="flex items-baseline gap-1.5">
+      <dt class="text-base-content/60">Total {{ metric_noun }}</dt>
+      {% if metric == "trips" %}
+      <dd class="num font-semibold">{{ pp.total_receipts }}</dd>
+      {% else %}
+      <dd class="num font-semibold">${{ "%.2f"|format(pp.grand_total) }}</dd>
+      {% endif %}
+    </div>
+  </dl>
+  {% endif %}
+
+  {# Chart heading rendered as real HTML so it uses the site's display font and frees the Plotly
+     canvas top. The fragment is re-fetched on every control change, so this always matches. #}
+  {% set metric_label = "Trips" if metric == "trips" else "Spend" %}
+  {{ ui.chart_heading("Top products by " ~ metric_label) }}
+
+  <div id="top-products-chart" class="min-h-[340px] w-full"></div>
+
+  {# Tufte: name the evidence. Spend is itemized (excludes tax and fees); trips count the distinct
+     receipts a product appears on. Only the top products are charted; the headline discloses the
+     full count. #}
+  <p class="text-base-content/60 text-xs">
+    {% if metric == "trips" %}
+    Trips count the distinct receipts each product appears on. Showing the top {{ pp.rows | length }} of {{ pp.product_total }} products.
+    {% else %}
+    Spend is summed from itemized lines, so it excludes tax and fees. The percentage is each product's share of total spend. Showing the top {{ pp.rows | length }} of {{ pp.product_total }} products.
+    {% endif %}
+  </p>
+
+  {# The ranked rows for the renderer. tojson html-escapes < > & so this is safe in a script tag;
+     values arrive as strings and are coerced with Number() in the renderer. #}
+  <script type="application/json" id="pareto-data">{{ pareto_payload | tojson }}</script>
+</div>
+<script>
+  (function () {
+    // Re-query root on each render so a renderer invoked after an htmx history-restore acts on the
+    // live node, not a stale closure over the pre-navigation element.
+    function root() {
+      return document.querySelector('[data-insight-view="top-products"]');
+    }
+
+    async function render() {
+      await Insights.ensurePlotly();
+      const el = root().querySelector("#top-products-chart");
+      const data = JSON.parse(root().querySelector("#pareto-data").textContent);
+      if (!data.rows.length) {
+        Insights.showEmpty(el, "No products recorded for this selection.");
+        return;
+      }
+
+      const money = data.metric === "spend";
+      // Plotly draws the first horizontal-bar category at the bottom, so reverse the ranked rows to
+      // put rank 1 on top.
+      const rows = data.rows.slice().reverse();
+      const values = rows.map((r) => Number(r.value));
+
+      const fmtValue = (v) =>
+        money
+          ? "$" + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : String(Math.round(v));
+      // Spend bars carry the dollar value and the product's share of total spend; trip bars just
+      // carry the count (a share of summed trip counts would only add noise).
+      const share = rows.map((r) => Math.round(r.share));
+      const text = money
+        ? values.map((v, i) => `${fmtValue(v)} · ${share[i]}%`)
+        : values.map((v) => fmtValue(v));
+      const hover = money
+        ? rows.map((r, i) => `${r.name}<br>Spend: ${fmtValue(values[i])}<br>${share[i]}% of total`)
+        : rows.map((r, i) => `${r.name}<br>Trips: ${fmtValue(values[i])}`);
+
+      const trace = {
+        x: values,
+        y: rows.map((r) => r.name),
+        type: "bar",
+        orientation: "h",
+        marker: { color: Insights.brand(), opacity: Insights.MARK_OPACITY },
+        text: text,
+        textposition: "outside",
+        textfont: { size: 13 },
+        cliponaxis: false,
+        hovertext: hover,
+        hovertemplate: "%{hovertext}<extra></extra>",
+      };
+
+      // The trip axis is integer-valued: let Plotly pick a nice integer tick step so a product
+      // with many trips does not force one crowded tick per unit. Spend already auto-scales.
+      const xaxis = Insights.numericAxis({ money: money, title: money ? "Spend" : "Trips" });
+      if (!money) {
+        delete xaxis.dtick;
+        xaxis.tickformat = "d";
+      }
+      // Bigger product-name labels, and a plot tall enough to give every bar a chunky, engaging
+      // height regardless of how many products are shown.
+      const yaxis = Insights.categoryAxis();
+      yaxis.tickfont = { size: 15 };
+
+      const layout = {
+        ...Insights.baseLayout(),
+        height: Math.max(340, rows.length * 40 + 120),
+        // Widen the right margin so the outside value + share labels never clip.
+        margin: { ...Insights.MARGIN, r: 130 },
+        xaxis: xaxis,
+        yaxis: yaxis,
+        bargap: 0.28,
+        showlegend: false,
+      };
+      Plotly.newPlot(el, [trace], layout, Insights.PLOT_CONFIG);
+    }
+
+    Insights.register("top-products", render);
+  })();
+</script>
