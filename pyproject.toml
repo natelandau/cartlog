@@ -2,7 +2,7 @@
     authors = [{ name = "Nathaniel Landau", email = "github@natelandau.com" }]
     dependencies = [
         "alembic>=1.18.5,<2",
-        "fastapi>=0.138.1,<1",
+        "fastapi>=0.138.2,<1",
         "genai-prices>=0.0.67,<0.1",
         "inflect>=7.5.0,<8",
         "itsdangerous>=2.2.0,<3",
@@ -16,7 +16,7 @@
         "pyyaml>=6.0.3,<7",
         "rich>=15.0.0,<16",
         "sqlalchemy>=2.0.51,<3",
-        "typer>=0.26.7,<1",
+        "typer>=0.26.8,<1",
         "uvicorn>=0.49.0,<1",
 ]
     description = "Scan and parse grocery receipts to track prices and spending over time."
@@ -47,7 +47,7 @@
         "coverage>=7.14.3",
         "duty>=1.9.0",
         "httpx2>=2.5.0",
-        "playwright>=1.60.0",
+        "playwright>=1.61.0",
         "prek>=0.4.5",
         "pytest-clarity>=1.0.1",
         "pytest-cov>=7.1.0",
@@ -59,8 +59,8 @@
         "pytest-xdist>=3.8.0",
         "pytest>=9.1.1",
         "ruff>=0.15.20",
-        "ty>=0.0.54",
-        "typos>=1.47.2",
+        "ty>=0.0.55",
+        "typos>=1.48.0",
         "yamllint>=1.38.0",
 ]
 
