@@ -1,3 +1,19 @@
+## v0.6.0 (2026-06-30)
+
+### Feat
+
+- **insights**: add a top products analysis
+- **web**: add /healthz health check endpoint
+- **insights**: add a spend-over-time analysis
+
+### Fix
+
+- **receipts**: show item sizes in readable, rounded units
+
+### Refactor
+
+- **insights**: give every insights chart a consistent look
+
 ## v0.5.3 (2026-06-27)
 
 ### Fix
