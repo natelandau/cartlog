@@ -1,43 +1,150 @@
-{# Category spend analysis fragment. Self-registers its Plotly renderer with the Insights shell.
-   Renders immediately on mount (no product input), so no Show button is needed. #}
+{# Category spend: a server-rendered toolbar (like top-products) driving a Plotly drill-down
+   treemap. The category -> product hierarchy travels with the fragment as a JSON blob the inline
+   renderer reads. Clicking a category zooms into its products; the pathbar breadcrumb navigates
+   back. Area and shade both encode spend; the tile label carries the name + dollar amount.
+   No category filter here: the whole point of the map is to show every category at once. #}
 {% import "macros/ui.html" as ui with context %}
-<div data-insight-view="category-spend" class="flex flex-col gap-3">
+
+<div data-insight-view="category-spend" class="flex flex-col gap-4">
+  {# Live-updates on any control change; the explicit submit covers the date range, where the user
+     sets two fields before wanting one refresh. Mirrors the top-products toolbar. #}
+  <form id="cs-controls"
+        hx-get="/insights/category-spend"
+        hx-target="#insights-panel"
+        hx-swap="innerHTML"
+        hx-trigger="change, submit"
+        hx-push-url="true"
+        class="space-y-4">
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Store</legend>
+        <select name="store" class="select w-full">
+          <option value="" {% if selected_store is none %}selected{% endif %}>All stores</option>
+          {% for s in store_options %}
+          <option value="{{ s.id }}" {% if s.id == selected_store %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">From</legend>
+        <input type="date" name="from" class="input w-full"
+               value="{{ date_from.isoformat() if date_from else '' }}" />
+      </fieldset>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">To</legend>
+        <input type="date" name="to" class="input w-full"
+               value="{{ date_to.isoformat() if date_to else '' }}" />
+      </fieldset>
+    </div>
+    <div class="flex justify-end">
+      <button type="submit" class="btn btn-primary btn-sm">Update chart</button>
+    </div>
+  </form>
+
   {{ ui.chart_heading("Spend by category") }}
-  <div id="category-spend-chart" class="min-h-[320px] sm:min-h-[420px] w-full"></div>
-  {# Tufte: name the evidence. The pie is part-to-whole of itemized spend only. #}
-  <p class="text-base-content/60 text-xs">Share of itemized spend across categories. Excludes tax and fees.</p>
+  <div id="category-spend-chart" class="min-h-[360px] sm:min-h-[520px] w-full"></div>
+  {# Tufte: name the evidence. Area and shade both encode share of itemized (classified) spend. #}
+  <p class="text-base-content/60 text-xs">Area and shade show each category's share of itemized spend. Click a category to see its products; use the breadcrumb to go back. Excludes tax and fees.</p>
+
+  {# The hierarchy for the renderer. tojson html-escapes < > & so this is safe in a script tag;
+     each node's spend arrives as a string and is coerced with Number() in the renderer. #}
+  <script type="application/json" id="category-tree-data">{{ tree_payload | tojson }}</script>
 </div>
 <script>
   (function () {
-    // Re-query root on each render so a renderer invoked after an htmx history-restore acts on
-    // the live node, not a stale closure over the pre-navigation element.
+    // Re-query root on each render so a renderer invoked after an htmx history-restore acts on the
+    // live node, not a stale closure over the pre-navigation element.
     function root() {
       return document.querySelector('[data-insight-view="category-spend"]');
     }
+
     async function render() {
       await Insights.ensurePlotly();
-      const data = await Insights.getJSON(`/api/analytics/category-spend`);
       const el = root().querySelector("#category-spend-chart");
-      if (!data.rows.length) {
-        Insights.showEmpty(el, "No category spend data yet.");
+      const nodes = JSON.parse(root().querySelector("#category-tree-data").textContent).nodes;
+      // Only the root node means no categorized, positive spend in the selection.
+      if (nodes.length <= 1) {
+        Insights.showEmpty(el, "No category spend for this selection.");
         return;
       }
-      const trace = {
-        labels: data.rows.map((r) => r.category),
-        values: data.rows.map((r) => Number(r.total_spend)),
-        type: "pie",
-        opacity: Insights.MARK_OPACITY,
-        marker: { colors: Insights.categoryPalette(data.rows.length) },
-      };
+
+      const rootValue = Number(nodes.find((n) => n.parent === "").spend);
+      // Color each level with its own ramp: group siblings by parent, then shade darkest-first by
+      // spend rank (nodes arrive spend-desc within each parent). Muted neutral for any "Other",
+      // and a quiet base tone for the root so its breadcrumb crumb stays legible.
+      const byParent = {};
+      nodes.forEach((n, i) => {
+        (byParent[n.parent] = byParent[n.parent] || []).push(i);
+      });
+      // A node is a branch (root/category) if some node names it as a parent; the rest are leaves.
+      const branchIds = new Set(nodes.map((n) => n.parent));
+      const colors = new Array(nodes.length);
+      Object.entries(byParent).forEach(([parent, idxs]) => {
+        if (parent === "") return; // the root, colored separately below
+        // Size the ramp to the real (non-Other) siblings so they span its full darkest->lightest
+        // range; the "Other" leaf takes the muted neutral rather than consuming a ramp slot.
+        const ramp = Insights.spendRamp(idxs.filter((i) => !nodes[i].isOther).length);
+        let rank = 0;
+        idxs.forEach((idx) => {
+          colors[idx] = nodes[idx].isOther ? Insights.otherTile() : ramp[rank++];
+        });
+      });
+      const rootIdx = nodes.findIndex((n) => n.parent === "");
+      colors[rootIdx] = Insights.themeColor("--color-base-200", "#e5e7eb");
+
       const layout = {
         ...Insights.baseLayout(),
-        // A pie has no axes, so override the cartesian margin with a tight, symmetric one. Reuse
+        // A treemap has no axes; replace the cartesian margin with a tight symmetric one. Reuse
         // MARGIN.t so the heading-to-chart gap matches the other charts.
-        margin: { ...Insights.MARGIN, r: 16, b: 16, l: 16 },
-        // Intentionally NOT Insights.legend(): a pie legend keys slices, not series, so Plotly's
-        // default vertical legend at the side reads better than a horizontal one above the canvas.
+        margin: { ...Insights.MARGIN, r: 8, b: 8, l: 8 },
+      };
+      const trace = {
+        type: "treemap",
+        ids: nodes.map((n) => n.id),
+        labels: nodes.map((n) => n.label),
+        parents: nodes.map((n) => n.parent),
+        values: nodes.map((n) => Number(n.spend)),
+        // Each branch's value is exactly the sum of its children's (built in Decimal server-side),
+        // so "total" mode is honest and keeps maxdepth showing categories-first with a clean drill.
+        branchvalues: "total",
+        maxdepth: 2, // show categories; a click drills one level into that category's products
+        // Hover detail: share of itemized spend + the line-item count (the share belongs here, not
+        // on the tile label). Root shares are against the whole selection.
+        customdata: nodes.map((n) => {
+          const share = rootValue > 0 ? (Number(n.spend) / rootValue) * 100 : 0;
+          return `${share.toFixed(1)}% of itemized spend · ${n.count} items`;
+        }),
+        // In-tile label: name + whole-dollar spend (no percentage). Plotly hides the block on tiles
+        // too small to fit it, so small tiles show no text and reveal detail on hover/tap.
+        texttemplate: "<b>%{label}</b><br>$%{value:,.0f}",
+        textposition: "middle center",
+        textfont: { family: layout.font.family }, // color unset: Plotly auto-contrasts per tile
+        hovertemplate: "<b>%{label}</b><br>$%{value:,.2f}<br>%{customdata}<extra></extra>",
+        marker: {
+          colors: colors,
+          // Thin separators the color of the card surface read as clean gaps between tiles.
+          line: { width: 2, color: Insights.themeColor("--color-base-100", "#ffffff") },
+        },
+        // The back/breadcrumb bar: themed text so it is never invisible against the card.
+        pathbar: {
+          visible: true,
+          side: "top",
+          thickness: 26,
+          textfont: { family: layout.font.family, size: 13, color: Insights.themeColor("--color-base-content", "#333") },
+        },
       };
       Plotly.newPlot(el, [trace], layout, Insights.PLOT_CONFIG);
+
+      // The tree is exactly two levels (category -> product). A product (and either "Other" leaf)
+      // has nothing deeper, so cancel Plotly's default zoom-into-node for any leaf (an id no node
+      // names as a parent); only a category, which has products, drills in. Drop any prior handler
+      // first: newPlot does not clear gd.on listeners, so a re-render would stack them.
+      if (el.removeAllListeners) el.removeAllListeners("plotly_treemapclick");
+      el.on("plotly_treemapclick", function (ev) {
+        const point = ev.points && ev.points[0];
+        if (point && !branchIds.has(point.id)) return false;
+        return undefined;
+      });
     }
     Insights.register("category-spend", render);
   })();

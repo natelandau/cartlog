@@ -93,9 +93,9 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
 ) -> HTMLResponse:
     """Render one analysis: the bare fragment for htmx, the full shell otherwise.
 
-    The store-comparison, spend-over-time, and top-products views read the toolbar's query
-    params and are server-rendered; price-history and category-spend ignore them and self-fetch
-    their JSON.
+    The store-comparison, spend-over-time, top-products, and category-spend views read the
+    toolbar's query params and are server-rendered; only price-history ignores them and
+    self-fetches its JSON.
     """
     selected = get_view(view)
     if selected is None:
@@ -133,6 +133,13 @@ def insights_view(  # noqa: PLR0913 - toolbar query params map 1:1 to filter con
             start=from_,
             end=to,
             metric=metric,
+        )
+    elif selected.key == "category-spend":
+        context = _category_spend_context(
+            service,
+            store=store,
+            start=from_,
+            end=to,
         )
     if wants_partial(request):
         return templates.TemplateResponse(request, selected.template, context)
@@ -263,6 +270,45 @@ def _spend_over_time_context(  # noqa: PLR0913 - each kwarg is a distinct toolba
         "date_to": end,
         "granularity": sot.granularity.value,
         "series": sot.series.value,
+    }
+
+
+def _category_spend_context(
+    service: AnalyticsService,
+    *,
+    store: int | None,
+    start: date | None,
+    end: date | None,
+) -> dict[str, object]:
+    """Assemble the category-spend treemap context, including the drill-down hierarchy payload.
+
+    Validates the store filter against known stores (an unknown id falls back to all stores) and
+    serializes the category -> product node list into the <script type="application/json"> block the
+    inline renderer reads. Each node's spend goes out as a string so SQLite float drift never
+    reaches the treemap; the renderer coerces it with Number(). The treemap intentionally has no
+    category filter: it exists to show the full spread of categories at once.
+    """
+    stores, store_id = _resolved_stores(service, store)
+    cst = service.category_spend_tree(start=start, end=end, store_id=store_id)
+    payload: dict[str, object] = {
+        "nodes": [
+            {
+                "id": n.id,
+                "parent": n.parent_id,
+                "label": n.label,
+                "spend": str(n.total_spend),
+                "count": n.line_item_count,
+                "isOther": n.is_other,
+            }
+            for n in cst.nodes
+        ],
+    }
+    return {
+        "tree_payload": payload,
+        "store_options": stores,
+        "selected_store": store_id,
+        "date_from": start,
+        "date_to": end,
     }
 
 

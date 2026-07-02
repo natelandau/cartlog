@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import statistics
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
@@ -15,6 +15,7 @@ from cartlog.analytics.ranges import RangePreset, prior_range, range_label, reso
 from cartlog.analytics.results import (
     CategorySpend,
     CategorySpendRow,
+    CategorySpendTree,
     CategoryUnitComparison,
     CategoryUnitRow,
     DashboardData,
@@ -39,6 +40,7 @@ from cartlog.analytics.results import (
     SpendGranularity,
     SpendOverTime,
     SpendSeries,
+    SpendTreeNode,
     StoreOption,
     StorePairComparison,
     StorePairRow,
@@ -69,6 +71,10 @@ if TYPE_CHECKING:
 # Receipts whose line items count toward analytics. A needs_review purchase is real
 # spend; excluding it would silently understate every figure.
 COUNTED_STATUSES = (ReceiptStatus.PARSED, ReceiptStatus.NEEDS_REVIEW)
+
+# Folding a single item into an "Other" tile is pointless (it just renames it), so only fold a
+# tail of at least this many items.
+_MIN_TAIL_TO_FOLD = 2
 
 # Minimum number of price points required to draw a meaningful trend line or half-split.
 _MIN_PRICE_POINTS = 2
@@ -1233,6 +1239,171 @@ class AnalyticsService:
         rows.sort(key=lambda r: r.total_spend, reverse=True)
         total_spend = sum(running.values(), Decimal(0))
         return CategorySpend(rows=rows, total_spend=total_spend, unclassified_spend=unclassified)
+
+    @staticmethod
+    def _fold_tail(
+        items: list[tuple[str, Decimal, int]],
+        *,
+        max_other_share: float,
+        max_tiles: int,
+    ) -> tuple[list[tuple[str, Decimal, int]], list[tuple[str, Decimal, int]]]:
+        """Split spend-ranked `(label, spend, count)` items into tiles to show and a tail to fold.
+
+        Grows the folded tail from the smallest item upward while its combined share stays within
+        `max_other_share`, so the resulting "Other" never dominates; a hard `max_tiles` ceiling
+        bounds a nearly-flat distribution. Fewer than two folded items is not worth an Other tile,
+        so everything is kept. Mirrors the treemap's client-side grouping so both the category and
+        product levels fold the same way.
+        """
+        total = sum((spend for _label, spend, _count in items), Decimal(0))
+        head = len(items)
+        running = Decimal(0)
+        budget = Decimal(str(max_other_share))
+        for i in range(len(items) - 1, 0, -1):
+            running += items[i][1]
+            if total > 0 and running / total > budget:
+                break
+            head = i
+        if len(items) > max_tiles:
+            head = min(head, max_tiles - 1)
+        if len(items) - head < _MIN_TAIL_TO_FOLD:
+            return items, []
+        return items[:head], items[head:]
+
+    def category_spend_tree(
+        self,
+        *,
+        start: date | None = None,
+        end: date | None = None,
+        store_id: int | None = None,
+        products_per_category: int = 10,
+        category_limit: int = 16,
+        max_other_share: float = 0.08,
+    ) -> CategorySpendTree:
+        """Build the category to product hierarchy behind the drill-down treemap.
+
+        Use this to power a treemap where clicking a category tile drills into the products that
+        make it up. Shares the counted/date/store universe of the other spend views
+        (`_spend_rows`), drops the uncategorized bucket and any product or category whose net spend
+        is non-positive (a refund/coupon-heavy line can sum <= 0, and a treemap cannot render
+        negative area). Each category keeps its top `products_per_category` products and folds the
+        rest into one muted "Other" leaf; the small category tail folds the same way. There is no
+        category filter: the map's job is to show every category at once. Returns a flat node list
+        ready to map onto a Plotly treemap.
+
+        Args:
+            start: Optional earliest purchase date (inclusive).
+            end: Optional latest purchase date (inclusive).
+            store_id: Optional store to restrict to; None spans every store.
+            products_per_category: Product tiles per category before the rest fold into "Other".
+            category_limit: Category tiles before the small tail folds into "Other".
+            max_other_share: Largest combined share a folded "Other" node may reach.
+
+        Returns:
+            CategorySpendTree: flat category/product/Other nodes and the grand total.
+        """
+        universe = self._spend_rows(start=start, end=end, store_id=store_id)
+        rows = [
+            r
+            for r in universe
+            if r.category_id is not None and r.category_name != UNCATEGORIZED_NAME
+        ]
+
+        # Aggregate per (category, product); the category total is then the sum of its POSITIVE
+        # products, so a parent tile always equals the sum of the children the treemap draws
+        # (Plotly's branchvalues="total" requires this) and refund-driven negatives never leak in.
+        prod_spend: dict[tuple[str, str], Decimal] = {}
+        prod_count: dict[tuple[str, str], int] = {}
+        for r in rows:
+            key = (r.category_name, r.name)
+            prod_spend[key] = prod_spend.get(key, Decimal(0)) + r.line_total
+            prod_count[key] = prod_count.get(key, 0) + 1
+
+        cat_products: dict[str, list[tuple[str, Decimal, int]]] = defaultdict(list)
+        for (cat, prod), spend in prod_spend.items():
+            if spend > 0:
+                cat_products[cat].append((prod, spend, prod_count[(cat, prod)]))
+
+        cat_items = sorted(
+            (
+                (
+                    cat,
+                    sum((s for _p, s, _c in products), Decimal(0)),
+                    sum(c for _p, _s, c in products),
+                )
+                for cat, products in cat_products.items()
+            ),
+            key=lambda it: (-it[1], it[0]),
+        )
+        kept_cats, folded_cats = self._fold_tail(
+            cat_items, max_other_share=max_other_share, max_tiles=category_limit
+        )
+
+        total = sum((spend for _label, spend, _count in cat_items), Decimal(0))
+        total_count = sum(count for _label, _spend, count in cat_items)
+        nodes: list[SpendTreeNode] = [
+            SpendTreeNode(
+                id="root",
+                parent_id="",
+                label="All categories",
+                total_spend=total,
+                line_item_count=total_count,
+            )
+        ]
+
+        for cat, cat_total, cat_count in kept_cats:
+            cat_id = f"c:{cat}"
+            nodes.append(
+                SpendTreeNode(
+                    id=cat_id,
+                    parent_id="root",
+                    label=cat,
+                    total_spend=cat_total,
+                    line_item_count=cat_count,
+                )
+            )
+            products = sorted(cat_products[cat], key=lambda it: (-it[1], it[0]))
+            kept_products, folded_products = self._fold_tail(
+                products, max_other_share=max_other_share, max_tiles=products_per_category
+            )
+            for prod, prod_total, prod_lines in kept_products:
+                nodes.append(
+                    SpendTreeNode(
+                        id=f"{cat_id}/p:{prod}",
+                        parent_id=cat_id,
+                        label=prod,
+                        total_spend=prod_total,
+                        line_item_count=prod_lines,
+                    )
+                )
+            if folded_products:
+                nodes.append(
+                    SpendTreeNode(
+                        id=f"{cat_id}/p:__other__",
+                        parent_id=cat_id,
+                        label="Other",
+                        total_spend=sum((s for _p, s, _c in folded_products), Decimal(0)),
+                        line_item_count=sum(c for _p, _s, c in folded_products),
+                        is_other=True,
+                    )
+                )
+
+        # The folded small categories become one muted, non-drilling Other leaf under the root; it
+        # keeps the top-level look while staying a category-shaped catch-all (it is not itself a
+        # category, so it carries no product children to drill into).
+        if folded_cats:
+            nodes.append(
+                SpendTreeNode(
+                    id="c:__other__",
+                    parent_id="root",
+                    label="Other",
+                    total_spend=sum((s for _c, s, _n in folded_cats), Decimal(0)),
+                    line_item_count=sum(n for _c, _s, n in folded_cats),
+                    is_other=True,
+                )
+            )
+
+        return CategorySpendTree(nodes=nodes, total_spend=total)
 
     def category_unit_comparison(
         self,
