@@ -133,6 +133,36 @@ window.Insights = window.Insights || (function () {
     return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : "#9ca3af";
   }
 
+  // A sequential single-hue ramp (brand green, hue 165) for the category treemap: lightness runs
+  // darkest (biggest spender) to lightest (smallest), so color reinforces the area encoding
+  // instead of adding a second, competing dimension. On a dark surface the sense of "visual
+  // weight" inverts (biggest = brightest), so the lightness endpoints flip. Chroma eases toward
+  // the faint end so the smallest tiles read as quiet neutrals, not saturated chips.
+  function spendRamp(count) {
+    const dark = isDarkSurface();
+    const big = dark ? { l: 72, c: 0.12 } : { l: 44, c: 0.11 }; // largest tile
+    const small = dark ? { l: 30, c: 0.04 } : { l: 89, c: 0.045 }; // smallest tile
+    return Array.from({ length: count }, (_, i) => {
+      const t = count === 1 ? 0 : i / (count - 1); // 0 = biggest, 1 = smallest
+      const l = big.l + (small.l - big.l) * t;
+      const c = big.c + (small.c - big.c) * t;
+      const rgb = cssToRgb(`oklch(${l}% ${c} 165)`, PALETTE_FALLBACK[i % PALETTE_FALLBACK.length]);
+      return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : PALETTE_FALLBACK[i % PALETTE_FALLBACK.length];
+    });
+  }
+
+  // The residual "Other" tile for the treemap: a neutral gray at the faint end of the spend
+  // ramp's lightness, so it recedes toward the card surface in BOTH themes (categoryMuted keeps a
+  // near-constant lightness that pops on a dark map). Near-zero chroma keeps it clearly outside
+  // the green ramp, so it reads as the catch-all rather than another category.
+  function otherTile() {
+    const dark = isDarkSurface();
+    const l = dark ? 34 : 84;
+    const fallback = dark ? "#3a3f3d" : "#d8dcd6";
+    const rgb = cssToRgb(`oklch(${l}% 0.006 165)`, fallback);
+    return rgb ? `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})` : fallback;
+  }
+
   // The site's body/UI typeface, read from the same CSS token (--font-sans, app.css) the rest of
   // the page uses, so the chart text tracks the stylesheet instead of duplicating the stack here.
   // Plotly renders SVG <text> with this once the page has loaded the font.
@@ -252,7 +282,7 @@ window.Insights = window.Insights || (function () {
     };
   }
 
-  return { register, ensurePlotly, renderActive, getJSON, showEmpty, themeColor, themeAlpha, brand, accent, categoryPalette, categoryMuted, baseLayout, numericAxis, categoryAxis, legend, priceHistoryTimeAxis, PLOT_CONFIG, MARK_OPACITY, MARGIN };
+  return { register, ensurePlotly, renderActive, getJSON, showEmpty, themeColor, themeAlpha, brand, accent, categoryPalette, categoryMuted, spendRamp, otherTile, baseLayout, numericAxis, categoryAxis, legend, priceHistoryTimeAxis, PLOT_CONFIG, MARK_OPACITY, MARGIN };
 })();
 
 // Wire the page-level listeners exactly once, even if this script re-runs on a history restore.
