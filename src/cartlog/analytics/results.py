@@ -53,6 +53,37 @@ class CategorySpend(BaseModel):
     unclassified_spend: Decimal = Decimal(0)
 
 
+class SpendTreeNode(BaseModel):
+    """One node in the category-spend treemap: a category, a product, or a folded "Other".
+
+    A flat list of these (rather than nested models) maps directly onto a Plotly treemap's
+    `ids`/`parents`/`values`, and lets the renderer group siblings by `parent_id` to color each
+    level with its own ramp.
+
+    Args:
+        id: Stable, unique node id (path-prefixed so repeated labels never collide).
+        parent_id: The parent node's id; "" for the root.
+        label: Display text (the category or product name, or "Other").
+        total_spend: Summed itemized spend at this node.
+        line_item_count: Line items rolled into this node.
+        is_other: True for a folded catch-all node, so the renderer can mute it.
+    """
+
+    id: str
+    parent_id: str
+    label: str
+    total_spend: Decimal
+    line_item_count: int
+    is_other: bool = False
+
+
+class CategorySpendTree(BaseModel):
+    """The category → product hierarchy for the drill-down treemap."""
+
+    nodes: list[SpendTreeNode]
+    total_spend: Decimal
+
+
 class SearchResult(BaseModel):
     """One line item matching a free-text search, with context."""
 
