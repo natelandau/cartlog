@@ -63,7 +63,7 @@ repos:
         entry: yamllint --strict --config-file .yamllint.yml
 
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
-    rev: v0.15.20
+    rev: v0.15.21
     hooks:
       - id: ruff
         exclude: tests/
@@ -72,7 +72,7 @@ repos:
         args: [--check]
 
   - repo: "https://github.com/adhtruong/mirrors-typos"
-    rev: v1.47.2
+    rev: v1.48.0
     hooks:
       - id: typos
         args: ["--force-exclude"]
@@ -102,7 +102,7 @@ repos:
         stages: [commit-msg]
 
   - repo: "https://github.com/tsvikas/sync-with-uv"
-    rev: v0.5.0
+    rev: v0.6.0
     hooks:
       - id: sync-with-uv
 
