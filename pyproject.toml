@@ -2,13 +2,13 @@
     authors = [{ name = "Nathaniel Landau", email = "github@natelandau.com" }]
     dependencies = [
         "alembic>=1.18.5,<2",
-        "fastapi>=0.139.0,<1",
-        "genai-prices>=0.0.71,<0.1",
+        "fastapi>=0.140.13,<1",
+        "genai-prices>=0.0.72,<0.1",
         "inflect>=7.5.0,<8",
         "itsdangerous>=2.2.0,<3",
         "jinja2>=3.1.6,<4",
         "pwdlib[argon2]>=0.3.0",
-        "pydantic-ai-slim[anthropic,google,openai]>=1.107.1,<2",
+        "pydantic-ai-slim[anthropic,google,openai]>=2.19.0,<3",
         "pydantic-settings>=2.14.2,<3",
         "pydantic>=2.13.4,<3",
         "python-dotenv>=1.2.2,<2",
@@ -16,7 +16,7 @@
         "pyyaml>=6.0.3,<7",
         "rich>=15.0.0,<16",
         "sqlalchemy>=2.0.51,<3",
-        "typer>=0.26.8,<1",
+        "typer>=0.27.0,<1",
         "uvicorn>=0.51.0,<1",
 ]
     description = "Scan and parse grocery receipts to track prices and spending over time."
